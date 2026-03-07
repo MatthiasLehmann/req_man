@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, useBlocker } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, FileText, AlertTriangle } from 'lucide-react';
 import { getProject } from '../api/client';
@@ -28,7 +28,8 @@ function UnsavedModal({ onConfirm, onCancel }: UnsavedModalProps) {
         <div className="px-5 py-4">
           <p className="text-sm text-gray-600">
             Die Anforderung enthält ungespeicherte Änderungen.
-            Wenn du fortfährst, gehen diese <span className="font-semibold text-red-600">unwiederbringlich verloren</span>.
+            Wenn du fortfährst, gehen diese{' '}
+            <span className="font-semibold text-red-600">unwiederbringlich verloren</span>.
           </p>
           <p className="text-xs text-gray-400 mt-2">
             Speichere zuerst oder verwerfe die Änderungen.
@@ -36,10 +37,7 @@ function UnsavedModal({ onConfirm, onCancel }: UnsavedModalProps) {
         </div>
         {/* Actions */}
         <div className="flex gap-2 px-5 pb-4 justify-end">
-          <button
-            onClick={onCancel}
-            className="btn-secondary text-sm py-2"
-          >
+          <button onClick={onCancel} className="btn-secondary text-sm py-2">
             Abbrechen
           </button>
           <button
@@ -66,10 +64,10 @@ export default function RequirementsPage() {
   const [selectedUid, setSelectedUid]       = useState<string | null>(null);
   const [editorDirty, setEditorDirty]       = useState(false);
 
-  // Ausstehende Navigation bei Blocker
+  // Ausstehende Aktion (Item-/Dok-Wechsel oder Sidebar-Navigation)
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
-  // ── Projekt laden falls nicht im Store ──────────────────────────────────────
+  // ── Projekt laden ────────────────────────────────────────────────────────────
   const { data: projectRes } = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => getProject(projectId!),
@@ -82,21 +80,33 @@ export default function RequirementsPage() {
     }
   }, [projectRes]);
 
-  // ── React-Router-Navigationsblocker ─────────────────────────────────────────
-  // Blockiert das Verlassen der Seite (andere Route) wenn Editor dirty ist
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      editorDirty && currentLocation.pathname !== nextLocation.pathname,
-  );
+  // ── Sidebar-Links abfangen (BrowserRouter hat kein useBlocker) ───────────────
+  // Kein Navigationsblocker nötig – beforeunload in ItemEditor deckt den Fall ab,
+  // und das Modal deckt interne Item-/Dok-Wechsel ab.
+  // Für Klicks auf Sidebar-<a>-Links: capture-phase-Listener der das Modal zeigt.
+  useEffect(() => {
+    if (!editorDirty) return;
 
-  // Wenn Blocker aktiv wird, zeigen wir unser Modal
-  // (blocker.state wechselt auf 'blocked')
+    const handler = (e: MouseEvent) => {
+      const target = (e.target as Element).closest('a[href]');
+      if (!target) return;
+      const href = target.getAttribute('href') ?? '';
+      // Nur interne Links abfangen, die NICHT auf /requirements zeigen
+      if (href.startsWith('/requirements') || href === '') return;
 
-  // ── Navigationswächter für interne Wechsel (Item / Dokument) ─────────────────
-  /**
-   * Führt eine Aktion aus, die ggf. ungespeicherte Änderungen verwirft.
-   * Bei dirty-State: Modal anzeigen. Andernfalls: sofort ausführen.
-   */
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      setPendingAction(() => () => navigate(href));
+    };
+
+    document.addEventListener('click', handler, true);
+    return () => document.removeEventListener('click', handler, true);
+  }, [editorDirty, navigate]);
+
+  // ── Browser-Tab: beforeunload ist in ItemEditor registriert ──────────────────
+
+  // ── Navigationswächter für interne Wechsel ────────────────────────────────────
   const guardedAction = useCallback((action: () => void) => {
     if (!editorDirty) {
       action();
@@ -106,10 +116,7 @@ export default function RequirementsPage() {
   }, [editorDirty]);
 
   const handleModalConfirm = () => {
-    if (blocker.state === 'blocked') {
-      setEditorDirty(false);
-      blocker.proceed();
-    } else if (pendingAction) {
+    if (pendingAction) {
       setEditorDirty(false);
       pendingAction();
       setPendingAction(null);
@@ -117,13 +124,8 @@ export default function RequirementsPage() {
   };
 
   const handleModalCancel = () => {
-    if (blocker.state === 'blocked') {
-      blocker.reset();
-    }
     setPendingAction(null);
   };
-
-  const showModal = blocker.state === 'blocked' || pendingAction !== null;
 
   // ── Kein Projekt ─────────────────────────────────────────────────────────────
   if (!projectId) {
@@ -167,7 +169,6 @@ export default function RequirementsPage() {
               prefix={selectedPrefix}
               selectedUid={selectedUid}
               onSelectItem={(uid) => {
-                // Kein Dialog nötig wenn dasselbe Item oder kein Wechsel
                 if (uid === selectedUid) return;
                 guardedAction(() => setSelectedUid(uid || null));
               }}
@@ -203,7 +204,7 @@ export default function RequirementsPage() {
       </div>
 
       {/* Ungespeichert-Warndialog */}
-      {showModal && (
+      {pendingAction && (
         <UnsavedModal
           onConfirm={handleModalConfirm}
           onCancel={handleModalCancel}
