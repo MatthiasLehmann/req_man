@@ -17,7 +17,26 @@ function parseLevel(level: string): number[] {
   return level.split('.').map((n) => parseInt(n, 10) || 0);
 }
 
-/** Vergleichsfunktion für Level-Sortierung */
+/**
+ * Berechnet die Anzeigetiefe eines Doorstop-Levels.
+ *
+ * Doorstop verwendet ein abschließendes ".0" für Abschnitts-Header:
+ *   "1.0"   → Abschnitt 1 auf oberster Ebene  → Tiefe 0
+ *   "1.1"   → erstes Element in Abschnitt 1   → Tiefe 1
+ *   "1.3.0" → Unter-Abschnitt 1.3             → Tiefe 1
+ *   "1.3.1" → erstes Element in 1.3           → Tiefe 2
+ *
+ * Regel: Endet das Level auf ".0", wird dieses Segment für die
+ * Tiefenberechnung ignoriert (es liegt eine Ebene höher als erwartet).
+ */
+function levelDepth(level: string): number {
+  const parts = parseLevel(level);
+  // Abschließendes 0 = Doorstop-Sektion → effektiv ein Segment weniger
+  const effective = parts[parts.length - 1] === 0 ? parts.slice(0, -1) : parts;
+  return Math.max(0, effective.length - 1);
+}
+
+/** Vergleichsfunktion für Level-Sortierung (numerisch) */
 function compareLevel(a: string, b: string): number {
   const la = parseLevel(a);
   const lb = parseLevel(b);
@@ -41,7 +60,7 @@ function buildFlatTree(items: Item[]): FlatNode[] {
 
   const nodes: FlatNode[] = sorted.map((item) => ({
     item,
-    depth: Math.max(0, parseLevel(item.level).length - 1),
+    depth: levelDepth(item.level),
     hasChildren: false,
   }));
 
