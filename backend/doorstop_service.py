@@ -392,6 +392,46 @@ def delete_item(project_id: str, uid: str) -> bool:
         return False
 
 
+def add_link(project_id: str, source_uid: str, target_uid: str) -> Optional[Dict]:
+    """Fügt einen Link von source_uid zu target_uid hinzu."""
+    project = get_project(project_id)
+    if not project:
+        raise ValueError(f"Project {project_id} not found")
+
+    path = project["path"]
+    try:
+        tree = _build_tree(path)
+        item = tree.find_item(source_uid)
+
+        # Kein doppelter Link
+        existing = [str(lnk) for lnk in item.links]
+        if target_uid in existing:
+            return _item_to_dict(item)  # already linked – idempotent
+
+        item.link(target_uid)
+        item.save()
+        return _item_to_dict(item)
+    except doorstop.DoorstopError as e:
+        raise ValueError(str(e))
+
+
+def remove_link(project_id: str, source_uid: str, target_uid: str) -> Optional[Dict]:
+    """Entfernt einen Link von source_uid zu target_uid."""
+    project = get_project(project_id)
+    if not project:
+        raise ValueError(f"Project {project_id} not found")
+
+    path = project["path"]
+    try:
+        tree = _build_tree(path)
+        item = tree.find_item(source_uid)
+        item.unlink(target_uid)
+        item.save()
+        return _item_to_dict(item)
+    except doorstop.DoorstopError as e:
+        raise ValueError(str(e))
+
+
 def get_traceability(project_id: str) -> Dict:
     project = get_project(project_id)
     if not project:

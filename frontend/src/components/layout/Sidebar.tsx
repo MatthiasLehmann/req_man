@@ -1,7 +1,7 @@
 import { NavLink, useParams } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, GitBranch, BarChart3, Table2,
-  Settings, ChevronRight, Database
+  Link2, Settings, ChevronRight, Database
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useProjectStore } from '../../store/projectStore';
@@ -13,6 +13,7 @@ const navItems = [
   { to: '/traceability', icon: GitBranch, label: 'Traceability' },
   { to: '/metrics', icon: BarChart3, label: 'Metriken' },
   { to: '/matrix', icon: Table2, label: 'Matrix' },
+  { to: '/linking', icon: Link2, label: 'Verlinkung' },
 ];
 
 export default function Sidebar() {

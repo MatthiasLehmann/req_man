@@ -67,6 +67,12 @@ export const updateItem = (projectId: string, uid: string, data: object) =>
 export const deleteItem = (projectId: string, uid: string) =>
   api.delete(`/projects/${projectId}/items/${uid}`);
 
+// Links
+export const addLink = (projectId: string, sourceUid: string, targetUid: string) =>
+  api.post(`/projects/${projectId}/items/${sourceUid}/links`, { target_uid: targetUid });
+export const removeLink = (projectId: string, sourceUid: string, targetUid: string) =>
+  api.delete(`/projects/${projectId}/items/${sourceUid}/links/${targetUid}`);
+
 // Traceability
 export const getTraceability = (projectId: string) =>
   api.get(`/projects/${projectId}/traceability`);

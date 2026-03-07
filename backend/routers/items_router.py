@@ -1,10 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
+from pydantic import BaseModel
 
 from database import User
 from auth import get_current_user, require_editor
 from models import ItemCreate, ItemUpdate, ItemResponse
 import doorstop_service as ds
+
+
+class LinkCreate(BaseModel):
+    target_uid: str
 
 router = APIRouter(prefix="/api/projects/{project_id}", tags=["items"])
 
@@ -71,3 +76,35 @@ async def delete_item(
     success = ds.delete_item(project_id, uid)
     if not success:
         raise HTTPException(status_code=404, detail="Item not found")
+
+
+@router.post("/items/{uid}/links", response_model=ItemResponse)
+async def add_link(
+    project_id: str,
+    uid: str,
+    body: LinkCreate,
+    current_user: User = Depends(require_editor)
+):
+    try:
+        result = ds.add_link(project_id, uid, body.target_uid)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Item not found")
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/items/{uid}/links/{target_uid}", response_model=ItemResponse)
+async def remove_link(
+    project_id: str,
+    uid: str,
+    target_uid: str,
+    current_user: User = Depends(require_editor)
+):
+    try:
+        result = ds.remove_link(project_id, uid, target_uid)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Item not found")
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

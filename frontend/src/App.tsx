@@ -6,6 +6,7 @@ import RequirementsPage from './pages/RequirementsPage';
 import TraceabilityPage from './pages/TraceabilityPage';
 import MetricsPage from './pages/MetricsPage';
 import MatrixPage from './pages/MatrixPage';
+import LinkingPage from './pages/LinkingPage';
 import AdminPage from './pages/AdminPage';
 import Layout from './components/layout/Layout';
 
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="traceability/:projectId?" element={<TraceabilityPage />} />
         <Route path="metrics/:projectId?" element={<MetricsPage />} />
         <Route path="matrix/:projectId?" element={<MatrixPage />} />
+        <Route path="linking/:projectId?" element={<LinkingPage />} />
         <Route
           path="admin"
           element={
