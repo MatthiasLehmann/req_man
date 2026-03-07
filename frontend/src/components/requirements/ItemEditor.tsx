@@ -14,9 +14,10 @@ interface Props {
   projectId: string;
   uid: string;
   onClose: () => void;
+  onDirtyChange?: (isDirty: boolean) => void;
 }
 
-export default function ItemEditor({ projectId, uid, onClose }: Props) {
+export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: Props) {
   const { user } = useAuthStore();
   const canEdit = user?.role !== 'viewer';
   const qc = useQueryClient();
@@ -46,6 +47,23 @@ export default function ItemEditor({ projectId, uid, onClose }: Props) {
       setDirty(false);
     }
   }, [item]);
+
+  // Elternkomponente über dirty-Status informieren
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
+  // Browser-Tab schließen / neu laden: Warnung anzeigen wenn ungespeichert
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (dirty) {
+        e.preventDefault();
+        e.returnValue = ''; // Löst Browser-Warndialog aus
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
 
   const updateMut = useMutation({
     mutationFn: (data: object) => updateItem(projectId, uid, data),
