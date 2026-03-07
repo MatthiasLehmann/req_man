@@ -39,14 +39,17 @@ def get_project(project_id: str) -> Optional[Dict]:
     return next((p for p in projects if p["id"] == project_id), None)
 
 
-def create_project(name: str, description: str = "", path: Optional[str] = None) -> Dict:
+def create_project(name: str, description: str = "", path: str = "") -> Dict:
+    """Legt ein neues, leeres Doorstop-Projekt an dem angegebenen Pfad an."""
     import uuid
-    project_id = str(uuid.uuid4())[:8]
-    if path is None:
-        path = os.path.join(PROJECTS_ROOT, project_id)
 
+    if not path:
+        raise ValueError("Ein Speicherpfad ist erforderlich.")
+
+    path = os.path.abspath(path)
     os.makedirs(path, exist_ok=True)
 
+    project_id = str(uuid.uuid4())[:8]
     project = {
         "id": project_id,
         "name": name,
@@ -59,6 +62,65 @@ def create_project(name: str, description: str = "", path: Optional[str] = None)
     _save_projects_config(config)
 
     return project
+
+
+def import_project(path: str, name: Optional[str] = None, description: str = "") -> Dict:
+    """
+    Importiert ein bestehendes Doorstop-Projekt aus einem Verzeichnis.
+    Es wird nur in der Registry registriert; die Dateien bleiben unverändert.
+    """
+    import uuid
+
+    path = os.path.abspath(path)
+    if not os.path.isdir(path):
+        raise ValueError(f"Verzeichnis nicht gefunden: {path}")
+
+    # Prüfen ob dieser Pfad bereits registriert ist
+    config = _load_projects_config()
+    for p in config.get("projects", []):
+        if os.path.abspath(p["path"]) == path:
+            raise ValueError(f"Dieses Verzeichnis ist bereits als Projekt '{p['name']}' registriert.")
+
+    # Name aus Verzeichnisnamen ableiten wenn nicht angegeben
+    if not name:
+        name = os.path.basename(path)
+
+    project_id = str(uuid.uuid4())[:8]
+    project = {
+        "id": project_id,
+        "name": name,
+        "description": description or "",
+        "path": path,
+    }
+
+    config["projects"].append(project)
+    _save_projects_config(config)
+
+    return project
+
+
+def delete_project(project_id: str, delete_files: bool = False) -> bool:
+    """
+    Entfernt ein Projekt aus der Registry.
+    Mit delete_files=True wird auch das Verzeichnis physisch gelöscht.
+    """
+    import shutil
+
+    config = _load_projects_config()
+    projects = config.get("projects", [])
+    project = next((p for p in projects if p["id"] == project_id), None)
+
+    if not project:
+        return False
+
+    if delete_files:
+        path = project["path"]
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+
+    config["projects"] = [p for p in projects if p["id"] != project_id]
+    _save_projects_config(config)
+    return True
 
 
 def _build_tree(project_path: str) -> doorstop.Tree:

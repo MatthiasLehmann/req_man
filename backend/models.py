@@ -46,7 +46,17 @@ class UserResponse(UserBase):
 class ProjectCreate(BaseModel):
     name: str
     description: Optional[str] = ""
-    path: Optional[str] = None
+    path: str  # Pflichtangabe: Verzeichnis, in dem das Projekt gespeichert wird
+
+
+class ProjectImport(BaseModel):
+    path: str                        # Pfad zu einem bestehenden Doorstop-Projekt
+    name: Optional[str] = None       # Wenn leer, wird der Verzeichnisname verwendet
+    description: Optional[str] = ""
+
+
+class ProjectDelete(BaseModel):
+    delete_files: bool = False       # True = Verzeichnis wird physisch gelöscht
 
 
 class ProjectResponse(BaseModel):

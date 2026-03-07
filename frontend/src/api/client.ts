@@ -39,8 +39,12 @@ export const getMe = () => api.get('/auth/me');
 
 // Projects
 export const listProjects = () => api.get('/projects');
-export const createProject = (data: { name: string; description?: string }) =>
+export const createProject = (data: { name: string; description?: string; path: string }) =>
   api.post('/projects', data);
+export const importProject = (data: { path: string; name?: string; description?: string }) =>
+  api.post('/projects/import', data);
+export const deleteProject = (id: string, deleteFiles = false) =>
+  api.delete(`/projects/${id}?delete_files=${deleteFiles}`);
 export const getProject = (id: string) => api.get(`/projects/${id}`);
 
 // Documents
