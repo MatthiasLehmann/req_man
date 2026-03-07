@@ -327,18 +327,37 @@ function PanelHeader({
 
 export default function LinkingPage() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { currentProject } = useProjectStore();
+  const {
+    currentProject,
+    linkingLeftPrefix:  storedLeft,
+    linkingRightPrefix: storedRight,
+    setLinkingLeftPrefix,
+    setLinkingRightPrefix,
+  } = useProjectStore();
   const navigate = useNavigate();
   const qc = useQueryClient();
 
   const pid = projectId ?? currentProject?.id ?? '';
 
-  // UI-State
-  const [leftPrefix, setLeftPrefix]   = useState('');
-  const [rightPrefix, setRightPrefix] = useState('');
-  const [leftSearch, setLeftSearch]   = useState('');
+  // UI-State – aus Store wiederherstellen
+  const [leftPrefixState,  setLeftPrefixState]  = useState(() => storedLeft[pid]  ?? '');
+  const [rightPrefixState, setRightPrefixState] = useState(() => storedRight[pid] ?? '');
+  const [leftSearch,  setLeftSearch]  = useState('');
   const [rightSearch, setRightSearch] = useState('');
-  const [activeItem, setActiveItem]   = useState<Item | null>(null);
+  const [activeItem,  setActiveItem]  = useState<Item | null>(null);
+
+  // Wrapper, die Zustand + Store synchron halten
+  const setLeftPrefix = (v: string) => {
+    setLeftPrefixState(v);
+    if (pid) setLinkingLeftPrefix(pid, v);
+  };
+  const setRightPrefix = (v: string) => {
+    setRightPrefixState(v);
+    if (pid) setLinkingRightPrefix(pid, v);
+  };
+
+  const leftPrefix  = leftPrefixState;
+  const rightPrefix = rightPrefixState;
 
   // Sensor: min. 5 px Bewegung, damit normales Klicken weiterhin funktioniert
   const sensors = useSensors(

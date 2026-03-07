@@ -247,13 +247,19 @@ function ColumnPanel({
 
 export default function MatrixPage() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { currentProject } = useProjectStore();
+  const { currentProject, matrixPrefix: storedPrefixes, setMatrixPrefix } = useProjectStore();
   const navigate = useNavigate();
 
   const pid = projectId ?? currentProject?.id ?? '';
 
-  // UI-State
-  const [selectedPrefix, setSelectedPrefix] = useState('');
+  // UI-State – Prefix aus dem Store wiederherstellen
+  const [selectedPrefix, setSelectedPrefixState] = useState(() => storedPrefixes[pid] ?? '');
+
+  const setSelectedPrefix = (prefix: string) => {
+    setSelectedPrefixState(prefix);
+    if (pid) setMatrixPrefix(pid, prefix);
+  };
+
   const [showColPanel, setShowColPanel]  = useState(false);
   const [showFilters,  setShowFilters]   = useState(false);
   const [search,       setSearch]        = useState('');
