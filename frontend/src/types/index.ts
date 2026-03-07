@@ -90,6 +90,70 @@ export interface ProjectMetrics {
   review_coverage: number;
 }
 
+// Validation models
+export type ValidationStatus = 'APPROVED' | 'REJECTED' | 'NEEDS_REVISION';
+
+export interface ValidationStatusInfo {
+  status: ValidationStatus | null;
+  validation_date: string | null;
+  validator_username: string | null;
+  validator_display_name: string | null;
+  fingerprint_is_current: boolean;
+  validation_id: string | null;
+}
+
+export interface ChecklistItemData {
+  value: boolean;
+  note?: string;
+  refs?: string[];
+  applicable?: boolean;
+  coverage_percent?: number;
+  test_run_id?: string;
+  reviewer_username?: string;
+  reviewer_display_name?: string;
+  review_date?: string;
+}
+
+export interface ValidationChecklist {
+  requirement_complete: ChecklistItemData;
+  acceptance_criteria_defined: ChecklistItemData;
+  implementation_linked: ChecklistItemData;
+  tests_passed: ChecklistItemData;
+  peer_review: ChecklistItemData;
+  security_audit: ChecklistItemData;
+}
+
+export interface ValidationCreateRequest {
+  status: ValidationStatus;
+  checklist: ValidationChecklist;
+  summary: string;
+  skip_doorstop_check?: boolean;
+}
+
+export interface ValidationCreateResponse {
+  validation_id: string;
+  commit_hash: string;
+  commit_hash_short: string;
+  report_path: string;
+  status: ValidationStatus;
+}
+
+export interface ValidationReport {
+  schema_version: string;
+  requirement_id: string;
+  requirement_document: string;
+  requirement_text_hash: string;
+  validation_id: string;
+  validation_date: string;
+  validation_time: string;
+  validator: { username: string; display_name: string };
+  status: ValidationStatus;
+  checklist: Record<string, ChecklistItemData>;
+  summary: string;
+  related_commits: string[];
+  supersedes: string | null;
+}
+
 export interface AuthState {
   user: User | null;
   token: string | null;

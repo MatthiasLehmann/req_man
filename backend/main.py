@@ -8,7 +8,7 @@ from database import init_db, SessionLocal, User
 from auth import get_password_hash
 from routers import auth_router, users_router, projects_router
 from routers import documents_router, items_router, traceability_router
-from routers import metrics_router, attributes_router
+from routers import metrics_router, attributes_router, validation_router
 
 app = FastAPI(title="ReqMan - Requirements Management", version="1.0.0")
 
@@ -29,6 +29,7 @@ app.include_router(items_router.router)
 app.include_router(traceability_router.router)
 app.include_router(metrics_router.router)
 app.include_router(attributes_router.router)
+app.include_router(validation_router.router)
 
 # Serve frontend static files if built
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist')

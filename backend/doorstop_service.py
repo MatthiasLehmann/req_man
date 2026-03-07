@@ -42,12 +42,16 @@ def get_project(project_id: str) -> Optional[Dict]:
 def create_project(name: str, description: str = "", path: str = "") -> Dict:
     """Legt ein neues, leeres Doorstop-Projekt an dem angegebenen Pfad an."""
     import uuid
+    import git_service
 
     if not path:
         raise ValueError("Ein Speicherpfad ist erforderlich.")
 
     path = os.path.abspath(path)
     os.makedirs(path, exist_ok=True)
+
+    # Git-Repo initialisieren (idempotent – existiert es schon, wird es genutzt)
+    git_service.get_or_init_repo(path)
 
     project_id = str(uuid.uuid4())[:8]
     project = {

@@ -90,3 +90,17 @@ export const listUsers = () => api.get('/users');
 export const createUser = (data: object) => api.post('/users', data);
 export const updateUser = (id: number, data: object) => api.put(`/users/${id}`, data);
 export const deleteUser = (id: number) => api.delete(`/users/${id}`);
+
+// Validation (Konzept 2)
+export const createValidation = (projectId: string, uid: string, data: object) =>
+  api.post(`/projects/${projectId}/items/${uid}/validate`, data);
+export const getLatestValidation = (projectId: string, uid: string) =>
+  api.get(`/projects/${projectId}/items/${uid}/validations/latest`);
+export const getValidationHistory = (projectId: string, uid: string) =>
+  api.get(`/projects/${projectId}/items/${uid}/validations`);
+export const getAllValidations = (projectId: string) =>
+  api.get(`/projects/${projectId}/validations`);
+export const getGitLog = (projectId: string, maxCount = 50) =>
+  api.get(`/projects/${projectId}/git/log?max_count=${maxCount}`);
+export const getGitStatus = (projectId: string) =>
+  api.get(`/projects/${projectId}/git/status`);

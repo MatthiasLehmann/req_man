@@ -154,6 +154,16 @@ class TraceabilityData(BaseModel):
     links: List[TraceabilityLink]
 
 
+# Validation models
+class ValidationStatus(BaseModel):
+    status: Optional[str] = None          # APPROVED | REJECTED | NEEDS_REVISION | None
+    validation_date: Optional[str] = None
+    validator_username: Optional[str] = None
+    validator_display_name: Optional[str] = None
+    fingerprint_is_current: bool = False
+    validation_id: Optional[str] = None
+
+
 # Metrics models
 class DocumentMetrics(BaseModel):
     prefix: str

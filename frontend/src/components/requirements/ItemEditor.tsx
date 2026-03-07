@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, X, Link2, Tag, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { Save, X, Link2, Tag, ChevronDown, ChevronUp, Loader2, GitCommit, History } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
-import { getItem, updateItem, getAttributes } from '../../api/client';
-import { Item, AttributeDefinition } from '../../types';
+import { getItem, updateItem, getAttributes, getLatestValidation } from '../../api/client';
+import { Item, AttributeDefinition, ValidationStatusInfo } from '../../types';
 import { useAuthStore } from '../../store/authStore';
 import MarkdownEditor from './MarkdownEditor';
 import HelpTooltip, { FieldLabel } from '../ui/HelpTooltip';
 import { DOORSTOP_HELP } from '../ui/doorstopHelp';
+import ValidationBadge from '../validation/ValidationBadge';
+import ValidationDialog from '../validation/ValidationDialog';
+import ValidationHistory from '../validation/ValidationHistory';
 
 interface Props {
   projectId: string;
@@ -34,12 +37,21 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
   });
   const customAttrs: AttributeDefinition[] = attrsRes?.data || [];
 
+  const { data: validationRes } = useQuery<ValidationStatusInfo>({
+    queryKey: ['validation-latest', projectId, uid],
+    queryFn: () => getLatestValidation(projectId, uid).then((r) => r.data),
+    enabled: !!uid,
+  });
+  const validationInfo = validationRes ?? null;
+
   const item: Item | undefined = itemRes?.data;
 
   const [form, setForm] = useState<Partial<Item>>({});
   const [dirty, setDirty] = useState(false);
   const [newLink, setNewLink] = useState('');
   const [showCustom, setShowCustom] = useState(false);
+  const [showValidationDialog, setShowValidationDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState<'details' | 'validation'>('details');
 
   useEffect(() => {
     if (item) {
@@ -132,7 +144,7 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
     <div className="flex flex-col h-full bg-white">
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50 shrink-0">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           {/* UID mit Tooltip */}
           <div className="flex items-center gap-1.5">
             <h3 className="font-mono font-semibold text-gray-800">{uid}</h3>
@@ -145,17 +157,28 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
           {dirty && <span className="badge-yellow text-xs">Ungespeichert</span>}
           {item.reviewed && <span className="badge-green text-xs">Reviewed</span>}
           {!item.active && <span className="badge-gray text-xs">Inaktiv</span>}
+          <ValidationBadge info={validationInfo} size="sm" />
         </div>
         <div className="flex items-center gap-2">
           {canEdit && (
-            <button
-              onClick={handleSave}
-              disabled={!dirty || updateMut.isPending}
-              className="btn-primary text-xs py-1.5"
-            >
-              {updateMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-              Speichern
-            </button>
+            <>
+              <button
+                onClick={handleSave}
+                disabled={!dirty || updateMut.isPending}
+                className="btn-primary text-xs py-1.5"
+              >
+                {updateMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                Speichern
+              </button>
+              <button
+                onClick={() => setShowValidationDialog(true)}
+                className="btn-secondary text-xs py-1.5"
+                title="Validierung starten"
+              >
+                <GitCommit className="w-3 h-3" />
+                Validieren
+              </button>
+            </>
           )}
           <button onClick={onClose} className="btn-ghost text-xs py-1.5">
             <X className="w-3 h-3" />
@@ -163,7 +186,39 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
         </div>
       </div>
 
+      {/* ── Tabs ── */}
+      <div className="flex border-b border-gray-200 bg-white shrink-0">
+        <button
+          onClick={() => setActiveTab('details')}
+          className={clsx(
+            'px-4 py-2 text-xs font-medium border-b-2 transition-colors',
+            activeTab === 'details'
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700',
+          )}
+        >
+          Details
+        </button>
+        <button
+          onClick={() => setActiveTab('validation')}
+          className={clsx(
+            'flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors',
+            activeTab === 'validation'
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700',
+          )}
+        >
+          <History className="w-3 h-3" />
+          Validierungen
+        </button>
+      </div>
+
       {/* ── Body ── */}
+      {activeTab === 'validation' ? (
+        <div className="flex-1 overflow-y-auto p-4">
+          <ValidationHistory projectId={projectId} uid={uid} />
+        </div>
+      ) : (
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
 
         {/* ── Metaattribute ── */}
@@ -340,6 +395,17 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
           </div>
         )}
       </div>
+      )}
+
+      {/* ── Validierungs-Dialog ── */}
+      {showValidationDialog && (
+        <ValidationDialog
+          projectId={projectId}
+          uid={uid}
+          onClose={() => setShowValidationDialog(false)}
+          onSuccess={() => setActiveTab('validation')}
+        />
+      )}
     </div>
   );
 }
