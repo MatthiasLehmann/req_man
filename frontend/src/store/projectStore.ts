@@ -6,6 +6,12 @@ interface ProjectStore {
   currentProject: Project | null;
   setCurrentProject: (project: Project | null) => void;
 
+  // Requirements-View: zuletzt gewähltes Dokument + Item (pro Projekt)
+  requirementsPrefix: Record<string, string>;
+  requirementsUid:    Record<string, string>;
+  setRequirementsPrefix: (projectId: string, prefix: string) => void;
+  setRequirementsUid:    (projectId: string, uid: string) => void;
+
   // Matrix-View: zuletzt gewähltes Dokument (pro Projekt)
   matrixPrefix: Record<string, string>;
   setMatrixPrefix: (projectId: string, prefix: string) => void;
@@ -22,6 +28,13 @@ export const useProjectStore = create<ProjectStore>()(
     (set) => ({
       currentProject: null,
       setCurrentProject: (project) => set({ currentProject: project }),
+
+      requirementsPrefix: {},
+      requirementsUid: {},
+      setRequirementsPrefix: (projectId, prefix) =>
+        set((s) => ({ requirementsPrefix: { ...s.requirementsPrefix, [projectId]: prefix } })),
+      setRequirementsUid: (projectId, uid) =>
+        set((s) => ({ requirementsUid: { ...s.requirementsUid, [projectId]: uid } })),
 
       matrixPrefix: {},
       setMatrixPrefix: (projectId, prefix) =>

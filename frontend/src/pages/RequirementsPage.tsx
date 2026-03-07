@@ -57,15 +57,38 @@ function UnsavedModal({ onConfirm, onCancel }: UnsavedModalProps) {
 
 export default function RequirementsPage() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { currentProject, setCurrentProject } = useProjectStore();
+  const {
+    currentProject, setCurrentProject,
+    requirementsPrefix: storedPrefixes,
+    requirementsUid:    storedUids,
+    setRequirementsPrefix,
+    setRequirementsUid,
+  } = useProjectStore();
   const navigate = useNavigate();
 
-  const [selectedPrefix, setSelectedPrefix] = useState<string | null>(null);
-  const [selectedUid, setSelectedUid]       = useState<string | null>(null);
-  const [editorDirty, setEditorDirty]       = useState(false);
+  const pid = projectId ?? currentProject?.id ?? '';
+
+  // Aus Store wiederherstellen
+  const [selectedPrefix, setSelectedPrefixState] = useState<string | null>(
+    () => storedPrefixes[pid] || null,
+  );
+  const [selectedUid, setSelectedUidState] = useState<string | null>(
+    () => storedUids[pid] || null,
+  );
+  const [editorDirty, setEditorDirty] = useState(false);
 
   // Ausstehende Aktion (Item-/Dok-Wechsel oder Sidebar-Navigation)
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+
+  // Wrapper, die lokalen State + Store synchron halten
+  const setSelectedPrefix = (prefix: string | null) => {
+    setSelectedPrefixState(prefix);
+    if (pid) setRequirementsPrefix(pid, prefix ?? '');
+  };
+  const setSelectedUid = (uid: string | null) => {
+    setSelectedUidState(uid);
+    if (pid) setRequirementsUid(pid, uid ?? '');
+  };
 
   // ── Projekt laden ────────────────────────────────────────────────────────────
   const { data: projectRes } = useQuery({
