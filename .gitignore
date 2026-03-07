@@ -1,0 +1,65 @@
+# ─── Python / Backend ─────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+
+# Virtuelle Umgebungen
+backend/.venv/
+.venv/
+venv/
+env/
+ENV/
+
+# Distribution / Build
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+
+# pytest / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# mypy / Linter
+.mypy_cache/
+.ruff_cache/
+
+# ─── Laufzeitdaten (werden zur Laufzeit erzeugt) ──────────────────────────────
+data/reqman.db
+data/projects.json
+data/attributes.yml
+
+# ─── Doorstop-Projekte (nutzerspezifische Daten) ─────────────────────────────
+projects/
+
+# ─── Node / Frontend ──────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Lokale Env-Dateien
+.env
+.env.local
+.env.*.local
+
+# ─── macOS ────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ─── Editoren & IDEs ──────────────────────────────────────────────────────────
+.idea/
+.vscode/
+.claude/
+*.swp
+*.swo
+*~
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
