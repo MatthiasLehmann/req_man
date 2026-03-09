@@ -73,6 +73,10 @@ export const addLink = (projectId: string, sourceUid: string, targetUid: string)
 export const removeLink = (projectId: string, sourceUid: string, targetUid: string) =>
   api.delete(`/projects/${projectId}/items/${sourceUid}/links/${targetUid}`);
 
+// Review (doorstop stamp)
+export const reviewItem = (projectId: string, uid: string) =>
+  api.post(`/projects/${projectId}/items/${uid}/review`);
+
 // Traceability
 export const getTraceability = (projectId: string) =>
   api.get(`/projects/${projectId}/traceability`);
@@ -104,3 +108,12 @@ export const getGitLog = (projectId: string, maxCount = 50) =>
   api.get(`/projects/${projectId}/git/log?max_count=${maxCount}`);
 export const getGitStatus = (projectId: string) =>
   api.get(`/projects/${projectId}/git/status`);
+
+// Uploads
+export const uploadImage = (file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return api.post<{ url: string; filename: string; original_name: string; size: number }>("/uploads", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};

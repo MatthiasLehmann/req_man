@@ -28,7 +28,7 @@ export const DOORSTOP_HELP: Record<string, DoorstopAttrHelp> = {
     text:
       'Gibt an, ob eine Anforderung gültig und aktiv ist. ' +
       'Inaktive Anforderungen (z.B. veraltete oder abgelehnte) bleiben im System erhalten, ' +
-      'werden aber bei Validierungen, Metriken und Berichten nicht berücksichtigt. ' +
+      'werden aber bei Reviews, Metriken und Berichten nicht berücksichtigt. ' +
       'Dies ermöglicht ein sauberes Change-Management ohne Datenverlust.',
   },
   normative: {
@@ -61,7 +61,7 @@ export const DOORSTOP_HELP: Record<string, DoorstopAttrHelp> = {
       'Verlinkungen zu Anforderungen in anderen Dokumenten (z.B. SYS-001, SPEC-042). ' +
       'Links bilden die Grundlage der Traceability: Sie zeigen, welche übergeordneten ' +
       'Anforderungen durch diese Anforderung abgedeckt werden. ' +
-      'Normative Anforderungen ohne Links erzeugen Warnungen bei der Doorstop-Validierung. ' +
+      'Normative Anforderungen ohne Links erzeugen Warnungen beim Doorstop-Review. ' +
       'Format: Präfix-Nummer (z.B. REQ-001). Mehrere Links möglich.',
   },
   reviewed: {

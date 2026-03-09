@@ -1,7 +1,7 @@
 import { NavLink, useParams } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, GitBranch, BarChart3, Table2,
-  Link2, Settings, ChevronRight, Database
+  Link2, Settings, ChevronRight, Database, HelpCircle
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useProjectStore } from '../../store/projectStore';
@@ -73,6 +73,21 @@ export default function Sidebar() {
 
       {/* Bottom */}
       <div className="p-3 border-t border-gray-700 space-y-1">
+        <NavLink
+          to="/help"
+          className={({ isActive }) =>
+            clsx(
+              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+              isActive
+                ? 'bg-primary-600 text-white'
+                : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+            )
+          }
+        >
+          <HelpCircle className="w-4 h-4" />
+          Hilfe
+        </NavLink>
+
         {user?.role === 'admin' && (
           <NavLink
             to="/admin"

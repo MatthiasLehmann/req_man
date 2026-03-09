@@ -129,6 +129,7 @@ export default function ValidationDialog({ projectId, uid, onClose, onSuccess }:
   const [checklist, setChecklist] = useState<ValidationChecklist>(defaultChecklist());
   const [summary, setSummary] = useState('');
   const [skipDoorstopCheck, setSkipDoorstopCheck] = useState(false);
+  const [skipReviewStamp, setSkipReviewStamp] = useState(false);
   const [newRef, setNewRef] = useState('');
 
   const updateChecklist = <K extends keyof ValidationChecklist>(
@@ -168,16 +169,19 @@ export default function ValidationDialog({ projectId, uid, onClose, onSuccess }:
         checklist,
         summary: summary.trim(),
         skip_doorstop_check: skipDoorstopCheck,
+        skip_review_stamp: skipReviewStamp,
       }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['validation-latest', projectId, uid] });
       qc.invalidateQueries({ queryKey: ['validation-history', projectId, uid] });
-      toast.success(`Validierung gespeichert – Commit ${res.data.commit_hash_short}`);
+      qc.invalidateQueries({ queryKey: ['item', projectId, uid] });
+      const stampInfo = res.data.review_stamped ? ' · Review-Stempel gesetzt ✓' : '';
+      toast.success(`Review gespeichert – Commit ${res.data.commit_hash_short}${stampInfo}`);
       onSuccess?.(res.data);
       onClose();
     },
     onError: (e: any) => {
-      toast.error(e.response?.data?.detail || 'Fehler bei der Validierung');
+      toast.error(e.response?.data?.detail || 'Fehler beim Review');
     },
   });
 
@@ -203,7 +207,7 @@ export default function ValidationDialog({ projectId, uid, onClose, onSuccess }:
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-gray-50 shrink-0">
           <div className="flex items-center gap-2">
             <GitCommit className="w-4 h-4 text-primary-600" />
-            <h2 className="text-sm font-semibold text-gray-800">Validierung</h2>
+            <h2 className="text-sm font-semibold text-gray-800">Review</h2>
             <span className="font-mono text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{uid}</span>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -216,7 +220,7 @@ export default function ValidationDialog({ projectId, uid, onClose, onSuccess }:
 
           {/* Status */}
           <div>
-            <p className="text-xs font-medium text-gray-600 mb-2">Validierungsstatus</p>
+            <p className="text-xs font-medium text-gray-600 mb-2">Review-Status</p>
             <div className="flex gap-2">
               {statusOptions.map(({ value, label, Icon, color }) => (
                 <button
@@ -392,7 +396,7 @@ export default function ValidationDialog({ projectId, uid, onClose, onSuccess }:
             </label>
             <textarea
               className="input text-sm py-2 resize-y min-h-[80px]"
-              placeholder="Ergebnis der Validierung beschreiben …"
+              placeholder="Ergebnis des Reviews beschreiben …"
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
             />
@@ -403,15 +407,48 @@ export default function ValidationDialog({ projectId, uid, onClose, onSuccess }:
             <summary className="cursor-pointer text-gray-400 hover:text-gray-600 select-none">
               Erweiterte Optionen
             </summary>
-            <label className="flex items-center gap-2 mt-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={skipDoorstopCheck}
-                onChange={(e) => setSkipDoorstopCheck(e.target.checked)}
-                className="rounded border-gray-300"
-              />
-              <span className="text-gray-600">doorstop check überspringen</span>
-            </label>
+            <div className="mt-2 space-y-2 pl-1">
+              {/* Auto-Review-Stamp Info + Opt-out */}
+              <div className={clsx(
+                'rounded-lg border px-3 py-2 text-xs',
+                status === 'APPROVED' && !skipReviewStamp
+                  ? 'bg-green-50 border-green-200 text-green-700'
+                  : 'bg-gray-50 border-gray-200 text-gray-500',
+              )}>
+                {status === 'APPROVED' && !skipReviewStamp ? (
+                  <p>
+                    <span className="font-medium">Auto-Stamp aktiv:</span>{' '}
+                    Bei APPROVED wird der doorstop Review-Stempel automatisch gesetzt.
+                    Der SHA256-Hash im Item-YAML stimmt dann mit dem Review-Report überein.
+                  </p>
+                ) : status === 'APPROVED' && skipReviewStamp ? (
+                  <p>Auto-Stamp deaktiviert – Review-Stempel muss manuell gesetzt werden.</p>
+                ) : (
+                  <p>Auto-Stamp nur bei APPROVED-Reviews.</p>
+                )}
+                {status === 'APPROVED' && (
+                  <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={skipReviewStamp}
+                      onChange={(e) => setSkipReviewStamp(e.target.checked)}
+                      className="rounded border-gray-300"
+                    />
+                    <span>Review-Stempel NICHT setzen (DO-178C / ISO 26262 strikte Trennung)</span>
+                  </label>
+                )}
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={skipDoorstopCheck}
+                  onChange={(e) => setSkipDoorstopCheck(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                <span className="text-gray-600">doorstop check überspringen</span>
+              </label>
+            </div>
           </details>
         </div>
 

@@ -139,6 +139,16 @@
   @apply text-primary-600 underline;
 }
 
+.tiptap-editor .ProseMirror img,
+.tiptap-editor .ProseMirror .tiptap-image {
+  @apply max-w-full h-auto rounded-lg my-3 border border-gray-200 shadow-sm block;
+  cursor: default;
+}
+
+.tiptap-editor .ProseMirror img.ProseMirror-selectednode {
+  @apply outline-none ring-2 ring-primary-500 ring-offset-1;
+}
+
 .tiptap-editor .ProseMirror .is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   @apply text-gray-400 pointer-events-none float-left h-0;

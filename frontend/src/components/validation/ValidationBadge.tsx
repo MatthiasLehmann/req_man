@@ -9,7 +9,7 @@ interface Props {
 
 const STATUS_CONFIG = {
   APPROVED: {
-    label: 'Validiert',
+    label: 'Reviewed',
     icon: CheckCircle,
     className: 'bg-green-50 text-green-700 border-green-200',
   },
@@ -37,10 +37,10 @@ export default function ValidationBadge({ info, size = 'sm' }: Props) {
           size === 'sm' ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-sm',
           'bg-gray-50 text-gray-500 border-gray-200',
         )}
-        title="Noch nicht validiert"
+        title="Noch kein Review durchgeführt"
       >
         <Clock className={size === 'sm' ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
-        Nicht validiert
+        Kein Review
       </span>
     );
   }
@@ -53,7 +53,7 @@ export default function ValidationBadge({ info, size = 'sm' }: Props) {
           size === 'sm' ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-sm',
           'bg-orange-50 text-orange-700 border-orange-200',
         )}
-        title="Anforderung wurde nach der Validierung geändert – Re-Validierung erforderlich"
+        title="Anforderung wurde nach dem Review geändert – Re-Review erforderlich"
       >
         <AlertTriangle className={size === 'sm' ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
         Veraltet
@@ -71,7 +71,7 @@ export default function ValidationBadge({ info, size = 'sm' }: Props) {
         size === 'sm' ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-sm',
         cfg.className,
       )}
-      title={info?.validation_date ? `Validiert am ${info.validation_date}` : undefined}
+      title={info?.validation_date ? `Reviewed am ${info.validation_date}` : undefined}
     >
       <Icon className={size === 'sm' ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
       {cfg.label}
