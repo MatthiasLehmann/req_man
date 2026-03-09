@@ -21,8 +21,13 @@ SCHEMA_VERSION = "1.0"
 
 def get_fingerprint(project_id: str, item_uid: str) -> Optional[str]:
     """
-    Liest den aktuellen doorstop-SHA256-Fingerprint eines Items.
-    Gibt None zurück wenn das Item noch nicht reviewed wurde.
+    Berechnet den aktuellen SHA256-Fingerprint eines Items (item.stamp(links=True)).
+    Dieser Wert ändert sich sobald UID, Text, Ref oder Links geändert werden.
+
+    WICHTIG: Wir berechnen den Stamp immer NEU aus dem aktuellen Inhalt,
+    statt den gespeicherten Stamp aus item._data["reviewed"] zu lesen.
+    Nur so kann fingerprint_is_current() erkennen, ob sich die Anforderung
+    seit der letzten Validierung geändert hat.
     """
     project = ds.get_project(project_id)
     if not project:
@@ -30,9 +35,10 @@ def get_fingerprint(project_id: str, item_uid: str) -> Optional[str]:
     try:
         tree = ds._build_tree(project["path"])
         item = tree.find_item(item_uid)
-        rv = item.reviewed
-        if rv and rv is not False:
-            return str(rv)
+        current_stamp = item.stamp(links=True)  # berechnet aus aktuellem Inhalt
+        rv_str = str(current_stamp)             # Stamp.__str__() → SHA256-String
+        if rv_str:
+            return rv_str
     except Exception:
         pass
     return None
@@ -107,17 +113,20 @@ def create_validation(
     validator_display_name: str,
     validator_email: str,
     skip_doorstop_check: bool = False,
+    skip_review_stamp: bool = False,
 ) -> Dict[str, Any]:
     """
     Erstellt einen Validierungsreport und committet ihn in Git.
 
     Schritte:
-    1. Fingerprint aus doorstop auslesen
+    1. Fingerprint aus doorstop auslesen (aktuell berechneter Stamp)
     2. doorstop check ausführen (kann per skip_doorstop_check übersprungen werden)
     3. Report-YAML generieren
     4. Report in validation/ schreiben
     5. git add + git commit (req YAML + report YAML)
-    6. Commit-Hash zurückgeben
+    6. Bei status == APPROVED und nicht skip_review_stamp: item.review() aufrufen,
+       damit der doorstop-Stempel mit dem Validierungs-Fingerprint übereinstimmt.
+       (Option A: Auto-Stamp – entspricht Codebeamer/Jama-Pattern)
 
     Raises ValueError bei Fehlern.
     """
@@ -145,11 +154,13 @@ def create_validation(
 
     # 4. Report-Dict aufbauen
     now = datetime.now(timezone.utc)
-    # Dokument-Prefix aus dem Pfad ermitteln (zuverlässiger als String-Split)
+    # Dokument-Prefix als einfachen String ermitteln.
+    # WICHTIG: _item.document.prefix gibt ein doorstop-Prefix-Objekt zurück –
+    # str() konvertieren, damit yaml.dump() keinen Python-spezifischen Tag erzeugt.
     try:
         _tree = ds._build_tree(project_path)
         _item = _tree.find_item(item_uid)
-        doc_prefix = _item.document.prefix
+        doc_prefix = str(_item.document.prefix)
     except Exception:
         doc_prefix = item_uid.split("-")[0]
 
@@ -206,12 +217,30 @@ def create_validation(
         report_abs.unlink(missing_ok=True)
         raise ValueError(f"Git-Commit fehlgeschlagen: {e}")
 
+    # 9. Auto-Stamp (Option A):
+    # Bei APPROVED-Validierung den doorstop Review-Stempel automatisch setzen,
+    # damit reviewed-Hash == requirement_text_hash im Validierungsreport.
+    # Das entspricht dem Codebeamer/Jama-Pattern: abgeschlossene Approval-Validierung
+    # triggert automatisch den Reviewed-Statusübergang.
+    # Kann per skip_review_stamp=True deaktiviert werden (für DO-178C / ISO 26262-Projekte
+    # die Review und Validation formell getrennt nachweisen müssen).
+    review_stamped = False
+    if status == "APPROVED" and not skip_review_stamp:
+        try:
+            tree = ds._build_tree(project_path)
+            item = tree.find_item(item_uid)
+            item.review()  # setzt reviewed = item.stamp(links=True) und speichert
+            review_stamped = True
+        except Exception:
+            pass  # Stamp-Fehler ist nicht-fatal; Validierungsreport wurde bereits committed
+
     return {
         "validation_id": validation_id,
         "commit_hash": commit_hash,
         "commit_hash_short": commit_hash[:8],
         "report_path": report_rel,
         "status": status,
+        "review_stamped": review_stamped,
     }
 
 

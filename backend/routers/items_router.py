@@ -65,6 +65,8 @@ async def update_item(
         return updated
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Interner Fehler: {e}")
 
 
 @router.delete("/items/{uid}", status_code=204)
@@ -105,6 +107,26 @@ async def remove_link(
         result = ds.remove_link(project_id, uid, target_uid)
         if result is None:
             raise HTTPException(status_code=404, detail="Item not found")
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/items/{uid}/review", response_model=ItemResponse)
+async def review_item(
+    project_id: str,
+    uid: str,
+    current_user: User = Depends(require_editor),
+):
+    """
+    Stempelt ein Item mit dem aktuellen Inhalts-Hash (doorstop review).
+    Setzt reviewed = SHA256(uid + text + ref + links).
+    Erfordert Editor-Rolle.
+    """
+    try:
+        result = ds.review_item(project_id, uid)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Item nicht gefunden")
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

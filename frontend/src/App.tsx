@@ -8,6 +8,7 @@ import MetricsPage from './pages/MetricsPage';
 import MatrixPage from './pages/MatrixPage';
 import LinkingPage from './pages/LinkingPage';
 import AdminPage from './pages/AdminPage';
+import HelpPage from './pages/HelpPage';
 import Layout from './components/layout/Layout';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -48,6 +49,7 @@ export default function App() {
             </AdminRoute>
           }
         />
+        <Route path="help" element={<HelpPage />} />
       </Route>
     </Routes>
   );

@@ -41,6 +41,8 @@ class ValidationCreate(BaseModel):
     checklist: Dict[str, ChecklistItem]
     summary: str
     skip_doorstop_check: bool = False    # Für Projekte ohne vollst. doorstop-Baum
+    skip_review_stamp: bool = False      # Opt-out: Review-Stempel NICHT auto-setzen
+                                         # (für DO-178C / ISO 26262 strikte Projekte)
 
 
 class ValidationCreateResponse(BaseModel):
@@ -49,6 +51,7 @@ class ValidationCreateResponse(BaseModel):
     commit_hash_short: str
     report_path: str
     status: str
+    review_stamped: bool = False         # True wenn doorstop Review-Stempel gesetzt wurde
 
 
 class ValidationStatusResponse(BaseModel):
@@ -102,6 +105,7 @@ async def create_validation(
             validator_display_name=current_user.full_name,
             validator_email=current_user.email,
             skip_doorstop_check=body.skip_doorstop_check,
+            skip_review_stamp=body.skip_review_stamp,
         )
         return result
     except ValueError as e:
