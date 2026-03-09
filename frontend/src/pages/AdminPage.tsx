@@ -547,7 +547,7 @@ function AttributesTab() {
                         <span className="text-sm text-gray-700">Pflichtfeld</span>
                         <HelpTooltip
                           title="Pflichtfeld"
-                          text="Pflichtfelder werden mit einem roten Sternchen (*) gekennzeichnet. Die Validierung erfolgt manuell – Doorstop erzwingt keine Eingabe."
+                          text="Pflichtfelder werden mit einem roten Sternchen (*) gekennzeichnet. Das Review erfolgt manuell – Doorstop erzwingt keine Eingabe."
                         />
                       </label>
                     </div>

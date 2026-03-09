@@ -170,7 +170,7 @@ export default function ValidationHistory({ projectId, uid }: Props) {
   if (!data || data.length === 0) {
     return (
       <p className="text-xs text-gray-400 italic text-center py-4">
-        Noch keine Validierungen vorhanden
+        Noch keine Reviews vorhanden
       </p>
     );
   }
