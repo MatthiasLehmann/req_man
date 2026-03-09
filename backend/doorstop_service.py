@@ -268,12 +268,19 @@ def _item_to_dict(item: doorstop.Item) -> Dict:
     except Exception:
         pass
 
-    # In doorstop 3.1, reviewed is False (not None) when unreviewed
+    # item.reviewed ist eine bool-Property (aktueller Stamp == gespeicherter Stamp).
+    # Den tatsächlichen Hash-String bekommt man über item._data["reviewed"] → str(Stamp).
+    # Stamp.__str__() gibt "" für Stamp(True/False/None) und den SHA256-String für echte Hashes.
     reviewed = None
+    reviewed_current = None  # None = nie reviewed, True = Fingerprint ok, False = Inhalt geändert
     try:
-        rv = item.reviewed
-        if rv and rv is not False:
-            reviewed = str(rv)
+        rv_stamp = item._data.get("reviewed")
+        if rv_stamp:  # Stamp(True) oder Stamp("hash...") sind truthy
+            rv_str = str(rv_stamp)  # "" für Stamp(True), SHA256 für echte Stempel
+            if rv_str:
+                reviewed = rv_str
+                # item.reviewed (bool-Property) prüft ob aktueller Fingerprint mit gespeichertem übereinstimmt
+                reviewed_current = bool(item.reviewed)
     except Exception:
         pass
 
@@ -295,6 +302,7 @@ def _item_to_dict(item: doorstop.Item) -> Dict:
         "derived": bool(item.derived),
         "links": links,
         "reviewed": reviewed,
+        "reviewed_current": reviewed_current,
         "custom_attributes": custom_attributes,
     }
 
@@ -310,24 +318,38 @@ def create_item(project_id: str, prefix: str, data: Dict) -> Dict:
         doc = tree.find_document(prefix)
         item = doc.add_item()
 
-        if data.get("text"):
-            item.text = data["text"]
-        if data.get("level"):
-            item.level = doorstop.core.types.Level(data["level"])
-        if "header" in data:
-            item.header = data["header"]
-        if "normative" in data:
-            item.normative = data["normative"]
-        if "active" in data:
-            item.active = data["active"]
-        if data.get("links"):
-            for link in data["links"]:
-                item.link(link)
+        # Disable auto-save to avoid partial writes
+        item.auto = False
 
-        # Set custom attributes
-        custom_attrs = data.get("custom_attributes", {})
-        for key, value in custom_attrs.items():
-            item.set(key, value)
+        try:
+            if data.get("text"):
+                item.text = data["text"]
+            if data.get("level"):
+                item.level = doorstop.core.types.Level(data["level"])
+            if "header" in data:
+                h_val = data["header"]
+                if isinstance(h_val, bool):
+                    if not h_val:
+                        item._data["header"] = doorstop.core.types.Text("")
+                    else:
+                        # Use UID as default header title for new header items
+                        item._data["header"] = doorstop.core.types.Text(str(item.uid))
+                elif isinstance(h_val, str):
+                    item._data["header"] = doorstop.core.types.Text(h_val)
+            if "normative" in data:
+                item.normative = data["normative"]
+            if "active" in data:
+                item.active = data["active"]
+            if data.get("links"):
+                for link in data["links"]:
+                    item.link(link)
+
+            # Set custom attributes
+            custom_attrs = data.get("custom_attributes", {})
+            for key, value in custom_attrs.items():
+                item.set(key, value)
+        finally:
+            item.auto = True
 
         item.save()
         return _item_to_dict(item)
@@ -345,35 +367,78 @@ def update_item(project_id: str, uid: str, data: Dict) -> Optional[Dict]:
         tree = _build_tree(path)
         item = tree.find_item(uid)
 
-        if "text" in data and data["text"] is not None:
-            item.text = data["text"]
-        if "level" in data and data["level"] is not None:
-            item.level = doorstop.core.types.Level(data["level"])
-        if "header" in data and data["header"] is not None:
-            item.header = data["header"]
-        if "normative" in data and data["normative"] is not None:
-            item.normative = data["normative"]
-        if "active" in data and data["active"] is not None:
-            item.active = data["active"]
-        if "derived" in data and data["derived"] is not None:
-            item.derived = data["derived"]
+        # Disable auto-save so that each property setter doesn't immediately
+        # write to disk. This prevents partial saves when a later setter fails.
+        # We do one explicit item.save() at the end.
+        item.auto = False
 
-        if "links" in data and data["links"] is not None:
-            # Clear existing links and set new ones
-            item.links = []
-            for link in data["links"]:
-                try:
-                    item.link(link)
-                except Exception:
-                    pass
+        try:
+            if "text" in data and data["text"] is not None:
+                item.text = data["text"]
+            if "level" in data and data["level"] is not None:
+                item.level = doorstop.core.types.Level(data["level"])
+            if "header" in data:
+                h_val = data["header"]
+                if isinstance(h_val, bool):
+                    if not h_val:
+                        # False → clear the header text
+                        item._data["header"] = doorstop.core.types.Text("")
+                    else:
+                        # True → doorstop.Text(True) raises TypeError.
+                        # Keep existing header text if already set.
+                        # If the item has no header text yet, use the UID as
+                        # a default title so the item becomes a proper header.
+                        existing = str(item._data.get("header", ""))
+                        if not existing:
+                            item._data["header"] = doorstop.core.types.Text(str(item.uid))
+                elif isinstance(h_val, str):
+                    # String value: set directly (e.g. header title text)
+                    item._data["header"] = doorstop.core.types.Text(h_val)
+            if "normative" in data and data["normative"] is not None:
+                item.normative = data["normative"]
+            if "active" in data and data["active"] is not None:
+                item.active = data["active"]
+            if "derived" in data and data["derived"] is not None:
+                item.derived = data["derived"]
 
-        # Update custom attributes
-        custom_attrs = data.get("custom_attributes", {})
-        if custom_attrs:
-            for key, value in custom_attrs.items():
-                item.set(key, value)
+            if "links" in data and data["links"] is not None:
+                # Clear existing links and set new ones
+                item.links = []
+                for link in data["links"]:
+                    try:
+                        item.link(link)
+                    except Exception:
+                        pass
+
+            # Update custom attributes
+            custom_attrs = data.get("custom_attributes", {})
+            if custom_attrs:
+                for key, value in custom_attrs.items():
+                    item.set(key, value)
+        finally:
+            item.auto = True
 
         item.save()
+        return _item_to_dict(item)
+    except doorstop.DoorstopError as e:
+        raise ValueError(str(e))
+
+
+def review_item(project_id: str, uid: str) -> Optional[Dict]:
+    """
+    Stempelt ein Item mit dem aktuellen Inhalts-Hash (item.review()).
+    Entspricht 'doorstop review <UID>' auf der CLI.
+    Gibt das aktualisierte Item-Dict zurück.
+    """
+    project = get_project(project_id)
+    if not project:
+        raise ValueError(f"Project {project_id} not found")
+
+    path = project["path"]
+    try:
+        tree = _build_tree(path)
+        item = tree.find_item(uid)
+        item.review()      # setzt _data["reviewed"] = item.stamp(links=True) und speichert
         return _item_to_dict(item)
     except doorstop.DoorstopError as e:
         raise ValueError(str(e))

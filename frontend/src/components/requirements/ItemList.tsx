@@ -314,7 +314,7 @@ function TreeRow({
       <div className="shrink-0 mt-0.5">
         {!item.active ? (
           <Circle className="w-3.5 h-3.5 text-gray-300" />
-        ) : item.reviewed ? (
+        ) : item.reviewed && item.reviewed_current === true ? (
           <CheckCircle className="w-3.5 h-3.5 text-green-500" />
         ) : (
           <AlertCircle className="w-3.5 h-3.5 text-yellow-500" />
@@ -333,6 +333,9 @@ function TreeRow({
           <span className="text-xs text-gray-400 shrink-0">{item.level}</span>
           {isHeader && (
             <span className="badge-blue text-xs shrink-0">Abschnitt</span>
+          )}
+          {item.normative && !isHeader && (
+            <span className="badge-gray text-xs shrink-0">Req</span>
           )}
           {!item.normative && (
             <span className="badge-yellow text-xs shrink-0">Info</span>

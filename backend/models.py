@@ -114,6 +114,7 @@ class ItemResponse(BaseModel):
     derived: bool
     links: List[str]
     reviewed: Optional[str] = None
+    reviewed_current: Optional[bool] = None  # None = nie reviewed, True = Fingerprint ok, False = Inhalt geändert
     custom_attributes: Dict[str, Any] = {}
 
 

@@ -34,6 +34,7 @@ export interface Item {
   derived: boolean;
   links: string[];
   reviewed: string | null;
+  reviewed_current: boolean | null;  // null = nie reviewed, true = Fingerprint ok, false = Inhalt geändert
   custom_attributes: Record<string, unknown>;
 }
 
@@ -128,6 +129,8 @@ export interface ValidationCreateRequest {
   checklist: ValidationChecklist;
   summary: string;
   skip_doorstop_check?: boolean;
+  /** Opt-out: Review-Stempel NICHT auto-setzen (für DO-178C / ISO 26262 strikte Projekte) */
+  skip_review_stamp?: boolean;
 }
 
 export interface ValidationCreateResponse {
@@ -136,6 +139,8 @@ export interface ValidationCreateResponse {
   commit_hash_short: string;
   report_path: string;
   status: ValidationStatus;
+  /** True wenn doorstop Review-Stempel automatisch gesetzt wurde */
+  review_stamped: boolean;
 }
 
 export interface ValidationReport {

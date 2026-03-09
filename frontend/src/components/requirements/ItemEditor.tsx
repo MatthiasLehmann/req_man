@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, X, Link2, Tag, ChevronDown, ChevronUp, Loader2, GitCommit, History } from 'lucide-react';
+import { Save, X, Link2, Tag, ChevronDown, ChevronUp, Loader2, GitCommit, History, Stamp } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
-import { getItem, updateItem, getAttributes, getLatestValidation } from '../../api/client';
+import { getItem, updateItem, getAttributes, getLatestValidation, reviewItem } from '../../api/client';
 import { Item, AttributeDefinition, ValidationStatusInfo } from '../../types';
 import { useAuthStore } from '../../store/authStore';
 import MarkdownEditor from './MarkdownEditor';
@@ -89,6 +89,17 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
     onError: (e: any) => toast.error(e.response?.data?.detail || 'Fehler beim Speichern'),
   });
 
+  const reviewMut = useMutation({
+    mutationFn: () => reviewItem(projectId, uid),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['item', projectId, uid] });
+      qc.invalidateQueries({ queryKey: ['items'] });
+      setForm(res.data);
+      toast.success('Review-Stempel gesetzt');
+    },
+    onError: (e: any) => toast.error(e.response?.data?.detail || 'Fehler beim Stempeln'),
+  });
+
   const setField = (key: keyof Item, value: unknown) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
@@ -155,7 +166,8 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
             />
           </div>
           {dirty && <span className="badge-yellow text-xs">Ungespeichert</span>}
-          {item.reviewed && <span className="badge-green text-xs">Reviewed</span>}
+          {item.reviewed && item.reviewed_current === true && <span className="badge-green text-xs">Reviewed</span>}
+          {item.reviewed && item.reviewed_current === false && <span className="badge-yellow text-xs">Veraltet</span>}
           {!item.active && <span className="badge-gray text-xs">Inaktiv</span>}
           <ValidationBadge info={validationInfo} size="sm" />
         </div>
@@ -173,10 +185,10 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
               <button
                 onClick={() => setShowValidationDialog(true)}
                 className="btn-secondary text-xs py-1.5"
-                title="Validierung starten"
+                title="Review starten"
               >
                 <GitCommit className="w-3 h-3" />
-                Validieren
+                Review
               </button>
             </>
           )}
@@ -209,7 +221,7 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
           )}
         >
           <History className="w-3 h-3" />
-          Validierungen
+          Reviews
         </button>
       </div>
 
@@ -277,19 +289,45 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
           </div>
         </div>
 
-        {/* ── Review-Status (schreibgeschützt) ── */}
+        {/* ── Review-Status ── */}
         <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-          <FieldLabel
-            helpTitle={DOORSTOP_HELP.reviewed.title}
-            helpText={DOORSTOP_HELP.reviewed.text}
-            placement="right"
-          >
-            Review-Status
-          </FieldLabel>
-          {item.reviewed ? (
+          <div className="flex items-center justify-between mb-1">
+            <FieldLabel
+              helpTitle={DOORSTOP_HELP.reviewed.title}
+              helpText={DOORSTOP_HELP.reviewed.text}
+              placement="right"
+            >
+              Review-Status
+            </FieldLabel>
+            {canEdit && (
+              <button
+                onClick={() => reviewMut.mutate()}
+                disabled={reviewMut.isPending || dirty}
+                title={dirty ? 'Zuerst speichern' : 'Anforderung jetzt stempeln (doorstop review)'}
+                className={clsx(
+                  'flex items-center gap-1 text-xs px-2 py-0.5 rounded border transition-colors',
+                  dirty
+                    ? 'text-gray-300 border-gray-200 cursor-not-allowed'
+                    : 'text-primary-600 border-primary-200 hover:bg-primary-50',
+                )}
+              >
+                {reviewMut.isPending
+                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                  : <Stamp className="w-3 h-3" />}
+                Stempeln
+              </button>
+            )}
+          </div>
+          {item.reviewed && item.reviewed_current === true ? (
             <div className="flex items-center gap-2 mt-1">
               <span className="badge-green">✓ Reviewed</span>
               <span className="font-mono text-xs text-gray-400 truncate">{item.reviewed}</span>
+            </div>
+          ) : item.reviewed && item.reviewed_current === false ? (
+            <div className="flex items-center gap-2 mt-1">
+              <span className="badge-yellow">⚠ Veraltet</span>
+              <span className="font-mono text-xs text-gray-400 truncate">{item.reviewed}</span>
+              <span className="text-xs text-yellow-600">Inhalt geändert seit letztem Review</span>
             </div>
           ) : (
             <span className="badge-yellow mt-1 inline-flex">Ausstehend</span>
