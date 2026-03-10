@@ -9,12 +9,18 @@ from auth import get_password_hash
 from routers import auth_router, users_router, projects_router
 from routers import documents_router, items_router, traceability_router
 from routers import metrics_router, attributes_router, validation_router
+from routers import uploads_router, localfile_router
 
 app = FastAPI(title="ReqMan - Requirements Management", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,6 +36,13 @@ app.include_router(traceability_router.router)
 app.include_router(metrics_router.router)
 app.include_router(attributes_router.router)
 app.include_router(validation_router.router)
+app.include_router(uploads_router.router)
+app.include_router(localfile_router.router)
+
+# Serve uploaded images as static files
+UPLOADS_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 # Serve frontend static files if built
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist')

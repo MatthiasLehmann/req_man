@@ -109,6 +109,32 @@ export const getGitLog = (projectId: string, maxCount = 50) =>
 export const getGitStatus = (projectId: string) =>
   api.get(`/projects/${projectId}/git/status`);
 
+// Local file references (kein Upload – Datei bleibt am Originalort)
+export interface LocalFileInfo {
+  path: string;
+  hash: string;
+  size: number;
+  name: string;
+}
+
+export interface LocalFileCheckResult {
+  path: string;
+  status: 'ok' | 'changed' | 'missing' | 'forbidden';
+  current_hash?: string;
+}
+
+/** Öffnet nativen Dateidialog (Server-seitig), gibt Pfad + Hash zurück. */
+export const pickLocalFile = () =>
+  api.post<LocalFileInfo>('/localfile/pick');
+
+/** Prüft mehrere lokale Bildreferenzen auf Änderungen. */
+export const checkLocalFiles = (items: { path: string; hash: string }[]) =>
+  api.post<LocalFileCheckResult[]>('/localfile/check', items);
+
+/** URL zum Einbetten einer lokalen Datei als img.src */
+export const localFileUrl = (path: string, hash: string) =>
+  `/api/localfile?path=${encodeURIComponent(path)}&h=${encodeURIComponent(hash)}`;
+
 // Uploads
 export const uploadImage = (file: File) => {
   const form = new FormData();

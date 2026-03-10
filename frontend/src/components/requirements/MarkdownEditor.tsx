@@ -1,4 +1,4 @@
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, ReactNodeViewRenderer } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
@@ -11,6 +11,31 @@ import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import Image from '@tiptap/extension-image';
+
+// ─── LocalImage: Image-Extension mit Pfad+Hash-Attributen + React-NodeView ──
+
+const LocalImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      'data-local-path': {
+        default: null,
+        parseHTML: (el) => el.getAttribute('data-local-path'),
+        renderHTML: (attrs) =>
+          attrs['data-local-path'] ? { 'data-local-path': attrs['data-local-path'] } : {},
+      },
+      'data-hash': {
+        default: null,
+        parseHTML: (el) => el.getAttribute('data-hash'),
+        renderHTML: (attrs) =>
+          attrs['data-hash'] ? { 'data-hash': attrs['data-hash'] } : {},
+      },
+    };
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(LocalImageView);
+  },
+});
 import {
   Bold, Italic, Strikethrough, Code, List, ListOrdered,
   AlignLeft, AlignCenter, AlignRight, Underline as UnderlineIcon,
@@ -22,7 +47,8 @@ import {
 import clsx from 'clsx';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { uploadImage } from '../../api/client';
+import { pickLocalFile, localFileUrl } from '../../api/client';
+import LocalImageView from './LocalImageView';
 
 // ─── ToolbarButton ─────────────────────────────────────────────────────────
 
@@ -62,8 +88,10 @@ function Divider() {
 
 type ImageTab = 'file' | 'url';
 
+interface LocalRef { path: string; hash: string; name: string }
+
 interface ImageDialogProps {
-  onInsert: (url: string, alt: string) => void;
+  onInsert: (url: string, alt: string, local?: LocalRef) => void;
   onClose: () => void;
   anchorRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -73,18 +101,17 @@ function ImageDialog({ onInsert, onClose, anchorRef }: ImageDialogProps) {
   const [url, setUrl] = useState('');
   const [alt, setAlt] = useState('');
   const [preview, setPreview] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState('');
+  const [picking, setPicking] = useState(false);
+  const [pickError, setPickError] = useState('');
+  const [localRef, setLocalRef] = useState<LocalRef | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Position relative to the anchor button
   const [pos, setPos] = useState({ top: 0, left: 0 });
   useEffect(() => {
     if (anchorRef.current) {
       const rect = anchorRef.current.getBoundingClientRect();
-      // Flip left if dialog would go off the right edge
       const dialogWidth = 384; // w-96
       const left = rect.left + dialogWidth > window.innerWidth
         ? Math.max(4, rect.right - dialogWidth)
@@ -117,40 +144,35 @@ function ImageDialog({ onInsert, onClose, anchorRef }: ImageDialogProps) {
     return () => document.removeEventListener('keydown', handleKey);
   }, [onClose]);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Local preview immediately
-    const objectUrl = URL.createObjectURL(file);
-    setPreview(objectUrl);
-    setUploadError('');
-    setUploading(true);
-    setUrl('');
-
+  // ── Lokale Datei über nativen Dialog wählen ──────────────────────────────
+  const handlePick = async () => {
+    setPickError('');
+    setPicking(true);
     try {
-      const res = await uploadImage(file);
-      setUrl(res.data.url);
-      if (!alt) setAlt(file.name.replace(/\.[^.]+$/, ''));
+      const res = await pickLocalFile();
+      const { path, hash, name } = res.data;
+      setLocalRef({ path, hash, name });
+      setUrl(localFileUrl(path, hash));
+      setPreview(localFileUrl(path, hash));
+      if (!alt) setAlt(name.replace(/\.[^.]+$/, ''));
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-        ?? 'Upload fehlgeschlagen';
-      setUploadError(msg);
-      setPreview('');
+        ?? 'Datei konnte nicht geöffnet werden';
+      setPickError(msg);
     } finally {
-      setUploading(false);
+      setPicking(false);
     }
   };
 
   const handleInsert = () => {
     const trimmed = url.trim();
     if (!trimmed) return;
-    onInsert(trimmed, alt.trim());
+    onInsert(trimmed, alt.trim(), localRef ?? undefined);
     onClose();
   };
 
-  const canInsert = url.trim().length > 0 && !uploading;
+  const canInsert = url.trim().length > 0 && !picking;
 
   const inputClass =
     'w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent';
@@ -183,7 +205,7 @@ function ImageDialog({ onInsert, onClose, anchorRef }: ImageDialogProps) {
           )}
         >
           <FolderOpen className="w-3.5 h-3.5" />
-          Datei wählen
+          Lokale Datei
         </button>
         <button
           type="button"
@@ -199,60 +221,61 @@ function ImageDialog({ onInsert, onClose, anchorRef }: ImageDialogProps) {
       </div>
 
       <div className="space-y-3">
-        {/* ── Tab: File ── */}
+        {/* ── Tab: Lokale Datei ── */}
         {tab === 'file' && (
           <>
-            {/* Drop zone / picker */}
-            <div
-              onClick={() => fileInputRef.current?.click()}
+            {/* Picker-Button */}
+            <button
+              type="button"
+              onClick={handlePick}
+              disabled={picking}
               className={clsx(
-                'border-2 border-dashed rounded-xl cursor-pointer transition-colors flex flex-col items-center justify-center gap-2 min-h-[100px]',
-                preview
+                'w-full flex flex-col items-center justify-center gap-2 min-h-[100px] border-2 border-dashed rounded-xl transition-colors',
+                localRef
                   ? 'border-primary-300 bg-primary-50 p-2'
-                  : 'border-gray-300 hover:border-primary-400 hover:bg-primary-50 p-6'
+                  : 'border-gray-300 hover:border-primary-400 hover:bg-primary-50 p-6',
+                picking && 'cursor-wait'
               )}
             >
-              {uploading ? (
+              {picking ? (
                 <>
                   <Loader2 className="w-6 h-6 text-primary-500 animate-spin" />
-                  <span className="text-xs text-gray-500">Wird hochgeladen…</span>
+                  <span className="text-xs text-gray-500">Warte auf Dateiauswahl…</span>
                 </>
-              ) : preview ? (
-                <img
-                  src={preview}
-                  alt="Vorschau"
-                  className="max-h-40 max-w-full rounded-lg object-contain"
-                />
+              ) : preview && localRef ? (
+                <>
+                  <img
+                    src={preview}
+                    alt="Vorschau"
+                    className="max-h-36 max-w-full rounded-lg object-contain"
+                  />
+                  <span className="text-xs text-gray-500 truncate max-w-full px-2">{localRef.name}</span>
+                </>
               ) : (
                 <>
                   <FolderOpen className="w-7 h-7 text-gray-400" />
                   <div className="text-center">
                     <p className="text-sm font-medium text-gray-600">Datei auswählen</p>
-                    <p className="text-xs text-gray-400 mt-0.5">JPG, PNG, GIF, WebP, SVG · max. 10 MB</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Öffnet den Finder – Datei bleibt am Originalort
+                    </p>
                   </div>
                 </>
               )}
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
-              onChange={handleFileChange}
-              className="hidden"
-            />
+            </button>
 
-            {/* Upload error */}
-            {uploadError && (
-              <div className="flex items-start gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <span>{uploadError}</span>
+            {/* Pfad-Anzeige */}
+            {localRef && (
+              <div className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 truncate" title={localRef.path}>
+                📁 {localRef.path}
               </div>
             )}
 
-            {/* Uploaded URL feedback */}
-            {url && !uploading && (
-              <div className="text-xs text-green-600 bg-green-50 border border-green-200 rounded-lg px-3 py-2 truncate">
-                ✓ {url}
+            {/* Fehler */}
+            {pickError && (
+              <div className="flex items-start gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>{pickError}</span>
               </div>
             )}
           </>
@@ -273,7 +296,6 @@ function ImageDialog({ onInsert, onClose, anchorRef }: ImageDialogProps) {
               placeholder="https://example.com/bild.png"
               className={inputClass}
             />
-            {/* Inline preview for URL */}
             {preview && tab === 'url' && (
               <div className="mt-2 rounded-lg overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center min-h-[80px]">
                 <img
@@ -310,7 +332,6 @@ function ImageDialog({ onInsert, onClose, anchorRef }: ImageDialogProps) {
             disabled={!canInsert}
             className="flex-1 flex items-center justify-center gap-1.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium py-2 rounded-lg transition-colors"
           >
-            {uploading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             Einfügen
           </button>
           <button
@@ -362,7 +383,7 @@ export default function MarkdownEditor({
       TableRow,
       TableHeader,
       TableCell,
-      Image.configure({
+      LocalImage.configure({
         inline: false,
         allowBase64: false,
         HTMLAttributes: {
@@ -393,8 +414,12 @@ export default function MarkdownEditor({
     }
   };
 
-  const insertImage = (url: string, alt: string) => {
-    editor.chain().focus().setImage({ src: url, alt }).run();
+  const insertImage = (url: string, alt: string, local?: { path: string; hash: string }) => {
+    editor.chain().focus().setImage({
+      src: url,
+      alt,
+      ...(local ? { 'data-local-path': local.path, 'data-hash': local.hash } : {}),
+    }).run();
   };
 
   return (
@@ -568,7 +593,7 @@ export default function MarkdownEditor({
           {imageDialogOpen && (
             <ImageDialog
               anchorRef={imageButtonRef}
-              onInsert={insertImage}
+              onInsert={(url, alt, local) => insertImage(url, alt, local)}
               onClose={() => setImageDialogOpen(false)}
             />
           )}
