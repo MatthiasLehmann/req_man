@@ -96,9 +96,15 @@ async def render_plantuml(
     # Java-Verfügbarkeit prüfen
     java_bin = _find_java()
     if not java_bin:
+        import sys
+        hint = (
+            "macOS: 'brew install openjdk' oder JDK von https://adoptium.net installieren."
+            if sys.platform == "darwin"
+            else "Bitte Java (JDK ≥ 11) installieren."
+        )
         raise HTTPException(
             status_code=503,
-            detail="Java wurde nicht gefunden. Bitte Java installieren.",
+            detail=f"Java wurde nicht gefunden. {hint}",
         )
 
     try:
@@ -134,18 +140,79 @@ async def render_plantuml(
 
 
 def _find_java() -> str | None:
-    """Sucht java-Binary in PATH und bekannten Pfaden."""
-    import shutil
+    """Sucht java-Binary in PATH und bekannten Pfaden.
 
-    if path := shutil.which("java"):
-        return path
-    # Fallback für typische macOS/Linux-Installationen
-    candidates = [
-        "/usr/bin/java",
+    Auf macOS ist /usr/bin/java ein Stub ohne echten JDK – dieser wird
+    bewusst übersprungen. Stattdessen werden JAVA_HOME, /usr/libexec/java_home
+    (macOS-Systemutil) und typische Installations-Pfade geprüft.
+    """
+    import glob
+    import shutil
+    import sys
+
+    def _is_real_java(path: str) -> bool:
+        """Prüft ob der Pfad ein echtes java-Binary ist (kein macOS-Stub)."""
+        return os.path.isfile(path) and not (
+            sys.platform == "darwin" and path == "/usr/bin/java"
+        )
+
+    # 1. JAVA_HOME Umgebungsvariable (höchste Priorität)
+    java_home = os.environ.get("JAVA_HOME", "")
+    if java_home:
+        candidate = os.path.join(java_home, "bin", "java")
+        if _is_real_java(candidate):
+            return candidate
+
+    # 2. macOS: /usr/libexec/java_home gibt den registrierten JDK-Pfad zurück
+    if sys.platform == "darwin":
+        try:
+            result = subprocess.run(
+                ["/usr/libexec/java_home"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                jh = result.stdout.strip()
+                candidate = os.path.join(jh, "bin", "java")
+                if _is_real_java(candidate):
+                    return candidate
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
+
+        # 3. Homebrew OpenJDK (Apple Silicon + Intel)
+        for brew_pattern in [
+            "/opt/homebrew/opt/openjdk*/bin/java",
+            "/usr/local/opt/openjdk*/bin/java",
+        ]:
+            for match in sorted(glob.glob(brew_pattern), reverse=True):
+                if _is_real_java(match):
+                    return match
+
+        # 4. Direkt installierte JDKs unter /Library/Java/
+        for jvm_pattern in [
+            "/Library/Java/JavaVirtualMachines/*/Contents/Home/bin/java",
+            "/System/Library/Java/JavaVirtualMachines/*/Contents/Home/bin/java",
+        ]:
+            for match in sorted(glob.glob(jvm_pattern), reverse=True):
+                if _is_real_java(match):
+                    return match
+
+    # 5. PATH durchsuchen – macOS-Stub /usr/bin/java wird übersprungen
+    path_java = shutil.which("java")
+    if path_java and _is_real_java(path_java):
+        return path_java
+
+    # 6. Weitere bekannte Pfade (Linux / manuell installierte JDKs)
+    for candidate in [
         "/usr/local/bin/java",
         "/opt/homebrew/bin/java",
-    ]
-    for c in candidates:
-        if os.path.isfile(c):
-            return c
+        "/usr/lib/jvm/java-21-openjdk-amd64/bin/java",
+        "/usr/lib/jvm/java-17-openjdk-amd64/bin/java",
+        "/usr/lib/jvm/java-11-openjdk-amd64/bin/java",
+        "/usr/lib/jvm/default-java/bin/java",
+    ]:
+        if _is_real_java(candidate):
+            return candidate
+
     return None
