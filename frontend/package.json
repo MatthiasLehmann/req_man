@@ -25,6 +25,7 @@
     "@tiptap/extension-underline": "^2.10.3",
     "@tiptap/react": "^2.10.3",
     "@tiptap/starter-kit": "^2.10.3",
+    "@types/turndown": "^5.0.6",
     "@xyflow/react": "^12.3.6",
     "axios": "^1.7.9",
     "clsx": "^2.1.1",
@@ -36,6 +37,8 @@
     "react-router-dom": "^6.28.1",
     "recharts": "^2.14.1",
     "remark-gfm": "^4.0.1",
+    "tiptap-markdown": "^0.8.10",
+    "turndown": "^7.2.2",
     "zustand": "^5.0.2"
   },
   "devDependencies": {

@@ -275,7 +275,14 @@ interface TreeRowProps {
 function TreeRow({
   item, depth, hasChildren, isCollapsed, isSelected, onToggle, onClick, onDelete,
 }: TreeRowProps) {
-  const textPreview = item.text.replace(/<[^>]*>/g, '').slice(0, 80);
+  const textPreview = (item.text ?? '')
+    .replace(/<[^>]*>/g, '')             // HTML-Tags entfernen (z.B. <u>, <mark>)
+    .replace(/^#{1,6}\s+/gm, '')         // Markdown-Überschriften
+    .replace(/[*_`~]+/g, '')             // Markdown-Formatierung (bold, italic, code)
+    .replace(/!\[.*?\]\(.*?\)/g, '[Bild]') // Bilder
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // Links → Linktext
+    .trim()
+    .slice(0, 80);
   const isHeader = item.header;
 
   return (

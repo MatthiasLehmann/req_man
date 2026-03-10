@@ -11,6 +11,33 @@ import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import Image from '@tiptap/extension-image';
+import { Markdown } from 'tiptap-markdown';
+import { htmlToMarkdown } from '../../utils/htmlToMarkdown';
+
+// ─── Underline + Highlight mit Markdown-Serializer ───────────────────────────
+// Kein Standard-Markdown-Äquivalent → als Raw-HTML in Markdown speichern.
+
+const UnderlineWithMarkdown = Underline.extend({
+  addStorage() {
+    return {
+      markdown: {
+        serialize: { open: '<u>', close: '</u>', mixable: true, expelEnclosingWhitespace: true },
+        parse: {},
+      },
+    };
+  },
+});
+
+const HighlightWithMarkdown = Highlight.extend({
+  addStorage() {
+    return {
+      markdown: {
+        serialize: { open: '<mark>', close: '</mark>', mixable: true, expelEnclosingWhitespace: true },
+        parse: {},
+      },
+    };
+  },
+});
 
 // ─── LocalImage: Image-Extension mit Pfad+Hash-Attributen + React-NodeView ──
 
@@ -29,6 +56,31 @@ const LocalImage = Image.extend({
         parseHTML: (el) => el.getAttribute('data-hash'),
         renderHTML: (attrs) =>
           attrs['data-hash'] ? { 'data-hash': attrs['data-hash'] } : {},
+      },
+    };
+  },
+  addStorage() {
+    return {
+      markdown: {
+        // Lokale Bilder → vollständiger <img>-Tag (Attribute bleiben erhalten)
+        // Normale Bilder → Standard-Markdown-Syntax ![alt](url)
+        serialize(state: { write: (s: string) => void; closeBlock: (n: unknown) => void }, node: { attrs: Record<string, string | null> }) {
+          const { src, alt } = node.attrs;
+          const localPath = node.attrs['data-local-path'];
+          const hash = node.attrs['data-hash'];
+          const esc = (s: string | null) => (s ?? '').replace(/"/g, '&quot;');
+
+          if (localPath && hash) {
+            state.write(
+              `<img src="${esc(src)}" alt="${esc(alt)}" data-local-path="${esc(localPath)}" data-hash="${esc(hash)}" />`
+            );
+          } else {
+            const escapedSrc = (src ?? '').replace(/[()]/g, (c) => '\\' + c);
+            state.write(`![${alt ?? ''}](${escapedSrc})`);
+          }
+          state.closeBlock(node);
+        },
+        parse: {},
       },
     };
   },
@@ -368,14 +420,17 @@ export default function MarkdownEditor({
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const imageButtonRef = useRef<HTMLDivElement>(null);
 
+  // Verhindert Infinite-Loop: speichert den zuletzt emittierten Markdown-Wert
+  const lastValueRef = useRef<string>(value);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         codeBlock: false,
       }),
-      Underline,
+      UnderlineWithMarkdown,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
-      Highlight.configure({ multicolor: false }),
+      HighlightWithMarkdown.configure({ multicolor: false }),
       Placeholder.configure({ placeholder }),
       Link.configure({ openOnClick: false, HTMLAttributes: { class: 'text-primary-600 underline' } }),
       CharacterCount,
@@ -390,18 +445,31 @@ export default function MarkdownEditor({
           class: 'tiptap-image',
         },
       }),
+      // Markdown-Extension zuletzt – muss alle anderen Extensions kennen
+      Markdown.configure({
+        html: true,              // erlaubt <img>, <u>, <mark>, Tabellen als Raw-HTML
+        tightLists: true,
+        bulletListMarker: '-',
+        transformPastedText: true,  // User kann Markdown direkt einfügen
+        transformCopiedText: false,
+      }),
     ],
-    content: value,
+    content: htmlToMarkdown(value),   // Migration: altes HTML → Markdown beim ersten Laden
     editable: !readOnly,
-    onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+    onUpdate: ({ editor: ed }) => {
+      const md = ed.storage.markdown?.getMarkdown() ?? ed.getHTML();
+      lastValueRef.current = md;
+      onChange(md);
     },
   });
 
-  // Sync external value changes
+  // Sync externer Wertänderungen in den Editor (z.B. beim Wechsel der Anforderung)
   useEffect(() => {
-    if (editor && editor.getHTML() !== value) {
-      editor.commands.setContent(value || '', false);
+    if (!editor) return;
+    if (value !== lastValueRef.current) {
+      const md = htmlToMarkdown(value);
+      editor.commands.setContent(md, false);
+      lastValueRef.current = value;
     }
   }, [value, editor]);
 
