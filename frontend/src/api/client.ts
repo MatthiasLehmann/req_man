@@ -135,6 +135,10 @@ export const checkLocalFiles = (items: { path: string; hash: string }[]) =>
 export const localFileUrl = (path: string, hash: string) =>
   `/api/localfile?path=${encodeURIComponent(path)}&h=${encodeURIComponent(hash)}`;
 
+// PlantUML
+export const renderPlantUML = (source: string) =>
+  api.post<{ svg: string }>('/plantuml/render', { source });
+
 // Uploads
 export const uploadImage = (file: File) => {
   const form = new FormData();

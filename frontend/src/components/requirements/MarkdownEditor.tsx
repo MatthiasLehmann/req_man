@@ -94,13 +94,14 @@ import {
   Heading1, Heading2, Heading3, Quote, Minus, Highlighter,
   Link as LinkIcon, Table as TableIcon, Undo2, Redo2, ImageIcon, X,
   FolderOpen, Loader2, AlertCircle,
-  Columns2, Trash2, Rows2
+  Columns2, Trash2, Rows2, Network, Code2
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { pickLocalFile, localFileUrl } from '../../api/client';
 import LocalImageView from './LocalImageView';
+import { PlantUMLBlock } from '../../extensions/PlantUMLBlock';
 
 // ─── ToolbarButton ─────────────────────────────────────────────────────────
 
@@ -420,6 +421,10 @@ export default function MarkdownEditor({
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const imageButtonRef = useRef<HTMLDivElement>(null);
 
+  // Source-Mode: Markdown-Quelltext direkt bearbeiten
+  const [sourceMode, setSourceMode] = useState(false);
+  const [sourceText, setSourceText] = useState('');
+
   // Verhindert Infinite-Loop: speichert den zuletzt emittierten Markdown-Wert
   const lastValueRef = useRef<string>(value);
 
@@ -445,6 +450,7 @@ export default function MarkdownEditor({
           class: 'tiptap-image',
         },
       }),
+      PlantUMLBlock,
       // Markdown-Extension zuletzt – muss alle anderen Extensions kennen
       Markdown.configure({
         html: true,              // erlaubt <img>, <u>, <mark>, Tabellen als Raw-HTML
@@ -487,6 +493,31 @@ export default function MarkdownEditor({
       src: url,
       alt,
       ...(local ? { 'data-local-path': local.path, 'data-hash': local.hash } : {}),
+    }).run();
+  };
+
+  // ── Source-Mode Toggle ──────────────────────────────────────────────────────
+  const toggleSourceMode = () => {
+    if (!sourceMode) {
+      // WYSIWYG → Markdown-Quelltext
+      const md = editor.storage.markdown?.getMarkdown() ?? '';
+      setSourceText(md);
+      setSourceMode(true);
+    } else {
+      // Markdown-Quelltext → WYSIWYG
+      const md = htmlToMarkdown(sourceText);
+      editor.commands.setContent(md, false);
+      lastValueRef.current = sourceText;
+      onChange(sourceText);
+      setSourceMode(false);
+    }
+  };
+
+  // ── PlantUML einfügen ───────────────────────────────────────────────────────
+  const insertPlantUML = () => {
+    editor.chain().focus().insertContent({
+      type: 'plantUMLBlock',
+      attrs: { source: '' },
     }).run();
   };
 
@@ -675,6 +706,14 @@ export default function MarkdownEditor({
             <TableIcon className="w-4 h-4" />
           </ToolbarButton>
 
+          {/* PlantUML-Diagramm einfügen */}
+          <ToolbarButton
+            onClick={insertPlantUML}
+            title="PlantUML-Diagramm einfügen"
+          >
+            <Network className="w-4 h-4" />
+          </ToolbarButton>
+
           {/* Table context toolbar – only visible when cursor is inside a table */}
           {editor.isActive('table') && (
             <>
@@ -728,14 +767,45 @@ export default function MarkdownEditor({
               </ToolbarButton>
             </>
           )}
+
+          {/* Source-Mode-Toggle – ganz rechts, immer sichtbar */}
+          <div className="ml-auto">
+            <ToolbarButton
+              onClick={toggleSourceMode}
+              active={sourceMode}
+              title={sourceMode ? 'WYSIWYG-Modus (zurück zum Editor)' : 'Markdown-Quelltext bearbeiten'}
+            >
+              <Code2 className="w-4 h-4" />
+            </ToolbarButton>
+          </div>
         </div>
       )}
 
-      <EditorContent editor={editor} style={{ minHeight }} />
+      {/* ── Inhaltsbereich: WYSIWYG oder Markdown-Quelltext ── */}
+      {sourceMode ? (
+        <textarea
+          value={sourceText}
+          onChange={(e) => {
+            setSourceText(e.target.value);
+            onChange(e.target.value);
+          }}
+          spellCheck={false}
+          className="w-full font-mono text-sm p-4 bg-gray-900 text-gray-100 resize-none focus:outline-none"
+          style={{ minHeight }}
+          placeholder="# Markdown-Quelltext eingeben…"
+        />
+      ) : (
+        <EditorContent editor={editor} style={{ minHeight }} />
+      )}
 
-      {!readOnly && (
+      {!readOnly && !sourceMode && (
         <div className="px-3 py-1 bg-gray-50 border-t border-gray-200 text-xs text-gray-400 text-right">
           {editor.storage.characterCount?.characters()} Zeichen
+        </div>
+      )}
+      {!readOnly && sourceMode && (
+        <div className="px-3 py-1 bg-gray-800 border-t border-gray-700 text-xs text-gray-500 text-right">
+          Markdown-Quelltext · Klick auf <Code2 className="inline w-3 h-3 mx-0.5" /> zum Beenden
         </div>
       )}
     </div>
