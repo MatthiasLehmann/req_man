@@ -24,6 +24,22 @@ export interface Document {
   children: string[];
 }
 
+/** Eintrag in der doorstop-`references`-Liste eines Items. */
+export interface Reference {
+  type: string;        // 'file' (einziger von doorstop unterstützter Typ)
+  path: string;        // Pfad relativ zum Projektstamm
+  keyword: string;     // Suchbegriff / Bezeichner
+  sha?: string | null; // SHA256-Hash der Datei (optional)
+}
+
+/** Erweitert Reference um den geprüften Hash-Status. */
+export type ReferenceStatus = 'ok' | 'changed' | 'missing' | 'no_hash' | 'loading';
+
+export interface ReferenceWithStatus extends Reference {
+  status: ReferenceStatus;
+  current_sha?: string | null;
+}
+
 export interface Item {
   uid: string;
   level: string;
@@ -36,6 +52,7 @@ export interface Item {
   reviewed: string | null;
   reviewed_current: boolean | null;  // null = nie reviewed, true = Fingerprint ok, false = Inhalt geändert
   custom_attributes: Record<string, unknown>;
+  references: Reference[];
 }
 
 export interface AttributeDefinition {

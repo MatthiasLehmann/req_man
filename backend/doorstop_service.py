@@ -292,6 +292,22 @@ def _item_to_dict(item: doorstop.Item) -> Dict:
     except Exception:
         pass
 
+    # references – Liste von Dicts mit type/path/keyword/sha
+    references: List[Dict] = []
+    try:
+        raw_refs = item.references
+        if raw_refs:
+            for r in raw_refs:
+                ref_dict = dict(r) if hasattr(r, "items") else {}
+                references.append({
+                    "type":    ref_dict.get("type", "file"),
+                    "path":    ref_dict.get("path", ""),
+                    "keyword": ref_dict.get("keyword", ""),
+                    "sha":     ref_dict.get("sha"),
+                })
+    except Exception:
+        pass
+
     return {
         "uid": str(item.uid),
         "level": str(item.level),
@@ -304,6 +320,7 @@ def _item_to_dict(item: doorstop.Item) -> Dict:
         "reviewed": reviewed,
         "reviewed_current": reviewed_current,
         "custom_attributes": custom_attributes,
+        "references": references,
     }
 
 
@@ -617,3 +634,121 @@ def save_attribute_config(attributes: List[Dict]):
     os.makedirs(os.path.dirname(ATTRIBUTES_CONFIG), exist_ok=True)
     with open(ATTRIBUTES_CONFIG, 'w') as f:
         yaml.dump({"attributes": attributes}, f, default_flow_style=False, allow_unicode=True)
+
+
+# ─── References ───────────────────────────────────────────────────────────────
+
+def _compute_sha256(file_path: str) -> Optional[str]:
+    """Berechnet den SHA256-Hash einer Datei. Gibt None zurück wenn nicht lesbar."""
+    import hashlib
+    try:
+        with open(file_path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except OSError:
+        return None
+
+
+def get_references(project_id: str, uid: str) -> List[Dict]:
+    """Gibt die references-Liste eines Items zurück (ohne Hash-Statusprüfung)."""
+    project = get_project(project_id)
+    if not project:
+        raise ValueError(f"Project {project_id} not found")
+    try:
+        tree = _build_tree(project["path"])
+        item = tree.find_item(uid)
+        raw = item.references or []
+        return [
+            {
+                "type":    dict(r).get("type", "file"),
+                "path":    dict(r).get("path", ""),
+                "keyword": dict(r).get("keyword", ""),
+                "sha":     dict(r).get("sha"),
+            }
+            for r in raw
+        ]
+    except doorstop.DoorstopError as e:
+        raise ValueError(str(e))
+
+
+def update_references(project_id: str, uid: str, references: List[Dict]) -> List[Dict]:
+    """
+    Speichert die references-Liste eines Items und berechnet für jeden Eintrag
+    mit gültigem Pfad den SHA256-Hash neu.
+    """
+    project = get_project(project_id)
+    if not project:
+        raise ValueError(f"Project {project_id} not found")
+
+    project_path = project["path"]
+    try:
+        tree = _build_tree(project_path)
+        item = tree.find_item(uid)
+
+        normalized: List[Dict] = []
+        for ref in references:
+            entry: Dict = {
+                "type":    ref.get("type", "file"),
+                "path":    ref.get("path", "").strip(),
+                "keyword": ref.get("keyword", "").strip(),
+            }
+            # SHA256 neu berechnen wenn Datei gefunden wird
+            if entry["path"]:
+                abs_path = os.path.join(project_path, entry["path"])
+                sha = _compute_sha256(abs_path)
+                if sha:
+                    entry["sha"] = sha
+                elif ref.get("sha"):
+                    entry["sha"] = ref["sha"]   # alten Hash behalten wenn Datei fehlt
+            normalized.append(entry)
+
+        item.references = normalized if normalized else None
+        item.save()
+        return normalized
+    except doorstop.DoorstopError as e:
+        raise ValueError(str(e))
+
+
+def check_reference_hashes(project_id: str, uid: str) -> List[Dict]:
+    """
+    Prüft den Hash-Status aller References eines Items.
+    Status-Werte: 'ok' | 'changed' | 'missing' | 'no_hash'
+    """
+    project = get_project(project_id)
+    if not project:
+        raise ValueError(f"Project {project_id} not found")
+
+    project_path = project["path"]
+    try:
+        tree = _build_tree(project_path)
+        item = tree.find_item(uid)
+        raw = item.references or []
+
+        results: List[Dict] = []
+        for r in raw:
+            ref = dict(r)
+            abs_path = os.path.join(project_path, ref.get("path", ""))
+            stored_sha: Optional[str] = ref.get("sha")
+
+            if not os.path.isfile(abs_path):
+                status = "missing"
+                current_sha = None
+            else:
+                current_sha = _compute_sha256(abs_path)
+                if not stored_sha:
+                    status = "no_hash"
+                elif current_sha == stored_sha:
+                    status = "ok"
+                else:
+                    status = "changed"
+
+            results.append({
+                "type":        ref.get("type", "file"),
+                "path":        ref.get("path", ""),
+                "keyword":     ref.get("keyword", ""),
+                "sha":         stored_sha,
+                "status":      status,
+                "current_sha": current_sha,
+            })
+        return results
+    except doorstop.DoorstopError as e:
+        raise ValueError(str(e))

@@ -135,6 +135,25 @@ export const checkLocalFiles = (items: { path: string; hash: string }[]) =>
 export const localFileUrl = (path: string, hash: string) =>
   `/api/localfile?path=${encodeURIComponent(path)}&h=${encodeURIComponent(hash)}`;
 
+// References (doorstop `references`-Feld)
+import type { Reference, ReferenceWithStatus } from '../types';
+
+/** Gibt die gespeicherten Referenzen eines Items zurück. */
+export const getReferences = (projectId: string, uid: string) =>
+  api.get<Reference[]>(`/projects/${projectId}/items/${uid}/references`);
+
+/** Speichert eine neue Referenzliste; SHA256 wird serverseitig berechnet. */
+export const updateReferences = (projectId: string, uid: string, refs: Reference[]) =>
+  api.put<Reference[]>(`/projects/${projectId}/items/${uid}/references`, refs);
+
+/** Prüft den SHA256-Status aller Referenzen (ok / changed / missing / no_hash). */
+export const checkReferences = (projectId: string, uid: string) =>
+  api.post<ReferenceWithStatus[]>(`/projects/${projectId}/items/${uid}/references/check`);
+
+/** Berechnet SHA256 für alle Referenzen neu und speichert das Ergebnis. */
+export const refreshReferenceHashes = (projectId: string, uid: string) =>
+  api.post<Reference[]>(`/projects/${projectId}/items/${uid}/references/refresh`);
+
 // PlantUML
 export const renderPlantUML = (source: string) =>
   api.post<{ svg: string }>('/plantuml/render', { source });
