@@ -674,6 +674,11 @@ def update_references(project_id: str, uid: str, references: List[Dict]) -> List
     """
     Speichert die references-Liste eines Items und berechnet für jeden Eintrag
     mit gültigem Pfad den SHA256-Hash neu.
+
+    Wichtig: doorstop bezieht self.references in den Fingerprint (stamp) ein.
+    Um den Review-Status nicht zu invalidieren, wird der Stempel nach dem
+    Speichern der Referenzen automatisch neu berechnet – sofern das Item bereits
+    gestempelt war.
     """
     project = get_project(project_id)
     if not project:
@@ -701,7 +706,22 @@ def update_references(project_id: str, uid: str, references: List[Dict]) -> List
                     entry["sha"] = ref["sha"]   # alten Hash behalten wenn Datei fehlt
             normalized.append(entry)
 
-        item.references = normalized if normalized else None
+        # auto=False: verhindert den automatischen @auto_save des references-Setters
+        # (sonst würde item.save() doppelt aufgerufen)
+        item.auto = False
+        try:
+            item.references = normalized if normalized else None
+
+            # War das Item bereits gestempelt, berechnen wir den Fingerprint neu,
+            # damit das Hinzufügen / Ändern von Referenzen den Review-Status nicht
+            # auf "Veraltet" setzt. doorstop.stamp() bezieht self.references ein –
+            # wir aktualisieren also den gespeicherten Stempel auf die neue Basis.
+            old_stamp = item._data.get("reviewed")
+            if old_stamp and bool(old_stamp):
+                item._data["reviewed"] = item.stamp(links=True)
+        finally:
+            item.auto = True
+
         item.save()
         return normalized
     except doorstop.DoorstopError as e:
