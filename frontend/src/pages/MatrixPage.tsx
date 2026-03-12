@@ -7,9 +7,16 @@ import {
   ArrowUp, ArrowDown, ArrowUpDown, Search, X, Filter,
 } from 'lucide-react';
 import clsx from 'clsx';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { listDocuments, listItems, getAttributes } from '../api/client';
 import { useProjectStore } from '../store/projectStore';
 import { Item, AttributeDefinition } from '../types';
+
+/** Erkennt ob ein Text HTML enthält (TipTap) oder reines Markdown/Plaintext ist */
+function isHtml(text: string): boolean {
+  return /<[a-z][\s\S]*>/i.test(text);
+}
 
 // ─── Level-Hilfsfunktionen ────────────────────────────────────────────────────
 
@@ -135,19 +142,24 @@ function CellValue({ col, item }: { col: ColDef; item: Item }) {
   }
   switch (col.key) {
     case 'text': {
-      if (!item.text?.trim()) return <span className="text-gray-300">–</span>;
+      const raw = item.text?.trim();
+      if (!raw) return <span className="text-gray-300">–</span>;
+      const proseClass = `prose prose-sm max-w-none text-gray-700
+        [&_p]:my-0.5 [&_p]:leading-snug
+        [&_ul]:my-0.5 [&_ul]:pl-4
+        [&_ol]:my-0.5 [&_ol]:pl-4
+        [&_li]:my-0
+        [&_strong]:font-semibold
+        [&_code]:text-[11px] [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded
+        [&_h1]:font-semibold [&_h1]:my-1 [&_h2]:font-semibold [&_h2]:my-1
+        [&_h3]:font-semibold [&_h3]:my-1`;
+      if (isHtml(raw)) {
+        return <div className={proseClass} dangerouslySetInnerHTML={{ __html: raw }} />;
+      }
       return (
-        <div
-          className="prose prose-xs max-w-none text-gray-700
-                     prose-p:my-0.5 prose-p:leading-snug
-                     prose-ul:my-0.5 prose-ul:pl-4
-                     prose-ol:my-0.5 prose-ol:pl-4
-                     prose-li:my-0
-                     prose-strong:font-semibold
-                     prose-code:text-[11px] prose-code:bg-gray-100 prose-code:px-1 prose-code:rounded
-                     prose-headings:font-semibold prose-headings:my-1"
-          dangerouslySetInnerHTML={{ __html: item.text }}
-        />
+        <div className={proseClass}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{raw}</ReactMarkdown>
+        </div>
       );
     }
     case 'active':    return <BoolCell value={item.active} />;
