@@ -79,6 +79,12 @@ def import_project(path: str, name: Optional[str] = None, description: str = "")
     if not os.path.isdir(path):
         raise ValueError(f"Verzeichnis nicht gefunden: {path}")
 
+    # Prüfen ob das Verzeichnis ein gültiges Doorstop-Projekt enthält
+    try:
+        doorstop.build(cwd=path, root=path)
+    except doorstop.DoorstopError as e:
+        raise ValueError(f"Kein gültiges Doorstop-Projekt: {e}")
+
     # Prüfen ob dieser Pfad bereits registriert ist
     config = _load_projects_config()
     for p in config.get("projects", []):
@@ -147,8 +153,8 @@ def list_documents(project_id: str) -> List[Dict]:
         for doc in tree.documents:
             documents.append(_document_to_dict(doc))
         return documents
-    except doorstop.DoorstopError:
-        return []
+    except doorstop.DoorstopError as e:
+        raise ValueError(f"Doorstop-Fehler beim Laden des Projekts: {e}")
 
 
 def _document_to_dict(doc: doorstop.Document) -> Dict:
