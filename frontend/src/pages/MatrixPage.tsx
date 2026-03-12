@@ -154,15 +154,27 @@ function CellValue({ col, item }: { col: ColDef; item: Item }) {
     case 'text': {
       const raw = item.text?.trim();
       if (!raw) return <span className="text-gray-300">–</span>;
-      const proseClass = `prose prose-sm max-w-none text-gray-700
-        [&_p]:my-0.5 [&_p]:leading-snug
-        [&_ul]:my-0.5 [&_ul]:pl-4
-        [&_ol]:my-0.5 [&_ol]:pl-4
-        [&_li]:my-0
-        [&_strong]:font-semibold
-        [&_code]:text-[11px] [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded
-        [&_h1]:font-semibold [&_h1]:my-1 [&_h2]:font-semibold [&_h2]:my-1
-        [&_h3]:font-semibold [&_h3]:my-1`;
+      const proseClass = [
+        'prose prose-sm max-w-none text-gray-700',
+        // Absätze & Listen
+        '[&_p]:my-0.5 [&_p]:leading-snug',
+        '[&_ul]:my-0.5 [&_ul]:pl-4 [&_ol]:my-0.5 [&_ol]:pl-4 [&_li]:my-0',
+        // Überschriften
+        '[&_h1]:font-semibold [&_h1]:my-1 [&_h2]:font-semibold [&_h2]:my-1 [&_h3]:font-semibold [&_h3]:my-1',
+        '[&_strong]:font-semibold',
+        // Inline-Code (nicht innerhalb <pre>)
+        '[&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[11px]',
+        '[&_:not(pre)>code]:bg-sky-50 [&_:not(pre)>code]:text-sky-800',
+        '[&_:not(pre)>code]:px-1 [&_:not(pre)>code]:py-0.5 [&_:not(pre)>code]:rounded',
+        '[&_:not(pre)>code]:border [&_:not(pre)>code]:border-sky-200',
+        // Code-Blöcke (<pre><code>)
+        '[&_pre]:my-1.5 [&_pre]:rounded-md [&_pre]:overflow-x-auto',
+        '[&_pre]:bg-gray-900 [&_pre]:text-gray-100',
+        '[&_pre]:px-3 [&_pre]:py-2',
+        '[&_pre>code]:font-mono [&_pre>code]:text-xs [&_pre>code]:leading-relaxed',
+        '[&_pre>code]:bg-transparent [&_pre>code]:text-inherit',
+        '[&_pre>code]:p-0 [&_pre>code]:border-0',
+      ].join(' ');
       if (isHtml(raw)) {
         return <div className={proseClass} dangerouslySetInnerHTML={{ __html: raw }} />;
       }
