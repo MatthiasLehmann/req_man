@@ -7,8 +7,6 @@ import {
   ArrowUp, ArrowDown, ArrowUpDown, Search, X, Filter,
 } from 'lucide-react';
 import clsx from 'clsx';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { listDocuments, listItems, getAttributes } from '../api/client';
 import { useProjectStore } from '../store/projectStore';
 import { Item, AttributeDefinition } from '../types';
@@ -139,16 +137,17 @@ function CellValue({ col, item }: { col: ColDef; item: Item }) {
     case 'text': {
       if (!item.text?.trim()) return <span className="text-gray-300">–</span>;
       return (
-        <div className="prose prose-xs max-w-none text-gray-700
-                        prose-p:my-0.5 prose-p:leading-snug
-                        prose-ul:my-0.5 prose-ul:pl-4
-                        prose-ol:my-0.5 prose-ol:pl-4
-                        prose-li:my-0
-                        prose-strong:font-semibold
-                        prose-code:text-[11px] prose-code:bg-gray-100 prose-code:px-1 prose-code:rounded
-                        prose-headings:font-semibold prose-headings:my-1">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.text}</ReactMarkdown>
-        </div>
+        <div
+          className="prose prose-xs max-w-none text-gray-700
+                     prose-p:my-0.5 prose-p:leading-snug
+                     prose-ul:my-0.5 prose-ul:pl-4
+                     prose-ol:my-0.5 prose-ol:pl-4
+                     prose-li:my-0
+                     prose-strong:font-semibold
+                     prose-code:text-[11px] prose-code:bg-gray-100 prose-code:px-1 prose-code:rounded
+                     prose-headings:font-semibold prose-headings:my-1"
+          dangerouslySetInnerHTML={{ __html: item.text }}
+        />
       );
     }
     case 'active':    return <BoolCell value={item.active} />;
