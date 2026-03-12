@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Table2, Loader2, FileText, CheckCircle2, XCircle, Minus,
-  ChevronDown, ChevronRight, SlidersHorizontal, Link2,
+  ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, SlidersHorizontal, Link2,
   ArrowUp, ArrowDown, ArrowUpDown, Search, X, Filter,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -39,6 +39,16 @@ function compareLevel(a: string, b: string): number {
 }
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+}
+
+/** Prüft ob parentLevel ein direkter oder indirekter Elternteil von childLevel ist */
+function isParentOf(parentLevel: string, childLevel: string): boolean {
+  const p = parseLevel(parentLevel);
+  const c = parseLevel(childLevel);
+  const ep = p[p.length - 1] === 0 ? p.slice(0, -1) : p; // z.B. [1,0] → [1]
+  const ec = c[c.length - 1] === 0 ? c.slice(0, -1) : c;
+  if (ec.length <= ep.length) return false;
+  return ep.every((n, i) => n === ec[i]);
 }
 
 // ─── Spaltendefinition ────────────────────────────────────────────────────────
@@ -287,9 +297,13 @@ export default function MatrixPage() {
   const [search,       setSearch]        = useState('');
   const [sort,         setSort]          = useState<SortState | null>(null);
   const [colFilters,   setColFilters]    = useState<Record<string, string>>({});
-  const [visibleCols,  setVisibleCols]   = useState<Set<string>>(
+  const [visibleCols,    setVisibleCols]    = useState<Set<string>>(
     new Set(['text', 'active', 'normative', 'reviewed', 'links'])
   );
+  const [collapsedLevels, setCollapsedLevels] = useState<Set<string>>(new Set());
+
+  // Collapsed-State zurücksetzen wenn Dokument wechselt
+  useEffect(() => { setCollapsedLevels(new Set()); }, [selectedPrefix]);
 
   // Daten laden
   const { data: docsRes, isLoading: docsLoading } = useQuery({
@@ -396,6 +410,37 @@ export default function MatrixPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawItems, sort, colFilters, search]);
 
+  // Level-Ebenen die Kinder haben (nur aus rawItems — unabhängig von Filtern)
+  const parentLevelSet = useMemo(() => {
+    const levels = rawItems.map((i) => i.level);
+    const parents = new Set<string>();
+    for (const lv of levels) {
+      if (levels.some((other) => isParentOf(lv, other))) parents.add(lv);
+    }
+    return parents;
+  }, [rawItems]);
+
+  // Toggle-Funktion
+  const toggleCollapse = (level: string) =>
+    setCollapsedLevels((prev) => {
+      const next = new Set(prev);
+      next.has(level) ? next.delete(level) : next.add(level);
+      return next;
+    });
+
+  // Alles ein-/ausklappen
+  const allCollapsed = parentLevelSet.size > 0 && collapsedLevels.size === parentLevelSet.size;
+  const toggleAll = () =>
+    setCollapsedLevels(allCollapsed ? new Set() : new Set(parentLevelSet));
+
+  // Collapse-Filter: Items ausblenden, deren Vorfahre eingeklappt ist
+  const visibleItems = useMemo(
+    () => processedItems.filter(
+      (item) => ![...collapsedLevels].some((cl) => isParentOf(cl, item.level))
+    ),
+    [processedItems, collapsedLevels]
+  );
+
   if (!pid) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400">
@@ -456,8 +501,22 @@ export default function MatrixPage() {
         {/* Treffer-Anzeige */}
         {selectedPrefix && !itemsLoading && (
           <span className="text-xs text-gray-400 shrink-0">
-            {processedItems.length} / {rawItems.length}
+            {visibleItems.length} / {rawItems.length}
           </span>
+        )}
+
+        {/* Alle ein-/ausklappen */}
+        {parentLevelSet.size > 0 && (
+          <button
+            onClick={toggleAll}
+            className="btn-secondary py-1 text-xs gap-1.5 shrink-0"
+            title={allCollapsed ? 'Alle aufklappen' : 'Alle einklappen'}
+          >
+            {allCollapsed
+              ? <><ChevronsUpDown className="w-3.5 h-3.5" /> Aufklappen</>
+              : <><ChevronsDownUp className="w-3.5 h-3.5" /> Einklappen</>
+            }
+          </button>
         )}
 
         <div className="flex-1" />
@@ -591,7 +650,7 @@ export default function MatrixPage() {
 
             {/* ── Tabelleninhalt ── */}
             <tbody>
-              {processedItems.length === 0 ? (
+              {visibleItems.length === 0 ? (
                 <tr>
                   <td
                     colSpan={2 + activeCols.length}
@@ -606,10 +665,12 @@ export default function MatrixPage() {
                   </td>
                 </tr>
               ) : (
-                processedItems.map((item, idx) => {
-                  const depth    = levelDepth(item.level);
-                  const isHeader = item.header;
-                  const inactive = !item.active;
+                visibleItems.map((item, idx) => {
+                  const depth     = levelDepth(item.level);
+                  const isHeader  = item.header;
+                  const inactive  = !item.active;
+                  const isParent  = parentLevelSet.has(item.level);
+                  const collapsed = collapsedLevels.has(item.level);
 
                   return (
                     <tr
@@ -626,7 +687,24 @@ export default function MatrixPage() {
                     >
                       {/* Ebene */}
                       <td className="px-3 py-2 font-mono text-xs text-gray-500 whitespace-nowrap align-top">
-                        <span style={{ paddingLeft: `${depth * 12}px` }} className="inline-block">
+                        <span
+                          style={{ paddingLeft: `${depth * 12}px` }}
+                          className="inline-flex items-center gap-1"
+                        >
+                          {isParent ? (
+                            <button
+                              onClick={() => toggleCollapse(item.level)}
+                              className="text-gray-400 hover:text-primary-600 transition-colors shrink-0"
+                              title={collapsed ? 'Aufklappen' : 'Einklappen'}
+                            >
+                              {collapsed
+                                ? <ChevronRight className="w-3 h-3" />
+                                : <ChevronDown  className="w-3 h-3" />
+                              }
+                            </button>
+                          ) : (
+                            <span className="w-3 h-3 shrink-0 inline-block" />
+                          )}
                           {item.level}
                         </span>
                       </td>
