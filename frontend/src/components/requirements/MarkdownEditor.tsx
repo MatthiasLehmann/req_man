@@ -469,13 +469,19 @@ export default function MarkdownEditor({
     },
   });
 
-  // Sync externer Wertänderungen in den Editor (z.B. beim Wechsel der Anforderung)
+  // Sync externer Wertänderungen in den Editor (z.B. beim Wechsel der Anforderung).
+  // setContent wird per queueMicrotask verzögert, damit TipTap's ReactNodeViewRenderer
+  // kein flushSync innerhalb einer React-Lifecycle-Phase aufruft (React-18-Warning).
   useEffect(() => {
     if (!editor) return;
     if (value !== lastValueRef.current) {
       const md = htmlToMarkdown(value);
-      editor.commands.setContent(md, false);
-      lastValueRef.current = value;
+      lastValueRef.current = value;   // sofort aktualisieren → verhindert Re-Trigger
+      queueMicrotask(() => {
+        if (!editor.isDestroyed) {
+          editor.commands.setContent(md, false);
+        }
+      });
     }
   }, [value, editor]);
 
