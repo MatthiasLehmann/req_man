@@ -47,6 +47,10 @@ export const deleteProject = (id: string, deleteFiles = false) =>
   api.delete(`/projects/${id}?delete_files=${deleteFiles}`);
 export const getProject = (id: string) => api.get(`/projects/${id}`);
 
+// Filesystem browser
+export const browseFilesystem = (path?: string) =>
+  api.get('/filesystem/browse', { params: path ? { path } : {} });
+
 // Documents
 export const listDocuments = (projectId: string) =>
   api.get(`/projects/${projectId}/documents`);

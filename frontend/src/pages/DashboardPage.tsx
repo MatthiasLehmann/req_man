@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, FolderOpen, FileText, ChevronRight, Loader2, X,
-  FolderInput, Trash2, AlertTriangle,
+  FolderInput, Trash2, AlertTriangle, FolderSearch, ArrowLeft,
+  Folder,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { listProjects, createProject, importProject, deleteProject } from '../api/client';
+import { listProjects, createProject, importProject, deleteProject, browseFilesystem } from '../api/client';
 import { useProjectStore } from '../store/projectStore';
 import { Project } from '../types';
 
@@ -19,10 +20,110 @@ function emptyImport() {
   return { path: '', name: '', description: '' };
 }
 
+// ─── Modal: Ordner-Browser ────────────────────────────────────────────────────
+
+function FolderBrowserModal({
+  initialPath,
+  onSelect,
+  onClose,
+}: {
+  initialPath: string;
+  onSelect: (path: string) => void;
+  onClose: () => void;
+}) {
+  const [browsePath, setBrowsePath] = useState(initialPath || '~');
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['filesystem', browsePath],
+    queryFn: () => browseFilesystem(browsePath),
+  });
+
+  const result = data?.data;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col" style={{ maxHeight: '70vh' }}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <FolderSearch className="w-5 h-5 text-primary-600" />
+            Ordner auswählen
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Aktueller Pfad */}
+        <div className="px-6 py-3 border-b border-gray-100 bg-gray-50 shrink-0">
+          <p className="font-mono text-xs text-gray-600 break-all">{result?.current ?? browsePath}</p>
+        </div>
+
+        {/* Verzeichnisliste */}
+        <div className="overflow-y-auto flex-1 px-2 py-2">
+          {isLoading && (
+            <div className="flex items-center justify-center py-8 text-gray-400">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" /> Lade...
+            </div>
+          )}
+          {error && (
+            <p className="text-xs text-red-500 px-4 py-2">Fehler beim Laden</p>
+          )}
+          {result && (
+            <ul>
+              {/* ".." Zurück-Eintrag */}
+              {result.parent && (
+                <li>
+                  <button
+                    onClick={() => setBrowsePath(result.parent!)}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+                  >
+                    <ArrowLeft className="w-4 h-4 shrink-0" />
+                    <span className="font-mono text-xs truncate">..</span>
+                  </button>
+                </li>
+              )}
+              {result.entries
+                .filter((e: any) => e.is_dir)
+                .map((entry: any) => (
+                  <li key={entry.path}>
+                    <button
+                      onClick={() => setBrowsePath(entry.path)}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-primary-50 transition-colors"
+                    >
+                      <Folder className="w-4 h-4 text-primary-500 shrink-0" />
+                      <span className="truncate">{entry.name}</span>
+                    </button>
+                  </li>
+                ))}
+              {result.entries.filter((e: any) => e.is_dir).length === 0 && !result.parent && (
+                <p className="text-xs text-gray-400 px-3 py-4 text-center">Keine Unterordner</p>
+              )}
+            </ul>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-100 shrink-0 flex gap-3">
+          <button
+            onClick={() => { onSelect(result?.current ?? browsePath); onClose(); }}
+            className="btn-primary flex-1 justify-center"
+            disabled={isLoading}
+          >
+            Diesen Ordner wählen
+          </button>
+          <button onClick={onClose} className="btn-secondary">Abbrechen</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Modal: Projekt erstellen ─────────────────────────────────────────────────
 
 function CreateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (p: Project) => void }) {
   const [form, setForm] = useState(emptyCreate);
+  const [showBrowser, setShowBrowser] = useState(false);
   const qc = useQueryClient();
 
   const mutation = useMutation({
@@ -38,6 +139,14 @@ function CreateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
   });
 
   return (
+    <>
+    {showBrowser && (
+      <FolderBrowserModal
+        initialPath={form.path}
+        onSelect={(p) => setForm({ ...form, path: p })}
+        onClose={() => setShowBrowser(false)}
+      />
+    )}
     <Modal title="Neues Projekt erstellen" icon={<Plus className="w-5 h-5 text-primary-600" />} onClose={onClose}>
       <div className="space-y-4">
         <Field label="Name *">
@@ -54,12 +163,22 @@ function CreateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           label="Speicherpfad *"
           hint="Verzeichnis, in dem das Doorstop-Projekt angelegt wird. Wird automatisch erstellt."
         >
-          <input
-            className="input font-mono text-sm"
-            value={form.path}
-            onChange={(e) => setForm({ ...form, path: e.target.value })}
-            placeholder="/home/user/projekte/fahrzeugsteuerung"
-          />
+          <div className="flex gap-2">
+            <input
+              className="input font-mono text-sm flex-1"
+              value={form.path}
+              onChange={(e) => setForm({ ...form, path: e.target.value })}
+              placeholder="/home/user/projekte/fahrzeugsteuerung"
+            />
+            <button
+              type="button"
+              onClick={() => setShowBrowser(true)}
+              className="btn-secondary px-3 shrink-0"
+              title="Ordner durchsuchen"
+            >
+              <FolderSearch className="w-4 h-4" />
+            </button>
+          </div>
         </Field>
 
         <Field label="Beschreibung">
@@ -81,6 +200,7 @@ function CreateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
         />
       </div>
     </Modal>
+    </>
   );
 }
 
@@ -88,6 +208,7 @@ function CreateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 
 function ImportModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (p: Project) => void }) {
   const [form, setForm] = useState(emptyImport);
+  const [showBrowser, setShowBrowser] = useState(false);
   const qc = useQueryClient();
 
   const mutation = useMutation({
@@ -104,6 +225,14 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
   });
 
   return (
+    <>
+    {showBrowser && (
+      <FolderBrowserModal
+        initialPath={form.path}
+        onSelect={(p) => setForm({ ...form, path: p })}
+        onClose={() => setShowBrowser(false)}
+      />
+    )}
     <Modal
       title="Bestehendes Projekt importieren"
       icon={<FolderInput className="w-5 h-5 text-emerald-600" />}
@@ -119,13 +248,23 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           label="Pfad zum Projektverzeichnis *"
           hint="Muss ein bestehendes Verzeichnis auf dem Server sein."
         >
-          <input
-            className="input font-mono text-sm"
-            value={form.path}
-            onChange={(e) => setForm({ ...form, path: e.target.value })}
-            placeholder="/home/user/projekte/bestehendes-projekt"
-            autoFocus
-          />
+          <div className="flex gap-2">
+            <input
+              className="input font-mono text-sm flex-1"
+              value={form.path}
+              onChange={(e) => setForm({ ...form, path: e.target.value })}
+              placeholder="/home/user/projekte/bestehendes-projekt"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => setShowBrowser(true)}
+              className="btn-secondary px-3 shrink-0"
+              title="Ordner durchsuchen"
+            >
+              <FolderSearch className="w-4 h-4" />
+            </button>
+          </div>
         </Field>
 
         <Field label="Anzeigename" hint="Leer lassen, um den Verzeichnisnamen zu verwenden.">
@@ -157,6 +296,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
         />
       </div>
     </Modal>
+    </>
   );
 }
 
