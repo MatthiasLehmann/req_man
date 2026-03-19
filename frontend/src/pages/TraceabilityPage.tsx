@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -7,7 +7,7 @@ import {
   NodeProps
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { GitBranch, Table2, List, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
+import { GitBranch, Table2, List, ArrowLeft, Loader2, AlertCircle, ArrowDown, ArrowUp } from 'lucide-react';
 import clsx from 'clsx';
 import { getTraceability } from '../api/client';
 import { TraceabilityData, TraceabilityNode } from '../types';
@@ -26,13 +26,20 @@ function getDocColor(doc: string, docList: string[]): string {
   return COLOR_PALETTE[idx % COLOR_PALETTE.length];
 }
 
-type ViewMode = 'graph' | 'matrix' | 'list';
+type ViewMode = 'graph' | 'matrix' | 'list' | 'topdown' | 'bottomup';
 
 export default function TraceabilityPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('graph');
   const [filterDoc, setFilterDoc] = useState<string>('');
+  const [selectedUid, setSelectedUid] = useState<string>('');
+
+  // Reset horizontal scroll caused by ReactFlow when switching views
+  useEffect(() => {
+    const main = document.querySelector('main');
+    if (main) main.scrollLeft = 0;
+  }, [viewMode]);
 
   const { data: res, isLoading } = useQuery({
     queryKey: ['traceability', projectId],
@@ -95,7 +102,13 @@ export default function TraceabilityPage() {
 
           {/* View mode */}
           <div className="flex border border-gray-200 rounded-lg overflow-hidden">
-            {([['graph', GitBranch], ['matrix', Table2], ['list', List]] as const).map(([mode, Icon]) => (
+            {([
+              ['graph', GitBranch, 'Graph'],
+              ['matrix', Table2, 'Matrix'],
+              ['list', List, 'Liste'],
+              ['topdown', ArrowDown, 'Top-Down'],
+              ['bottomup', ArrowUp, 'Bottom-Up'],
+            ] as const).map(([mode, Icon, label]) => (
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
@@ -107,7 +120,7 @@ export default function TraceabilityPage() {
                 )}
               >
                 <Icon className="w-3.5 h-3.5" />
-                {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                {label}
               </button>
             ))}
           </div>
@@ -131,8 +144,12 @@ export default function TraceabilityPage() {
           <GraphView nodes={filteredNodes} links={filteredLinks} docList={docList} />
         ) : viewMode === 'matrix' ? (
           <MatrixView nodes={filteredNodes} links={data.links} />
-        ) : (
+        ) : viewMode === 'list' ? (
           <ListView nodes={filteredNodes} links={filteredLinks} docList={docList} />
+        ) : viewMode === 'topdown' ? (
+          <TopDownView nodes={data.nodes} links={data.links} docList={docList} selectedUid={selectedUid} setSelectedUid={setSelectedUid} />
+        ) : (
+          <BottomUpView nodes={data.nodes} links={data.links} docList={docList} selectedUid={selectedUid} setSelectedUid={setSelectedUid} />
         )}
       </div>
     </div>
@@ -298,6 +315,293 @@ function MatrixView({
       <div className="mt-3 flex gap-4 text-xs text-gray-500">
         <span className="flex items-center gap-1"><span className="text-blue-600 font-bold">↓</span> Verlinkung (von → nach)</span>
         <span className="flex items-center gap-1"><span className="text-green-600">↑</span> Rückverlinkung</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared: Traceability Tree ─────────────────────────────────────────────────
+
+type TraceLink = { source: string; target: string; valid: boolean };
+
+function buildDownstream(
+  uid: string,
+  links: TraceLink[],
+  nodeMap: Record<string, TraceabilityNode>,
+  visited = new Set<string>()
+): TraceabilityNode[] {
+  if (visited.has(uid)) return [];
+  visited.add(uid);
+  const children = links.filter((l) => l.source === uid).map((l) => l.target);
+  const result: TraceabilityNode[] = [];
+  for (const child of children) {
+    const node = nodeMap[child];
+    if (node) result.push(node, ...buildDownstream(child, links, nodeMap, visited));
+  }
+  return result;
+}
+
+function buildUpstream(
+  uid: string,
+  links: TraceLink[],
+  nodeMap: Record<string, TraceabilityNode>,
+  visited = new Set<string>()
+): TraceabilityNode[] {
+  if (visited.has(uid)) return [];
+  visited.add(uid);
+  const parents = links.filter((l) => l.target === uid).map((l) => l.source);
+  const result: TraceabilityNode[] = [];
+  for (const parent of parents) {
+    const node = nodeMap[parent];
+    if (node) result.push(node, ...buildUpstream(parent, links, nodeMap, visited));
+  }
+  return result;
+}
+
+interface TraceTreeNodeProps {
+  uid: string;
+  links: TraceLink[];
+  nodeMap: Record<string, TraceabilityNode>;
+  docList: string[];
+  direction: 'down' | 'up';
+  depth?: number;
+  visited?: Set<string>;
+}
+
+function TraceTreeNode({ uid, links, nodeMap, docList, direction, depth = 0, visited = new Set() }: TraceTreeNodeProps) {
+  const [collapsed, setCollapsed] = useState(false);
+  if (visited.has(uid)) return null;
+  const newVisited = new Set(visited);
+  newVisited.add(uid);
+
+  const node = nodeMap[uid];
+  const children = direction === 'down'
+    ? links.filter((l) => l.source === uid).map((l) => l.target)
+    : links.filter((l) => l.target === uid).map((l) => l.source);
+
+  const color = node ? getDocColor(node.document, docList) : '#94a3b8';
+
+  return (
+    <div className={clsx('relative', depth > 0 && 'ml-6')}>
+      {depth > 0 && (
+        <div
+          className="absolute left-[-16px] top-4 w-4 border-t border-gray-300"
+          style={{ borderStyle: 'dashed' }}
+        />
+      )}
+      <div
+        className="flex items-start gap-2 py-1.5 px-2 rounded-lg hover:bg-gray-50 group"
+      >
+        {children.length > 0 && (
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            className="mt-0.5 text-gray-400 hover:text-gray-700 shrink-0"
+          >
+            {collapsed ? '▶' : '▼'}
+          </button>
+        )}
+        {children.length === 0 && <span className="w-4 shrink-0" />}
+        <div className="flex items-start gap-2 flex-1 min-w-0">
+          <span
+            className="shrink-0 font-mono text-xs px-1.5 py-0.5 rounded text-white"
+            style={{ background: color }}
+          >
+            {uid}
+          </span>
+          {node && (
+            <>
+              <span className="text-xs text-gray-400 shrink-0">[{node.document}]</span>
+              <span className="text-xs text-gray-600 truncate">{node.text}</span>
+            </>
+          )}
+          {!node && <span className="text-xs text-red-400 italic">Anforderung nicht gefunden</span>}
+        </div>
+      </div>
+      {!collapsed && children.map((childUid) => (
+        <TraceTreeNode
+          key={childUid}
+          uid={childUid}
+          links={links}
+          nodeMap={nodeMap}
+          docList={docList}
+          direction={direction}
+          depth={depth + 1}
+          visited={newVisited}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ─── Top-Down View ─────────────────────────────────────────────────────────────
+
+function TopDownView({
+  nodes,
+  links,
+  docList,
+  selectedUid,
+  setSelectedUid,
+}: {
+  nodes: TraceabilityNode[];
+  links: TraceLink[];
+  docList: string[];
+  selectedUid: string;
+  setSelectedUid: (uid: string) => void;
+}) {
+  const nodeMap = useMemo(() => Object.fromEntries(nodes.map((n) => [n.uid, n])), [nodes]);
+
+  return (
+    <div className="h-full overflow-auto p-6">
+      <div className="max-w-3xl mx-auto">
+        <div className="flex items-center gap-3 mb-6">
+          <ArrowDown className="w-5 h-5 text-primary-600" />
+          <h3 className="font-semibold text-gray-800">Top-Down Traceability</h3>
+          <span className="text-xs text-gray-400">Anforderung auswählen → Verlinkungen nach unten</span>
+        </div>
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Anforderung auswählen</label>
+          <select
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-400"
+            value={selectedUid}
+            onChange={(e) => setSelectedUid(e.target.value)}
+          >
+            <option value="">— Anforderung wählen —</option>
+            {nodes.map((n) => (
+              <option key={n.uid} value={n.uid}>
+                {n.uid} · [{n.document}] · {n.text?.slice(0, 60)}{n.text?.length > 60 ? '…' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {selectedUid && (
+          <div className="border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
+            <div className="mb-3 pb-3 border-b border-gray-100">
+              <p className="text-xs text-gray-500 mb-1">Ausgewählte Anforderung</p>
+              <div className="flex items-center gap-2">
+                <span
+                  className="font-mono text-sm px-2 py-0.5 rounded text-white"
+                  style={{ background: getDocColor(nodeMap[selectedUid]?.document ?? '', docList) }}
+                >
+                  {selectedUid}
+                </span>
+                <span className="text-sm text-gray-700">{nodeMap[selectedUid]?.text}</span>
+              </div>
+            </div>
+            {links.filter((l) => l.source === selectedUid).length === 0 ? (
+              <p className="text-sm text-gray-400 italic">Keine Verlinkungen nach unten vorhanden.</p>
+            ) : (
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2">Verlinkungen ↓</p>
+                {links.filter((l) => l.source === selectedUid).map((l) => (
+                  <TraceTreeNode
+                    key={l.target}
+                    uid={l.target}
+                    links={links}
+                    nodeMap={nodeMap}
+                    docList={docList}
+                    direction="down"
+                    visited={new Set([selectedUid])}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!selectedUid && (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-300">
+            <ArrowDown className="w-12 h-12 mb-3" />
+            <p className="text-sm">Wählen Sie eine Anforderung aus, um die Top-Down Traceability anzuzeigen.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Bottom-Up View ────────────────────────────────────────────────────────────
+
+function BottomUpView({
+  nodes,
+  links,
+  docList,
+  selectedUid,
+  setSelectedUid,
+}: {
+  nodes: TraceabilityNode[];
+  links: TraceLink[];
+  docList: string[];
+  selectedUid: string;
+  setSelectedUid: (uid: string) => void;
+}) {
+  const nodeMap = useMemo(() => Object.fromEntries(nodes.map((n) => [n.uid, n])), [nodes]);
+
+  return (
+    <div className="h-full overflow-auto p-6">
+      <div className="max-w-3xl mx-auto">
+        <div className="flex items-center gap-3 mb-6">
+          <ArrowUp className="w-5 h-5 text-primary-600" />
+          <h3 className="font-semibold text-gray-800">Bottom-Up Traceability</h3>
+          <span className="text-xs text-gray-400">Anforderung auswählen → Verlinkungen nach oben</span>
+        </div>
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Anforderung auswählen</label>
+          <select
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-400"
+            value={selectedUid}
+            onChange={(e) => setSelectedUid(e.target.value)}
+          >
+            <option value="">— Anforderung wählen —</option>
+            {nodes.map((n) => (
+              <option key={n.uid} value={n.uid}>
+                {n.uid} · [{n.document}] · {n.text?.slice(0, 60)}{n.text?.length > 60 ? '…' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {selectedUid && (
+          <div className="border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
+            <div className="mb-3 pb-3 border-b border-gray-100">
+              <p className="text-xs text-gray-500 mb-1">Ausgewählte Anforderung</p>
+              <div className="flex items-center gap-2">
+                <span
+                  className="font-mono text-sm px-2 py-0.5 rounded text-white"
+                  style={{ background: getDocColor(nodeMap[selectedUid]?.document ?? '', docList) }}
+                >
+                  {selectedUid}
+                </span>
+                <span className="text-sm text-gray-700">{nodeMap[selectedUid]?.text}</span>
+              </div>
+            </div>
+            {links.filter((l) => l.target === selectedUid).length === 0 ? (
+              <p className="text-sm text-gray-400 italic">Keine Verlinkungen nach oben vorhanden.</p>
+            ) : (
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2">Verlinkungen ↑</p>
+                {links.filter((l) => l.target === selectedUid).map((l) => (
+                  <TraceTreeNode
+                    key={l.source}
+                    uid={l.source}
+                    links={links}
+                    nodeMap={nodeMap}
+                    docList={docList}
+                    direction="up"
+                    visited={new Set([selectedUid])}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!selectedUid && (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-300">
+            <ArrowUp className="w-12 h-12 mb-3" />
+            <p className="text-sm">Wählen Sie eine Anforderung aus, um die Bottom-Up Traceability anzuzeigen.</p>
+          </div>
+        )}
       </div>
     </div>
   );
