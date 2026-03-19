@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, FileText, AlertTriangle } from 'lucide-react';
@@ -7,6 +7,87 @@ import { useProjectStore } from '../store/projectStore';
 import DocumentTree from '../components/requirements/DocumentTree';
 import ItemList from '../components/requirements/ItemList';
 import ItemEditor from '../components/requirements/ItemEditor';
+
+// ─── Resize-Divider ───────────────────────────────────────────────────────────
+
+interface ResizeDividerProps {
+  onDragStart: (e: React.MouseEvent) => void;
+}
+
+function ResizeDivider({ onDragStart }: ResizeDividerProps) {
+  return (
+    <div
+      onMouseDown={onDragStart}
+      className="w-1 shrink-0 bg-gray-200 hover:bg-primary-400 active:bg-primary-500
+                 cursor-col-resize transition-colors select-none"
+    />
+  );
+}
+
+// ─── Panel-Breiten Hook ────────────────────────────────────────────────────────
+
+const STORAGE_KEY = 'reqman_panel_widths';
+const DEFAULT_WIDTHS = { tree: 208, list: 288 };
+const MIN = { tree: 140, list: 180, editor: 280 };
+
+function usePanelWidths(containerRef: React.RefObject<HTMLDivElement | null>) {
+  const saved = (() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+    catch { return {}; }
+  })();
+
+  const [widths, setWidths] = useState({
+    tree: saved.tree ?? DEFAULT_WIDTHS.tree,
+    list: saved.list ?? DEFAULT_WIDTHS.list,
+  });
+
+  const dragging = useRef<'tree' | 'list' | null>(null);
+  const startX = useRef(0);
+  const startWidth = useRef(0);
+
+  const startDrag = useCallback((panel: 'tree' | 'list') => (e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = panel;
+    startX.current = e.clientX;
+    startWidth.current = widths[panel];
+
+    const onMove = (ev: MouseEvent) => {
+      if (!dragging.current || !containerRef.current) return;
+      const delta = ev.clientX - startX.current;
+      const containerW = containerRef.current.getBoundingClientRect().width;
+
+      setWidths((prev) => {
+        const next = { ...prev };
+        if (dragging.current === 'tree') {
+          const proposed = Math.max(MIN.tree, startWidth.current + delta);
+          // Sicherstellen dass Editor mindestens MIN.editor Platz hat
+          const maxTree = containerW - prev.list - MIN.editor - 2;
+          next.tree = Math.min(proposed, maxTree);
+        } else {
+          const proposed = Math.max(MIN.list, startWidth.current + delta);
+          const maxList = containerW - prev.tree - MIN.editor - 2;
+          next.list = Math.min(proposed, maxList);
+        }
+        return next;
+      });
+    };
+
+    const onUp = () => {
+      dragging.current = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      setWidths((w) => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(w));
+        return w;
+      });
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [widths, containerRef]);
+
+  return { widths, startDrag };
+}
 
 // ─── Ungespeichert-Modal ──────────────────────────────────────────────────────
 
@@ -65,6 +146,8 @@ export default function RequirementsPage() {
     setRequirementsUid,
   } = useProjectStore();
   const navigate = useNavigate();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { widths, startDrag } = usePanelWidths(containerRef);
 
   const pid = projectId ?? currentProject?.id ?? '';
 
@@ -169,9 +252,12 @@ export default function RequirementsPage() {
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <>
-      <div className="flex h-full">
+      <div ref={containerRef} className="flex h-full">
         {/* Dokumenten-Baum (linkes Panel) */}
-        <div className="w-52 shrink-0 border-r border-gray-200 bg-white flex flex-col">
+        <div
+          style={{ width: widths.tree }}
+          className="shrink-0 bg-white flex flex-col overflow-hidden"
+        >
           <DocumentTree
             projectId={projectId}
             selectedPrefix={selectedPrefix}
@@ -184,8 +270,13 @@ export default function RequirementsPage() {
           />
         </div>
 
+        <ResizeDivider onDragStart={startDrag('tree')} />
+
         {/* Item-Liste (mittleres Panel) */}
-        <div className="w-72 shrink-0 border-r border-gray-200 bg-white flex flex-col">
+        <div
+          style={{ width: widths.list }}
+          className="shrink-0 bg-white flex flex-col overflow-hidden"
+        >
           {selectedPrefix ? (
             <ItemList
               projectId={projectId}
@@ -205,6 +296,8 @@ export default function RequirementsPage() {
             </div>
           )}
         </div>
+
+        <ResizeDivider onDragStart={startDrag('list')} />
 
         {/* Item-Editor (Hauptbereich) */}
         <div className="flex-1 overflow-hidden">
