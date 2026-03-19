@@ -1,12 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, Loader2, CheckCircle, Circle, AlertCircle,
-  Tag, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown,
+  Tag, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
-import { listItems, createItem, deleteItem } from '../../api/client';
+import { listItems, createItem, deleteItem, exportDocument, ExportFormat } from '../../api/client';
 import { Item } from '../../types';
 import { useAuthStore } from '../../store/authStore';
 
@@ -106,6 +106,23 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
   const { user } = useAuthStore();
   const canEdit = user?.role !== 'viewer';
   const qc = useQueryClient();
+
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  const handleExport = async (format: ExportFormat) => {
+    setExportOpen(false);
+    setExporting(true);
+    try {
+      await exportDocument(projectId, prefix, format);
+      toast.success(`${prefix}.${format === 'yaml' ? 'yml' : format} heruntergeladen`);
+    } catch (e: any) {
+      toast.error(e.message || 'Export fehlgeschlagen');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const { data: itemsRes, isLoading } = useQuery({
     queryKey: ['items', projectId, prefix],
@@ -216,6 +233,38 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
               : <Plus className="w-3 h-3" />}
           </button>
         )}
+
+        {/* Export-Dropdown */}
+        <div className="relative" ref={exportRef}>
+          <button
+            onClick={() => setExportOpen((o) => !o)}
+            disabled={exporting}
+            title="Dokument exportieren"
+            className="p-1 text-gray-400 hover:text-gray-700 transition-colors"
+          >
+            {exporting
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <Download className="w-3.5 h-3.5" />}
+          </button>
+          {exportOpen && (
+            <div
+              className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200
+                         rounded-lg shadow-lg py-1 min-w-[110px]"
+              onMouseLeave={() => setExportOpen(false)}
+            >
+              {(['xlsx', 'csv', 'tsv', 'yaml'] as ExportFormat[]).map((fmt) => (
+                <button
+                  key={fmt}
+                  onClick={() => handleExport(fmt)}
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700
+                             hover:bg-gray-50 transition-colors"
+                >
+                  {fmt.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Zähler */}

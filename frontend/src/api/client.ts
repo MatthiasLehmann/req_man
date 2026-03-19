@@ -176,6 +176,55 @@ export const getProjectStructure = (projectId: string) =>
 export const assignDocumentType = (projectId: string, prefix: string, typeId: string | null) =>
   api.put(`/projects/${projectId}/documents/${prefix}/type`, { document_type_id: typeId });
 
+// Export
+export type ExportFormat = 'csv' | 'tsv' | 'xlsx' | 'yaml';
+
+/** Löst einen Browser-Download für ein einzelnes Dokument aus. */
+export const exportDocument = (projectId: string, prefix: string, format: ExportFormat = 'xlsx') => {
+  const token = localStorage.getItem('token');
+  const url = `/api/projects/${projectId}/documents/${encodeURIComponent(prefix)}/export?format=${format}`;
+  const a = document.createElement('a');
+  a.href = url;
+  // Token über fetch + Blob-URL (CORS-konform, Auth-Header mitschicken)
+  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    .then((res) => {
+      if (!res.ok) throw new Error(`Export fehlgeschlagen: ${res.statusText}`);
+      return res.blob();
+    })
+    .then((blob) => {
+      const ext = format === 'yaml' ? 'yml' : format;
+      const objectUrl = URL.createObjectURL(blob);
+      a.href = objectUrl;
+      a.download = `${prefix}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    });
+};
+
+/** Löst einen Browser-Download für das gesamte Projekt (ZIP) aus. */
+export const exportProject = (projectId: string, projectName: string, format: ExportFormat = 'xlsx') => {
+  const token = localStorage.getItem('token');
+  const url = `/api/projects/${projectId}/export?format=${format}`;
+  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    .then((res) => {
+      if (!res.ok) throw new Error(`Export fehlgeschlagen: ${res.statusText}`);
+      return res.blob();
+    })
+    .then((blob) => {
+      const safeName = projectName.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = `${safeName}_export_${format}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    });
+};
+
 // PlantUML
 export const renderPlantUML = (source: string) =>
   api.post<{ svg: string }>('/plantuml/render', { source });
