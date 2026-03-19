@@ -158,6 +158,24 @@ export const checkReferences = (projectId: string, uid: string) =>
 export const refreshReferenceHashes = (projectId: string, uid: string) =>
   api.post<Reference[]>(`/projects/${projectId}/items/${uid}/references/refresh`);
 
+// Document Types
+import type { DocumentType, ProjectStructure } from '../types';
+
+export const listDocumentTypes = () =>
+  api.get<DocumentType[]>('/document-types');
+export const createDocumentType = (data: Omit<DocumentType, 'id'>) =>
+  api.post<DocumentType>('/document-types', data);
+export const updateDocumentType = (id: string, data: Partial<Omit<DocumentType, 'id'>>) =>
+  api.put<DocumentType>(`/document-types/${id}`, data);
+export const deleteDocumentType = (id: string) =>
+  api.delete(`/document-types/${id}`);
+
+// Project Structure
+export const getProjectStructure = (projectId: string) =>
+  api.get<ProjectStructure>(`/projects/${projectId}/structure`);
+export const assignDocumentType = (projectId: string, prefix: string, typeId: string | null) =>
+  api.put(`/projects/${projectId}/documents/${prefix}/type`, { document_type_id: typeId });
+
 // PlantUML
 export const renderPlantUML = (source: string) =>
   api.post<{ svg: string }>('/plantuml/render', { source });

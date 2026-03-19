@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from datetime import datetime, timezone
 import os
@@ -26,6 +26,29 @@ class User(Base):
     role = Column(String, default="viewer")  # admin, editor, viewer
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class DocumentType(Base):
+    __tablename__ = "document_types"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    color = Column(String, default="#3b82f6")
+    default_prefix = Column(String, default="")
+    description = Column(String, default="")
+    properties_json = Column(String, default="[]")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class DocumentTypeAssignment(Base):
+    __tablename__ = "document_type_assignments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, nullable=False, index=True)
+    prefix = Column(String, nullable=False)
+    document_type_id = Column(String, nullable=False)
+
+    __table_args__ = (UniqueConstraint('project_id', 'prefix'),)
 
 
 def get_db():

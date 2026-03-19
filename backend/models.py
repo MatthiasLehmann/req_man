@@ -119,6 +119,55 @@ class ItemResponse(BaseModel):
     references: List[Dict[str, Any]] = []
 
 
+# Document Type models
+class PropertyDefinition(BaseModel):
+    key: str
+    label: str
+    type: str  # "text" | "date" | "select"
+    options: Optional[List[str]] = None
+
+
+class DocumentTypeCreate(BaseModel):
+    name: str
+    color: str = "#3b82f6"
+    default_prefix: str = ""
+    description: str = ""
+    properties: List[PropertyDefinition] = []
+
+
+class DocumentTypeUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    default_prefix: Optional[str] = None
+    description: Optional[str] = None
+    properties: Optional[List[PropertyDefinition]] = None
+
+
+class DocumentTypeResponse(BaseModel):
+    id: str
+    name: str
+    color: str
+    default_prefix: str
+    description: str
+    properties: List[PropertyDefinition]
+
+    class Config:
+        from_attributes = True
+
+
+class DocumentWithType(DocumentResponse):
+    document_type_id: Optional[str] = None
+    document_type: Optional[DocumentTypeResponse] = None
+
+
+class ProjectStructureResponse(BaseModel):
+    documents: List[DocumentWithType]
+
+
+class AssignDocumentTypeRequest(BaseModel):
+    document_type_id: Optional[str] = None
+
+
 # Attribute config models
 class AttributeDefinition(BaseModel):
     key: str

@@ -9,6 +9,7 @@ import MatrixPage from './pages/MatrixPage';
 import LinkingPage from './pages/LinkingPage';
 import AdminPage from './pages/AdminPage';
 import HelpPage from './pages/HelpPage';
+import DocumentStructurePage from './pages/DocumentStructurePage';
 import Layout from './components/layout/Layout';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="metrics/:projectId?" element={<MetricsPage />} />
         <Route path="matrix/:projectId?" element={<MatrixPage />} />
         <Route path="linking/:projectId?" element={<LinkingPage />} />
+        <Route path="document-structure/:projectId?" element={<DocumentStructurePage />} />
         <Route
           path="admin"
           element={

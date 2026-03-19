@@ -176,6 +176,32 @@ export interface ValidationReport {
   supersedes: string | null;
 }
 
+// Document Structure models
+export interface PropertyDefinition {
+  key: string;
+  label: string;
+  type: 'text' | 'date' | 'select';
+  options?: string[];
+}
+
+export interface DocumentType {
+  id: string;
+  name: string;
+  color: string;
+  default_prefix: string;
+  description: string;
+  properties: PropertyDefinition[];
+}
+
+export interface DocumentWithType extends Document {
+  document_type_id: string | null;
+  document_type: DocumentType | null;
+}
+
+export interface ProjectStructure {
+  documents: DocumentWithType[];
+}
+
 export interface AuthState {
   user: User | null;
   token: string | null;

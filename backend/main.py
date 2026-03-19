@@ -11,6 +11,7 @@ from routers import documents_router, items_router, traceability_router
 from routers import metrics_router, attributes_router, validation_router
 from routers import uploads_router, localfile_router, plantuml_router, references_router
 from routers import filesystem_router
+from routers import document_types_router
 
 app = FastAPI(title="ReqMan - Requirements Management", version="1.0.0")
 
@@ -42,6 +43,7 @@ app.include_router(localfile_router.router)
 app.include_router(plantuml_router.router)
 app.include_router(references_router.router)
 app.include_router(filesystem_router.router)
+app.include_router(document_types_router.router)
 
 # Serve uploaded images as static files
 UPLOADS_DIR = os.path.join(os.path.dirname(__file__), "uploads")

@@ -1,7 +1,7 @@
 import { NavLink, useParams } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, GitBranch, BarChart3, Table2,
-  Link2, Settings, ChevronRight, Database, HelpCircle
+  Link2, Settings, ChevronRight, Database, HelpCircle, Layers
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useProjectStore } from '../../store/projectStore';
@@ -9,6 +9,7 @@ import clsx from 'clsx';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', exact: true },
+  { to: '/document-structure', icon: Layers, label: 'Dokumentenstruktur' },
   { to: '/requirements', icon: FileText, label: 'Anforderungen' },
   { to: '/traceability', icon: GitBranch, label: 'Traceability' },
   { to: '/metrics', icon: BarChart3, label: 'Metriken' },
