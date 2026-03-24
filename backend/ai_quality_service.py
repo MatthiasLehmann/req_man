@@ -397,6 +397,19 @@ Gib NUR das JSON zurück, keinerlei Markdown-Formatierung oder Erklärungstext.\
         return "\n".join(lines)
 
 
+# ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
+
+
+def _clamp(value: Any) -> Optional[int]:
+    """Konvertiert einen Wert zu int und begrenzt ihn auf [0, 100]. None bleibt None."""
+    if value is None:
+        return None
+    try:
+        return max(0, min(100, int(value)))
+    except (TypeError, ValueError):
+        return None
+
+
 # ─── Ergebnis-Parser ──────────────────────────────────────────────────────────
 
 
@@ -412,12 +425,26 @@ class QualityResultParser:
 
         data = json.loads(json_str)
 
+        raw_scores = data.get("scores", {})
+        clarity     = _clamp(raw_scores.get("clarity"))
+        testability = _clamp(raw_scores.get("testability"))
+        completeness = _clamp(raw_scores.get("completeness"))
+        consistency  = _clamp(raw_scores.get("consistency"))
+
+        # Overall immer aus Unterkriterien berechnen, nie blind dem LLM vertrauen
+        sub = [s for s in (clarity, testability, completeness, consistency) if s is not None]
+        if sub:
+            overall = int(round(sum(sub) / len(sub)))
+        else:
+            # Fallback: LLM-Wert, aber geclampt
+            overall = _clamp(data.get("overall_score", 0)) or 0
+
         score = AiQualityScore(
-            overall=int(data.get("overall_score", 0)),
-            clarity=data.get("scores", {}).get("clarity"),
-            testability=data.get("scores", {}).get("testability"),
-            completeness=data.get("scores", {}).get("completeness"),
-            consistency=data.get("scores", {}).get("consistency"),
+            overall=overall,
+            clarity=clarity,
+            testability=testability,
+            completeness=completeness,
+            consistency=consistency,
         )
 
         issues = [

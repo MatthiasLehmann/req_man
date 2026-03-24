@@ -155,7 +155,8 @@ class TestQualityResultParser:
 
     def test_parse_low_score(self):
         result = self.parser.parse(SAMPLE_JSON_LOW_SCORE, "SRS002", "claude-sonnet-4-6", "standard")
-        assert result.score.overall == 22
+        # Overall wird aus Unterkriterien berechnet: (20+5+30+50)/4 = 26.25 → 26
+        assert result.score.overall == 26
         assert len(result.issues) == 2
         severities = {i.severity for i in result.issues}
         assert "critical" in severities
@@ -164,7 +165,78 @@ class TestQualityResultParser:
     def test_parse_with_markdown_codeblock(self):
         wrapped = f"```json\n{SAMPLE_JSON_RESPONSE}\n```"
         result = self.parser.parse(wrapped, "SRS001", "claude-sonnet-4-6", "standard")
-        assert result.score.overall == 72
+        assert result.score.overall == 72  # (80+75+70+65)/4 = 72.5 → 72 (Banker's Rounding)
+
+    def test_overall_score_calculated_not_from_llm(self):
+        """LLM gibt overall=100, Unterkriterien sind niedriger → muss Durchschnitt liefern."""
+        tricky = json.dumps({
+            "overall_score": 100,  # LLM lügt
+            "scores": {"clarity": 60, "testability": 40, "completeness": 50, "consistency": 70},
+            "issues": [],
+            "summary": "Test",
+        })
+        result = self.parser.parse(tricky, "SRS001", "model", "standard")
+        # Erwarteter Durchschnitt: (60+40+50+70)/4 = 55
+        assert result.score.overall == 55
+        assert result.score.overall != 100
+
+    def test_overall_score_all_perfect(self):
+        """Alle Unterkriterien 100 → Overall muss auch 100 sein."""
+        perfect = json.dumps({
+            "overall_score": 100,
+            "scores": {"clarity": 100, "testability": 100, "completeness": 100, "consistency": 100},
+            "issues": [],
+            "summary": "Perfekt",
+        })
+        result = self.parser.parse(perfect, "SRS001", "model", "standard")
+        assert result.score.overall == 100
+
+    def test_overall_score_all_zero(self):
+        """Alle Unterkriterien 0 → Overall muss 0 sein."""
+        zero = json.dumps({
+            "overall_score": 50,
+            "scores": {"clarity": 0, "testability": 0, "completeness": 0, "consistency": 0},
+            "issues": [],
+            "summary": "Schlecht",
+        })
+        result = self.parser.parse(zero, "SRS001", "model", "standard")
+        assert result.score.overall == 0
+
+    def test_overall_score_partial_subscores(self):
+        """Nur 2 Unterkriterien vorhanden → Durchschnitt aus diesen 2."""
+        partial = json.dumps({
+            "overall_score": 99,
+            "scores": {"clarity": 80, "testability": 60},
+            "issues": [],
+            "summary": "Teilweise",
+        })
+        result = self.parser.parse(partial, "SRS001", "model", "standard")
+        assert result.score.overall == 70  # (80+60)/2 = 70
+
+    def test_score_clamped_above_100(self):
+        """Werte über 100 vom LLM werden auf 100 begrenzt."""
+        clamped = json.dumps({
+            "overall_score": 150,
+            "scores": {"clarity": 110, "testability": 120, "completeness": 90, "consistency": 80},
+            "issues": [],
+            "summary": "Overflow",
+        })
+        result = self.parser.parse(clamped, "SRS001", "model", "standard")
+        assert result.score.clarity == 100
+        assert result.score.testability == 100
+        assert result.score.overall <= 100
+
+    def test_score_clamped_below_zero(self):
+        """Negative Werte vom LLM werden auf 0 begrenzt."""
+        clamped = json.dumps({
+            "overall_score": -10,
+            "scores": {"clarity": -5, "testability": 50, "completeness": 0, "consistency": 10},
+            "issues": [],
+            "summary": "Negativ",
+        })
+        result = self.parser.parse(clamped, "SRS001", "model", "standard")
+        assert result.score.clarity == 0
+        assert result.score.overall >= 0
 
     def test_parse_timestamp_set(self):
         result = self.parser.parse(SAMPLE_JSON_RESPONSE, "SRS001", "claude-sonnet-4-6", "standard")
@@ -252,6 +324,37 @@ class TestProfiles:
         # Sollte keinen Fehler werfen
         profile = aqs.load_profile("does_not_exist_xyz")
         assert isinstance(profile, dict)
+
+
+# ─── _clamp Tests ────────────────────────────────────────────────────────────
+
+class TestClamp:
+    def test_normal_value(self):
+        assert aqs._clamp(50) == 50
+
+    def test_zero(self):
+        assert aqs._clamp(0) == 0
+
+    def test_hundred(self):
+        assert aqs._clamp(100) == 100
+
+    def test_above_100(self):
+        assert aqs._clamp(150) == 100
+
+    def test_negative(self):
+        assert aqs._clamp(-10) == 0
+
+    def test_none(self):
+        assert aqs._clamp(None) is None
+
+    def test_string_number(self):
+        assert aqs._clamp("75") == 75
+
+    def test_invalid_string(self):
+        assert aqs._clamp("abc") is None
+
+    def test_float(self):
+        assert aqs._clamp(72.9) == 72  # int() truncates
 
 
 # ─── Provider-Tests ───────────────────────────────────────────────────────────
@@ -375,7 +478,7 @@ class TestQualityAnalyzer:
         analyzer = aqs.QualityAnalyzer(provider=mock_provider)
         result = asyncio.run(analyzer.analyze("proj1", "SRS002"))
 
-        assert result.score.overall == 22
+        assert result.score.overall == 26  # (20+5+30+50)/4 = 26.25 → 26
         assert len(result.issues) == 2
 
 
