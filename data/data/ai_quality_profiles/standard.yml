@@ -1,0 +1,40 @@
+# INCOSE Standard-Qualitätsprofil für Anforderungen
+name: INCOSE Standard
+description: >
+  Allgemeines INCOSE-Qualitätsprofil nach IEEE 29148:2018.
+  Geeignet für alle Projekttypen ohne spezifische Normvorgaben.
+norm_references:
+  - IEEE 29148:2018
+  - INCOSE Systems Engineering Handbook
+model: claude-sonnet-4-6
+min_score: 70
+forbidden_keywords:
+  - möglichst
+  - eventuell
+  - ggf.
+  - gegebenenfalls
+  - ausreichend
+  - angemessen
+  - benutzerfreundlich
+  - schnell
+  - einfach
+  - flexibel
+categories:
+  clarity:
+    weight: 1.0
+    enabled: true
+  testability:
+    weight: 1.0
+    enabled: true
+  completeness:
+    weight: 1.0
+    enabled: true
+  consistency:
+    weight: 1.0
+    enabled: true
+  modal_verb:
+    weight: 0.8
+    enabled: true
+additional_criteria:
+  - Jede Anforderung muss genau eine Anforderung beschreiben (keine Und-Verknüpfung)
+  - Subjekt und Akteur müssen eindeutig identifizierbar sein

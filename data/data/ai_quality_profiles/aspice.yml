@@ -1,0 +1,42 @@
+# Automotive SPICE (ASPICE) Qualitätsprofil
+name: Automotive SPICE (ASPICE)
+description: >
+  Qualitätsprofil nach Automotive SPICE v3.1 für die Prozessgruppen
+  SWE.1 (Software Requirements Analysis) und SYS.2/SYS.3.
+  Fokus auf Prozesskonformität, Traceability und Konsistenz im
+  V-Modell-basierten Entwicklungsprozess.
+norm_references:
+  - Automotive SPICE v3.1
+  - VDA Scope: SWE.1, SYS.2, SYS.3
+model: claude-sonnet-4-6
+min_score: 75
+forbidden_keywords:
+  - möglichst
+  - eventuell
+  - ggf.
+  - gegebenenfalls
+  - ausreichend
+  - angemessen
+  - schnell
+  - flexibel
+categories:
+  clarity:
+    weight: 1.0
+    enabled: true
+  testability:
+    weight: 1.2
+    enabled: true
+  completeness:
+    weight: 1.2
+    enabled: true
+  consistency:
+    weight: 1.3
+    enabled: true
+  modal_verb:
+    weight: 0.9
+    enabled: true
+additional_criteria:
+  - Bidirektionale Traceability muss zwischen SYS- und SWE-Ebene nachweisbar sein
+  - Anforderungen müssen eindeutig einem Stakeholder-Bedarf zugeordnet werden können
+  - Änderungsmanagement: Anforderungen müssen versionierbar und eindeutig identifizierbar sein
+  - Vollständige Abdeckung der Systemfunktionen durch Software-Anforderungen erforderlich
