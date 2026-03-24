@@ -225,6 +225,27 @@ export const exportProject = (projectId: string, projectName: string, format: Ex
     });
 };
 
+// KI-Qualitätsprüfung
+import type { AiQualityResult, AiQualityRequest } from '../types';
+
+export const triggerAiQuality = (projectId: string, uid: string, data: AiQualityRequest = {}) =>
+  api.post<AiQualityResult>(`/projects/${projectId}/items/${uid}/ai-quality`, data);
+
+export const getAiQuality = (projectId: string, uid: string) =>
+  api.get<AiQualityResult | null>(`/projects/${projectId}/items/${uid}/ai-quality`);
+
+export const triggerAiQualityBatch = (
+  projectId: string,
+  prefix: string,
+  data: AiQualityRequest = {},
+) => api.post(`/projects/${projectId}/documents/${prefix}/ai-quality-batch`, data);
+
+export const getAiQualityProfiles = () =>
+  api.get<string[]>('/ai-quality/profiles');
+
+export const getAiQualitySettings = () =>
+  api.get<{ api_key_configured: boolean; default_model: string; default_profile: string; available_profiles: string[] }>('/ai-quality/settings');
+
 // PlantUML
 export const renderPlantUML = (source: string) =>
   api.post<{ svg: string }>('/plantuml/render', { source });

@@ -207,3 +207,36 @@ export interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
 }
+
+// KI-Qualitätsprüfung
+export type AiQualitySeverity = 'low' | 'medium' | 'high' | 'critical';
+
+export interface AiQualityIssue {
+  category: string;
+  severity: AiQualitySeverity;
+  description: string;
+  suggestion: string;
+}
+
+export interface AiQualityScore {
+  overall: number;
+  clarity?: number;
+  testability?: number;
+  completeness?: number;
+  consistency?: number;
+}
+
+export interface AiQualityResult {
+  requirement_uid: string;
+  score: AiQualityScore;
+  issues: AiQualityIssue[];
+  summary: string;
+  model_used: string;
+  profile_used: string;
+  timestamp: string;
+}
+
+export interface AiQualityRequest {
+  profile?: string;
+  model?: string;
+}
