@@ -63,3 +63,4 @@ frontend/.vite/
 # ─── Logs ─────────────────────────────────────────────────────────────────────
 *.log
 npm-debug.log*
+frontend/node_modules
