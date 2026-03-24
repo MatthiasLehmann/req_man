@@ -1,0 +1,43 @@
+# ISO 26262 Qualitätsprofil für Automotive-Sicherheitssoftware
+name: ISO 26262 (Automotive)
+description: >
+  Qualitätsprofil für funktionssichere Automotive-Software nach ISO 26262.
+  Berücksichtigt ASIL-Einstufungen (A–D) und Anforderungen an
+  Sicherheitsziele, technische Sicherheitskonzepte und Software-Anforderungen.
+norm_references:
+  - ISO 26262:2018 (Functional Safety for Road Vehicles)
+  - ASPICE 3.1 (Automotive SPICE)
+model: claude-sonnet-4-6
+min_score: 80
+forbidden_keywords:
+  - möglichst
+  - eventuell
+  - ggf.
+  - gegebenenfalls
+  - ausreichend
+  - angemessen
+  - schnell
+  - typisch
+  - nominal
+categories:
+  clarity:
+    weight: 1.3
+    enabled: true
+  testability:
+    weight: 1.5
+    enabled: true
+  completeness:
+    weight: 1.3
+    enabled: true
+  consistency:
+    weight: 1.2
+    enabled: true
+  modal_verb:
+    weight: 1.0
+    enabled: true
+additional_criteria:
+  - ASIL-Einstufung muss für sicherheitsrelevante Anforderungen angegeben sein
+  - Sicherheitsziele müssen auf Systemebene rückverfolgbar sein (Traceability)
+  - Fehlererkennungs- und Fehlerbehandlungsmechanismen müssen spezifiziert sein
+  - Zeitkritische Anforderungen müssen Worst-Case-Ausführungszeiten (WCET) nennen
+  - Hardware-Software-Interface (HSI) muss eindeutig beschrieben sein
