@@ -246,6 +246,28 @@ export const getAiQualityProfiles = () =>
 export const getAiQualitySettings = () =>
   api.get<{ api_key_configured: boolean; default_model: string; default_profile: string; available_profiles: string[] }>('/ai-quality/settings');
 
+// Simulink Traceability
+import type { SimulinkSidecar, SimulinkImportResult, SimulinkCoverage } from '../types';
+
+export const importSimulinkTrace = (projectId: string, file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post<SimulinkImportResult>(
+    `/projects/${projectId}/simulink/import`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+};
+
+export const getSimulinkLinks = (projectId: string, uid: string) =>
+  api.get<SimulinkSidecar | null>(`/projects/${projectId}/items/${uid}/simulink-links`);
+
+export const getSimulinkCoverage = (projectId: string) =>
+  api.get<SimulinkCoverage>(`/projects/${projectId}/simulink/coverage`);
+
+export const deleteSimulinkLinks = (projectId: string) =>
+  api.delete<{ deleted: number; message: string }>(`/projects/${projectId}/simulink/links`);
+
 // PlantUML
 export const renderPlantUML = (source: string) =>
   api.post<{ svg: string }>('/plantuml/render', { source });

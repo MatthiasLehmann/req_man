@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, X, Link2, Tag, ChevronDown, ChevronUp, Loader2, GitCommit, History, Stamp, Paperclip, AlertTriangle, Sparkles } from 'lucide-react';
+import { Save, X, Link2, Tag, ChevronDown, ChevronUp, Loader2, GitCommit, History, Stamp, Paperclip, AlertTriangle, Sparkles, Boxes } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 import { getItem, updateItem, getAttributes, getLatestValidation, reviewItem } from '../../api/client';
@@ -15,6 +15,8 @@ import ValidationHistory from '../validation/ValidationHistory';
 import ReferencesTab from './ReferencesTab';
 import AiQualityTab from './AiQualityTab';
 import { useAiQuality } from '../../hooks/useAiQuality';
+import SimulinkTab from './SimulinkTab';
+import { useSimulinkLinks } from '../../hooks/useSimulinkLinks';
 
 interface Props {
   projectId: string;
@@ -54,10 +56,12 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
   const [newLink, setNewLink] = useState('');
   const [showCustom, setShowCustom] = useState(false);
   const [showValidationDialog, setShowValidationDialog] = useState(false);
-  const [activeTab, setActiveTab] = useState<'details' | 'references' | 'validation' | 'ai-quality'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'references' | 'validation' | 'ai-quality' | 'simulink'>('details');
 
   // KI-Qualitäts-Badge
   const { data: aiQualityResult } = useAiQuality(projectId, uid);
+  // Simulink-Badge
+  const { data: simulinkSidecar } = useSimulinkLinks(projectId, uid);
 
   // Badge-State für Referenzen-Tab
   const [refCount, setRefCount] = useState(0);
@@ -289,10 +293,33 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
             )}
           </button>
         )}
+        {!item?.header && (
+          <button
+            onClick={() => setActiveTab('simulink')}
+            className={clsx(
+              'flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors',
+              activeTab === 'simulink'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700',
+            )}
+          >
+            <Boxes className="w-3 h-3" />
+            Simulink
+            {simulinkSidecar && simulinkSidecar.links.length > 0 && (
+              <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700">
+                {simulinkSidecar.links.length}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* ── Body ── */}
-      {activeTab === 'ai-quality' ? (
+      {activeTab === 'simulink' ? (
+        <div className="flex-1 overflow-y-auto p-4">
+          <SimulinkTab projectId={projectId} uid={uid} />
+        </div>
+      ) : activeTab === 'ai-quality' ? (
         <div className="flex-1 overflow-y-auto p-4">
           <AiQualityTab projectId={projectId} uid={uid} />
         </div>

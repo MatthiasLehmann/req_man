@@ -240,3 +240,40 @@ export interface AiQualityRequest {
   profile?: string;
   model?: string;
 }
+
+// Simulink Traceability
+export type SimulinkLinkType = 'implements' | 'verifies' | 'refines';
+
+export interface SimulinkLink {
+  block_path: string;
+  block_type: string;
+  model_file: string;
+  uid: string;
+  link_type: SimulinkLinkType;
+  imported_at: string;
+}
+
+export interface SimulinkSidecar {
+  requirement_uid: string;
+  links: SimulinkLink[];
+  last_import: string;
+  model: string;
+}
+
+export interface SimulinkImportResult {
+  imported: number;
+  unknown_uids: string[];
+  updated_requirements: string[];
+  model: string;
+  timestamp: string;
+}
+
+export interface SimulinkCoverage {
+  total_requirements: number;
+  covered: number;
+  not_covered: number;
+  coverage_percent: number;
+  not_covered_uids: string[];
+  model: string | null;
+  last_import: string | null;
+}

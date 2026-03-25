@@ -14,6 +14,7 @@ from routers import filesystem_router
 from routers import document_types_router
 from routers import export_router
 from routers import ai_quality_router
+from routers import simulink_router
 
 app = FastAPI(title="ReqMan - Requirements Management", version="1.0.0")
 
@@ -49,6 +50,7 @@ app.include_router(document_types_router.router)
 app.include_router(export_router.router)
 app.include_router(ai_quality_router.router)
 app.include_router(ai_quality_router.settings_router)
+app.include_router(simulink_router.router)
 
 # Serve uploaded images as static files
 UPLOADS_DIR = os.path.join(os.path.dirname(__file__), "uploads")
