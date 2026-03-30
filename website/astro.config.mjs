@@ -3,6 +3,6 @@ import tailwind from '@astrojs/tailwind';
 
 export default defineConfig({
   integrations: [tailwind()],
-  site: 'https://yourusername.github.io',
+  site: 'https://MatthiasLehmann.github.io',
   base: '/req_man',
 });
