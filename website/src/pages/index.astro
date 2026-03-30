@@ -1,0 +1,340 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const features = [
+  {
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0 0 20.25 18V6A2.25 2.25 0 0 0 18 3.75H6A2.25 2.25 0 0 0 3.75 6v12A2.25 2.25 0 0 0 6 20.25Z" /></svg>`,
+    title: 'Interactive Traceability',
+    desc: 'Visualize requirement dependencies as interactive graphs, matrices, or hierarchical views. Understand your project at a glance.',
+    color: 'blue',
+  },
+  {
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" /></svg>`,
+    title: 'AI Quality Analysis',
+    desc: 'Built-in AI assistant evaluates your requirements for clarity, completeness, and consistency — giving you a score with actionable suggestions.',
+    color: 'violet',
+  },
+  {
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /></svg>`,
+    title: 'Rich Text Editing',
+    desc: 'Write requirements in a powerful WYSIWYG editor with full Markdown support, tables, images, and inline formatting.',
+    color: 'emerald',
+  },
+  {
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605" /></svg>`,
+    title: 'Metrics & Analytics',
+    desc: 'Track coverage, review status, and completeness with real-time dashboards. Export reports to keep stakeholders informed.',
+    color: 'amber',
+  },
+  {
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" /></svg>`,
+    title: 'Drag-and-Drop Linking',
+    desc: 'Create and manage cross-document requirement links with an intuitive drag-and-drop interface. Visual status indicators keep you in control.',
+    color: 'cyan',
+  },
+  {
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 0 1 21.75 8.25Z" /></svg>`,
+    title: 'Role-Based Access',
+    desc: 'Admin, Editor, and Viewer roles ensure that the right people have the right access. Full user management included.',
+    color: 'rose',
+  },
+];
+
+const techStack = [
+  { name: 'React 18', category: 'Frontend' },
+  { name: 'TypeScript', category: 'Frontend' },
+  { name: 'Tailwind CSS', category: 'Frontend' },
+  { name: 'TipTap', category: 'Frontend' },
+  { name: 'React Flow', category: 'Frontend' },
+  { name: 'FastAPI', category: 'Backend' },
+  { name: 'Python 3.x', category: 'Backend' },
+  { name: 'doorstop', category: 'Backend' },
+  { name: 'SQLite', category: 'Backend' },
+  { name: 'JWT Auth', category: 'Backend' },
+];
+
+const colorMap: Record<string, string> = {
+  blue:   'bg-blue-500/10 text-blue-400 ring-blue-500/20',
+  violet: 'bg-violet-500/10 text-violet-400 ring-violet-500/20',
+  emerald:'bg-emerald-500/10 text-emerald-400 ring-emerald-500/20',
+  amber:  'bg-amber-500/10 text-amber-400 ring-amber-500/20',
+  cyan:   'bg-cyan-500/10 text-cyan-400 ring-cyan-500/20',
+  rose:   'bg-rose-500/10 text-rose-400 ring-rose-500/20',
+};
+---
+
+<Layout>
+  <!-- NAV -->
+  <header class="fixed top-0 inset-x-0 z-50 border-b border-slate-800/60 bg-slate-950/80 backdrop-blur-md">
+    <nav class="mx-auto max-w-6xl flex items-center justify-between px-6 py-4">
+      <a href="#" class="flex items-center gap-2 font-bold text-lg tracking-tight">
+        <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600 text-white text-sm font-bold">R</span>
+        ReqMan
+      </a>
+      <div class="hidden md:flex items-center gap-8 text-sm text-slate-400">
+        <a href="#features" class="hover:text-white transition-colors">Features</a>
+        <a href="#install" class="hover:text-white transition-colors">Installation</a>
+        <a href="#stack" class="hover:text-white transition-colors">Tech Stack</a>
+      </div>
+      <a
+        href="https://github.com/yourusername/req_man"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="flex items-center gap-2 rounded-lg bg-slate-800 hover:bg-slate-700 px-4 py-2 text-sm font-medium transition-colors"
+      >
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2Z"/>
+        </svg>
+        GitHub
+      </a>
+    </nav>
+  </header>
+
+  <!-- HERO -->
+  <section class="relative overflow-hidden pt-32 pb-24 px-6">
+    <!-- Background glow -->
+    <div class="absolute inset-0 -z-10">
+      <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-blue-600/10 rounded-full blur-3xl"></div>
+    </div>
+
+    <div class="mx-auto max-w-4xl text-center">
+      <div class="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-sm text-blue-300 mb-8">
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-400"></span>
+        </span>
+        Open Source · Free to use
+      </div>
+
+      <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 bg-gradient-to-br from-white via-slate-200 to-slate-400 bg-clip-text text-transparent leading-tight">
+        Requirements Management<br/>done right.
+      </h1>
+
+      <p class="text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+        ReqMan is a full-stack web application for engineering teams — manage, trace, and analyze requirements with AI support, rich editing, and powerful visualizations.
+      </p>
+
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a
+          href="#install"
+          class="rounded-xl bg-blue-600 hover:bg-blue-500 px-8 py-3.5 text-base font-semibold transition-colors shadow-lg shadow-blue-600/25"
+        >
+          Get Started
+        </a>
+        <a
+          href="https://github.com/yourusername/req_man"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="rounded-xl border border-slate-700 hover:border-slate-500 bg-slate-800/50 hover:bg-slate-700/50 px-8 py-3.5 text-base font-medium transition-colors"
+        >
+          View on GitHub
+        </a>
+      </div>
+    </div>
+
+    <!-- Mock UI preview -->
+    <div class="mx-auto mt-20 max-w-5xl rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl shadow-black/50 overflow-hidden">
+      <div class="flex items-center gap-1.5 px-4 py-3 border-b border-slate-700/60 bg-slate-900/80">
+        <div class="w-3 h-3 rounded-full bg-rose-500"></div>
+        <div class="w-3 h-3 rounded-full bg-amber-500"></div>
+        <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
+        <span class="ml-3 text-xs text-slate-500 font-mono">localhost:5173 · ReqMan</span>
+      </div>
+      <div class="grid grid-cols-4 divide-x divide-slate-800 text-sm">
+        <!-- Sidebar -->
+        <div class="p-4 bg-slate-900/60 space-y-1">
+          <div class="text-xs text-slate-500 font-medium uppercase tracking-widest mb-3">Documents</div>
+          {['SYS', 'SWR', 'HWR', 'TEST'].map((doc, i) => (
+            <div class={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs ${i === 0 ? 'bg-blue-600/20 text-blue-300' : 'text-slate-400 hover:text-slate-200'}`}>
+              <div class={`w-2 h-2 rounded-full ${['bg-blue-400','bg-violet-400','bg-emerald-400','bg-amber-400'][i]}`}></div>
+              {doc}
+            </div>
+          ))}
+        </div>
+        <!-- Item List -->
+        <div class="p-4 space-y-2 bg-slate-900/40">
+          <div class="text-xs text-slate-500 font-medium uppercase tracking-widest mb-3">Requirements</div>
+          {['SYS-001','SYS-002','SYS-003','SYS-004'].map((id, i) => (
+            <div class={`rounded-md px-3 py-2 text-xs border ${i === 1 ? 'border-blue-500/40 bg-blue-500/10 text-blue-200' : 'border-slate-700/50 text-slate-400'}`}>
+              <div class="font-mono text-slate-500 text-[10px]">{id}</div>
+              <div class="mt-0.5 truncate">System requirement {i + 1}</div>
+            </div>
+          ))}
+        </div>
+        <!-- Editor -->
+        <div class="col-span-2 p-4 bg-slate-900/20">
+          <div class="text-xs text-slate-500 font-medium uppercase tracking-widest mb-3">Editor · SYS-002</div>
+          <div class="space-y-3">
+            <div>
+              <div class="text-[10px] text-slate-500 mb-1">Title</div>
+              <div class="text-sm text-slate-200 font-medium">Data processing latency</div>
+            </div>
+            <div>
+              <div class="text-[10px] text-slate-500 mb-1">Text</div>
+              <div class="text-xs text-slate-400 leading-relaxed">The system shall process all incoming sensor data within 50 ms under nominal load conditions.</div>
+            </div>
+            <div class="flex gap-2 mt-4">
+              <span class="text-[10px] px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/25">Reviewed</span>
+              <span class="text-[10px] px-2 py-1 rounded-full bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/25">Active</span>
+              <span class="text-[10px] px-2 py-1 rounded-full bg-violet-500/15 text-violet-400 ring-1 ring-violet-500/25">AI Score: 92%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features" class="py-24 px-6">
+    <div class="mx-auto max-w-6xl">
+      <div class="text-center mb-16">
+        <h2 class="text-3xl md:text-4xl font-bold mb-4">Everything your team needs</h2>
+        <p class="text-slate-400 text-lg max-w-xl mx-auto">From writing to traceability to release — ReqMan covers the full requirements lifecycle.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {features.map(f => (
+          <div class="group rounded-2xl border border-slate-800 bg-slate-900/50 p-6 hover:border-slate-600 transition-colors">
+            <div class={`inline-flex p-3 rounded-xl ring-1 mb-4 ${colorMap[f.color]}`} set:html={f.icon} />
+            <h3 class="text-lg font-semibold mb-2">{f.title}</h3>
+            <p class="text-slate-400 text-sm leading-relaxed">{f.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- SIMULINK HIGHLIGHT -->
+  <section class="py-20 px-6 border-y border-slate-800">
+    <div class="mx-auto max-w-6xl grid md:grid-cols-2 gap-12 items-center">
+      <div>
+        <div class="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-300 mb-6">
+          Engineering Integration
+        </div>
+        <h2 class="text-3xl font-bold mb-4">MATLAB/Simulink Traceability</h2>
+        <p class="text-slate-400 leading-relaxed mb-6">
+          ReqMan integrates natively with MATLAB and Simulink. Export your model structure and automatically trace system requirements to simulation blocks — keeping your design and requirements always in sync.
+        </p>
+        <ul class="space-y-3 text-sm text-slate-300">
+          {[
+            'Automatic block-to-requirement linking',
+            'MATLAB export script included',
+            'Visual diff of traceability coverage',
+            'PlantUML diagram generation',
+          ].map(item => (
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+              </svg>
+              {item}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div class="rounded-2xl border border-slate-700/60 bg-slate-900 p-6 font-mono text-sm space-y-2">
+        <div class="text-slate-500 text-xs mb-4">% MATLAB Export Script</div>
+        <div><span class="text-blue-400">model</span> <span class="text-slate-400">=</span> <span class="text-emerald-400">'MySystem'</span>;</div>
+        <div><span class="text-blue-400">blocks</span> <span class="text-slate-400">=</span> find_system(model, <span class="text-emerald-400">'Type'</span>, <span class="text-emerald-400">'block'</span>);</div>
+        <div class="text-slate-500">% Export to ReqMan JSON</div>
+        <div><span class="text-violet-400">reqman_export</span>(blocks, <span class="text-emerald-400">'output.json'</span>);</div>
+        <div class="mt-4 pt-4 border-t border-slate-800 text-slate-500 text-xs">→ 47 blocks · 23 linked · 3 untraced</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INSTALL -->
+  <section id="install" class="py-24 px-6">
+    <div class="mx-auto max-w-3xl text-center">
+      <h2 class="text-3xl md:text-4xl font-bold mb-4">Up and running in minutes</h2>
+      <p class="text-slate-400 text-lg mb-12">Clone the repo, run the installer, and start managing requirements.</p>
+
+      <div class="space-y-4 text-left">
+        {[
+          { step: '1', label: 'Clone the repository', cmd: 'git clone https://github.com/yourusername/req_man.git\ncd req_man' },
+          { step: '2', label: 'Run the installer', cmd: './install.sh' },
+          { step: '3', label: 'Start the application', cmd: './start.sh' },
+        ].map(({ step, label, cmd }) => (
+          <div class="rounded-xl border border-slate-700/60 bg-slate-900 overflow-hidden">
+            <div class="flex items-center gap-3 px-5 py-3 border-b border-slate-800 bg-slate-900/80">
+              <span class="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-xs font-bold text-white flex-shrink-0">{step}</span>
+              <span class="text-sm font-medium text-slate-300">{label}</span>
+            </div>
+            <pre class="px-5 py-4 text-sm font-mono text-emerald-400 overflow-x-auto"><code>{cmd}</code></pre>
+          </div>
+        ))}
+      </div>
+
+      <div class="mt-8 rounded-xl border border-slate-700/50 bg-slate-900/50 p-5 text-sm text-slate-400 text-left">
+        <div class="flex items-start gap-3">
+          <svg class="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+          </svg>
+          <div>
+            <strong class="text-slate-200">Requirements:</strong> Python 3.10+, Node.js 18+, npm.
+            After starting, open <code class="text-blue-300 font-mono">http://localhost:5173</code> and log in with
+            <code class="text-blue-300 font-mono">admin / admin123</code>.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TECH STACK -->
+  <section id="stack" class="py-20 px-6 border-t border-slate-800">
+    <div class="mx-auto max-w-4xl text-center">
+      <h2 class="text-2xl font-bold mb-3">Built with modern tools</h2>
+      <p class="text-slate-400 mb-10">A pragmatic, production-ready stack — no magic, no lock-in.</p>
+
+      <div class="flex flex-wrap justify-center gap-3">
+        {techStack.map(({ name, category }) => (
+          <div class="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800/60 px-4 py-2 text-sm">
+            <span class={`w-2 h-2 rounded-full flex-shrink-0 ${category === 'Frontend' ? 'bg-blue-400' : 'bg-emerald-400'}`}></span>
+            <span class="text-slate-200 font-medium">{name}</span>
+            <span class="text-slate-500 text-xs">{category}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="py-24 px-6">
+    <div class="mx-auto max-w-2xl text-center">
+      <div class="rounded-2xl border border-blue-500/20 bg-gradient-to-b from-blue-600/10 to-transparent p-12">
+        <h2 class="text-3xl font-bold mb-4">Start managing your requirements today.</h2>
+        <p class="text-slate-400 mb-8">ReqMan is open source and free to use. Contributions are welcome.</p>
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <a
+            href="https://github.com/yourusername/req_man"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-8 py-3.5 text-base font-semibold transition-colors"
+          >
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2Z"/>
+            </svg>
+            View on GitHub
+          </a>
+          <a
+            href="#install"
+            class="rounded-xl border border-slate-700 hover:border-slate-500 px-8 py-3.5 text-base font-medium transition-colors"
+          >
+            Installation Guide
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800 py-8 px-6 text-center text-sm text-slate-500">
+    <div class="mx-auto max-w-6xl flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-2 font-medium text-slate-400">
+        <span class="flex items-center justify-center w-6 h-6 rounded bg-blue-600 text-white text-xs font-bold">R</span>
+        ReqMan
+      </div>
+      <div>Built with Astro · Licensed under MIT</div>
+      <a href="https://github.com/yourusername/req_man" class="hover:text-slate-300 transition-colors">GitHub</a>
+    </div>
+  </footer>
+</Layout>
