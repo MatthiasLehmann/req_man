@@ -21,6 +21,8 @@ forbidden_keywords:
   - schnell
   - typischerweise
   - normalerweise
+  - TODO
+  - TBD
 categories:
   clarity:
     weight: 1.2
