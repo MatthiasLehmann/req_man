@@ -73,4 +73,3 @@ def require_role(*roles: str):
 
 require_admin = require_role("admin")
 require_editor = require_role("admin", "editor")
-require_viewer = require_role("admin", "editor", "viewer")

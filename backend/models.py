@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import Optional, List, Any, Dict
 from datetime import datetime
 
@@ -7,10 +7,6 @@ from datetime import datetime
 class Token(BaseModel):
     access_token: str
     token_type: str
-
-
-class TokenData(BaseModel):
-    username: Optional[str] = None
 
 
 # User models
@@ -53,10 +49,6 @@ class ProjectImport(BaseModel):
     path: str                        # Pfad zu einem bestehenden Doorstop-Projekt
     name: Optional[str] = None       # Wenn leer, wird der Verzeichnisname verwendet
     description: Optional[str] = ""
-
-
-class ProjectDelete(BaseModel):
-    delete_files: bool = False       # True = Verzeichnis wird physisch gelöscht
 
 
 class ProjectResponse(BaseModel):
@@ -203,16 +195,6 @@ class TraceabilityLink(BaseModel):
 class TraceabilityData(BaseModel):
     nodes: List[TraceabilityNode]
     links: List[TraceabilityLink]
-
-
-# Validation models
-class ValidationStatus(BaseModel):
-    status: Optional[str] = None          # APPROVED | REJECTED | NEEDS_REVISION | None
-    validation_date: Optional[str] = None
-    validator_username: Optional[str] = None
-    validator_display_name: Optional[str] = None
-    fingerprint_is_current: bool = False
-    validation_id: Optional[str] = None
 
 
 # Metrics models
