@@ -251,6 +251,9 @@ export interface SimulinkLink {
   uid: string;
   link_type: SimulinkLinkType;
   imported_at: string;
+  source_type?: 'simulink' | 'matlab';
+  file?: string;
+  line?: number;
 }
 
 export interface SimulinkSidecar {

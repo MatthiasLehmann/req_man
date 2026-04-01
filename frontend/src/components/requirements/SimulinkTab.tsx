@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Upload, Boxes, CheckCircle2, AlertCircle, Clock, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Upload, Boxes, FileCode2, CheckCircle2, Clock, Trash2, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useSimulinkLinks, useImportSimulink, useDeleteSimulinkLinks } from '../../hooks/useSimulinkLinks';
@@ -28,11 +28,23 @@ function LinkTypeBadge({ type }: { type: string }) {
 
 // ── Block-Karte ───────────────────────────────────────────────────────────────
 
+function openInVSCode(file: string, line?: number) {
+  const loc = line ? `${file}:${line}` : file;
+  window.open(`vscode://file/${loc}`, '_self');
+}
+
 function BlockCard({ link }: { link: SimulinkLink }) {
   const [expanded, setExpanded] = useState(false);
-  const parts = link.block_path.split('/');
-  const blockName = parts[parts.length - 1];
-  const parentPath = parts.slice(0, -1).join(' / ');
+  const isMatlabLink = link.source_type === 'matlab';
+
+  // Titel & Subtitle je nach Quelle
+  const title = isMatlabLink
+    ? (link.file ? link.file.split('/').pop()! : 'MATLAB-Datei')
+    : (link.block_path ? link.block_path.split('/').pop()! : '—');
+
+  const subtitle = isMatlabLink
+    ? (link.file ?? '')
+    : link.block_path.split('/').slice(0, -1).join(' / ');
 
   return (
     <div className="border border-gray-200 rounded-lg bg-white hover:border-gray-300 transition-colors">
@@ -40,17 +52,29 @@ function BlockCard({ link }: { link: SimulinkLink }) {
         onClick={() => setExpanded(v => !v)}
         className="w-full flex items-center gap-3 p-3 text-left"
       >
-        <Boxes className="w-4 h-4 text-blue-500 shrink-0" />
+        {isMatlabLink
+          ? <FileCode2 className="w-4 h-4 text-emerald-500 shrink-0" />
+          : <Boxes    className="w-4 h-4 text-blue-500 shrink-0" />
+        }
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-gray-800 truncate">{blockName}</span>
+            <span className="text-sm font-medium text-gray-800 truncate">{title}</span>
             <LinkTypeBadge type={link.link_type} />
-            <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded font-mono">
-              {link.block_type}
-            </span>
+            {isMatlabLink
+              ? link.line != null && (
+                  <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded font-mono">
+                    Zeile {link.line}
+                  </span>
+                )
+              : link.block_type && (
+                  <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded font-mono">
+                    {link.block_type}
+                  </span>
+                )
+            }
           </div>
-          {parentPath && (
-            <p className="text-xs text-gray-400 truncate mt-0.5">{parentPath}</p>
+          {subtitle && (
+            <p className="text-xs text-gray-400 truncate mt-0.5">{subtitle}</p>
           )}
         </div>
         {expanded ? (
@@ -61,12 +85,37 @@ function BlockCard({ link }: { link: SimulinkLink }) {
       </button>
 
       {expanded && (
-        <div className="px-3 pb-3 pt-0 border-t border-gray-100 mt-0 space-y-1.5">
-          <DetailRow label="Vollständiger Pfad" value={link.block_path} mono />
-          <DetailRow label="Modell-Datei"       value={link.model_file} />
-          <DetailRow label="Block-Typ"           value={link.block_type} />
-          <DetailRow label="Link-Typ"            value={link.link_type} />
-          <DetailRow label="Importiert am"       value={formatDate(link.imported_at)} />
+        <div className="px-3 pb-3 pt-0 border-t border-gray-100 space-y-1.5">
+          {isMatlabLink ? (
+            <>
+              <div className="flex gap-2 text-xs items-start">
+                <span className="text-gray-400 w-32 shrink-0">Datei</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-gray-700 break-all font-mono text-[11px]">{link.file ?? '—'}</span>
+                  {link.file && (
+                    <button
+                      onClick={() => openInVSCode(link.file!, link.line)}
+                      title="In VS Code öffnen"
+                      className="shrink-0 text-gray-400 hover:text-blue-600 transition-colors"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+              {link.line != null && (
+                <DetailRow label="Zeile" value={String(link.line)} mono />
+              )}
+            </>
+          ) : (
+            <>
+              <DetailRow label="Vollständiger Pfad" value={link.block_path || '—'} mono />
+              <DetailRow label="Modell-Datei"       value={link.model_file || '—'} />
+              <DetailRow label="Block-Typ"          value={link.block_type || '—'} />
+            </>
+          )}
+          <DetailRow label="Link-Typ"     value={link.link_type} />
+          <DetailRow label="Importiert am" value={formatDate(link.imported_at)} />
         </div>
       )}
     </div>
@@ -77,7 +126,7 @@ function DetailRow({ label, value, mono }: { label: string; value: string; mono?
   return (
     <div className="flex gap-2 text-xs">
       <span className="text-gray-400 w-32 shrink-0">{label}</span>
-      <span className={clsx('text-gray-700 break-all', mono && 'font-mono')}>{value}</span>
+      <span className={clsx('text-gray-700 break-all', mono && 'font-mono text-[11px]')}>{value}</span>
     </div>
   );
 }
@@ -209,7 +258,7 @@ export default function SimulinkTab({ projectId, uid }: Props) {
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-gray-700">Simulink-Traceability</h3>
           <span className="text-[11px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
-            {sidecar!.links.length} {sidecar!.links.length === 1 ? 'Block' : 'Blöcke'}
+            {sidecar!.links.length} {sidecar!.links.length === 1 ? 'Treffer' : 'Treffer'}
           </span>
         </div>
         <div className="flex items-center gap-2">

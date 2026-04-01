@@ -32,13 +32,16 @@ import doorstop_service as ds
 
 
 class SimulinkLink(BaseModel):
-    """Ein einzelner Block→Anforderung-Link."""
-    block_path: str                    # z. B. "Model/Subsystem/PID_Controller"
-    block_type: str                    # z. B. "SubSystem", "Gain", "Inport"
-    model_file: str                    # z. B. "SpeedController.slx"
-    uid: str                           # Anforderungs-UID in req_man
-    link_type: str = "implements"      # implements | verifies | refines
-    imported_at: str                   # ISO-8601-Zeitstempel des Imports
+    """Ein einzelner Block→Anforderung-Link (Simulink-Block oder MATLAB-.m-Datei)."""
+    block_path: str                        # z. B. "Model/Subsystem/PID_Controller" (leer bei matlab)
+    block_type: str                        # z. B. "SubSystem", "Gain" (leer bei matlab)
+    model_file: str                        # z. B. "SpeedController.slx" (leer bei matlab)
+    uid: str                               # Anforderungs-UID in req_man
+    link_type: str = "implements"          # implements | verifies | refines
+    imported_at: str                       # ISO-8601-Zeitstempel des Imports
+    source_type: str = "simulink"          # "simulink" | "matlab"
+    file: Optional[str] = None            # Absoluter Pfad zur .m-Datei (nur bei matlab)
+    line: Optional[int] = None            # Zeilennummer in der .m-Datei (nur bei matlab)
 
 
 class SimulinkSidecar(BaseModel):
@@ -79,7 +82,7 @@ def get_simulink_yaml_path(project_id: str, uid: str) -> Optional[Path]:
         return None
     project_path = Path(project["path"])
 
-    m = re.match(r"^([A-Za-z]+)", uid)
+    m = re.match(r"^(.+)-\d+$", uid)
     if not m:
         return None
     doc_prefix = m.group(1).upper()
@@ -183,13 +186,17 @@ def import_simulink_trace(project_id: str, json_data: Dict[str, Any]) -> Simulin
             unknown_uids.add(uid)
             continue
 
+        raw_line = raw.get("line")
         link = SimulinkLink(
             block_path=raw.get("block_path", ""),
-            block_type=raw.get("block_type", "Unknown"),
-            model_file=raw.get("model_file", f"{model_name}.slx"),
+            block_type=raw.get("block_type", ""),
+            model_file=raw.get("model_file", ""),
             uid=uid,
             link_type=raw.get("link_type", "implements"),
             imported_at=now,
+            source_type=raw.get("source_type", "simulink"),
+            file=raw.get("file") or None,
+            line=int(raw_line) if isinstance(raw_line, (int, float)) else None,
         )
         links_by_uid.setdefault(uid, []).append(link)
 
