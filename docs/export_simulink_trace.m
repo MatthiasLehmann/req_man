@@ -38,7 +38,20 @@ function export_simulink_trace(model_name, output_file, matlab_src_dir)
     %% ── Simulink-Blöcke ──────────────────────────────────────────────────────
     fprintf('Lade Modell: %s\n', model_name);
     if ~bdIsLoaded(model_name)
-        load_system(model_name);
+        try
+            load_system(model_name);
+        catch loadErr
+            % Hilfreiche Fehlermeldung mit Vorschlag geöffneter Modelle
+            open_models = Simulink.allBlockDiagrams('model');
+            if isempty(open_models)
+                hint = 'Kein Modell ist aktuell geöffnet.';
+            else
+                names = cellfun(@(h) get_param(h,'Name'), num2cell(open_models), 'UniformOutput', false);
+                hint  = ['Geöffnete Modelle: ' strjoin(names, ', ')];
+            end
+            error('export_simulink_trace: Modell ''%s'' konnte nicht geladen werden.\n%s\nOriginalfehler: %s', ...
+                  model_name, hint, loadErr.message);
+        end
         model_was_loaded = true;
     else
         model_was_loaded = false;
