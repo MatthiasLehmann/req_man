@@ -44,13 +44,14 @@ function export_simulink_trace(scan_dir, output_file)
     m_links_count     = 0;
     scanned_models    = {};
 
-    %% ── Alle .slx-Dateien finden und scannen ─────────────────────────────────
-    slx_files = dir(fullfile(scan_dir, '**', '*.slx'));
-    fprintf('Gefundene Modelle (.slx): %d\n', numel(slx_files));
+    %% ── Alle .slx/.mdl-Dateien finden und scannen ───────────────────────────
+    slx_files = [dir(fullfile(scan_dir, '**', '*.slx')); ...
+                 dir(fullfile(scan_dir, '**', '*.mdl'))];
+    fprintf('Gefundene Modelle (.slx/.mdl): %d\n', numel(slx_files));
 
     for fi = 1:numel(slx_files)
         slx_path   = fullfile(slx_files(fi).folder, slx_files(fi).name);
-        model_name = slx_files(fi).name(1:end-4);   % ohne .slx
+        [~, model_name, ~] = fileparts(slx_files(fi).name);  % ohne .slx/.mdl
 
         fprintf('  [%d/%d] %s ... ', fi, numel(slx_files), model_name);
 
@@ -99,7 +100,7 @@ function export_simulink_trace(scan_dir, output_file)
                     entry.source_type = 'simulink';
                     entry.block_path  = block_path;
                     entry.block_type  = block_type;
-                    entry.model_file  = slx_files(fi).name;
+                    entry.model_file  = slx_files(fi).name;   % z.B. Model.slx oder Model.mdl
                     entry.file        = slx_path;
                     entry.line        = [];
                     entry.uid         = uid_list{j};
