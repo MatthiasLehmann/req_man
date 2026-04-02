@@ -22,6 +22,9 @@ function export_simulink_trace(model_name, output_file, matlab_src_dir)
 
     if nargin < 1 || isempty(model_name)
         model_name = bdroot;
+        if isempty(model_name)
+            error('export_simulink_trace: Kein Modell ge\xf6ffnet.\nVerwendung: export_simulink_trace(''MeinModell'') oder zuerst ein Modell \xf6ffnen.');
+        end
     end
     if nargin < 2 || isempty(output_file)
         output_file = fullfile(pwd, 'simulink_trace.json');
