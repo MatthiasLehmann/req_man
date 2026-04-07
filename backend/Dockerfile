@@ -2,10 +2,14 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# System dependencies für doorstop, git und PlantUML (benötigt Java)
+# System dependencies für doorstop, git und PlantUML (benötigt Java + Font-Libs)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     default-jre-headless \
+    libharfbuzz0b \
+    libfreetype6 \
+    fontconfig \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
