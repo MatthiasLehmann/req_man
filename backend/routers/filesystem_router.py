@@ -23,15 +23,17 @@ class BrowseResponse(BaseModel):
 
 @router.get("/browse", response_model=BrowseResponse)
 async def browse_directory(
-    path: str = Query(default=os.path.expanduser("~")),
+    path: str = Query(default=""),
     current_user: User = Depends(get_current_user),
 ):
-    abs_path = os.path.abspath(os.path.expanduser(path))
+    # Standard-Startpfad: konfiguriertes home_dir des Users, sonst ~
+    default_path = current_user.home_dir or os.path.expanduser("~")
+    abs_path = os.path.abspath(os.path.expanduser(path if path else default_path))
 
     if not os.path.isdir(abs_path):
         abs_path = os.path.dirname(abs_path)
         if not os.path.isdir(abs_path):
-            abs_path = os.path.expanduser("~")
+            abs_path = default_path
 
     parent = str(os.path.dirname(abs_path)) if abs_path != os.path.dirname(abs_path) else None
 

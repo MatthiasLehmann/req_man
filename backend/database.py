@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, UniqueConstraint
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from datetime import datetime, timezone
 import os
@@ -26,6 +26,7 @@ class User(Base):
     role = Column(String, default="viewer")  # admin, editor, viewer
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    home_dir = Column(String, nullable=True)  # Basis-Verzeichnis für den Filesystem-Browser
 
 
 class DocumentType(Base):
@@ -61,3 +62,8 @@ def get_db():
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    # Migration: home_dir-Spalte nachrüsten falls Datenbank bereits existiert
+    with engine.connect() as conn:
+        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(users)"))]
+        if "home_dir" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN home_dir TEXT"))

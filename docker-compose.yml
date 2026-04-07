@@ -33,6 +33,10 @@ services:
       - ./projects:/projects
       # Hochgeladene Bilder/Dateien
       - backend_uploads:/app/uploads
+      # Home-Verzeichnisse aller Benutzer – mit identischem Pfad gemountet,
+      # damit projects.json-Pfade unverändert gültig bleiben.
+      # Jeder User konfiguriert seinen eigenen Unterordner im Admin-Panel.
+      - /Users:/Users
     depends_on:
       - ollama
     restart: unless-stopped

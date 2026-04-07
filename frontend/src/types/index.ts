@@ -6,6 +6,7 @@ export interface User {
   role: 'admin' | 'editor' | 'viewer';
   is_active: boolean;
   created_at: string;
+  home_dir: string | null;
 }
 
 export interface Project {

@@ -37,6 +37,7 @@ async def create_user(
         full_name=user_data.full_name,
         hashed_password=get_password_hash(user_data.password),
         role=user_data.role,
+        home_dir=user_data.home_dir,
     )
     db.add(user)
     db.commit()
@@ -79,6 +80,8 @@ async def update_user(
         user.is_active = user_data.is_active
     if user_data.password is not None:
         user.hashed_password = get_password_hash(user_data.password)
+    if user_data.home_dir is not None:
+        user.home_dir = user_data.home_dir
 
     db.commit()
     db.refresh(user)

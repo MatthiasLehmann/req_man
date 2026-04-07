@@ -58,7 +58,7 @@ function UsersTab() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [form, setForm] = useState({ username: '', email: '', full_name: '', role: 'viewer', password: '' });
+  const [form, setForm] = useState({ username: '', email: '', full_name: '', role: 'viewer', password: '', home_dir: '' });
 
   const createMut = useMutation({
     mutationFn: () => createUser(form),
@@ -66,7 +66,7 @@ function UsersTab() {
       qc.invalidateQueries({ queryKey: ['users'] });
       toast.success('Benutzer erstellt');
       setShowCreate(false);
-      setForm({ username: '', email: '', full_name: '', role: 'viewer', password: '' });
+      setForm({ username: '', email: '', full_name: '', role: 'viewer', password: '', home_dir: '' });
     },
     onError: (e: any) => toast.error(e.response?.data?.detail || 'Fehler'),
   });
@@ -187,9 +187,9 @@ function UsersTab() {
       {editUser && (
         <UserModal
           title={`${editUser.username} bearbeiten`}
-          form={{ username: editUser.username, email: editUser.email, full_name: editUser.full_name, role: editUser.role, password: '' }}
+          form={{ username: editUser.username, email: editUser.email, full_name: editUser.full_name, role: editUser.role, password: '', home_dir: editUser.home_dir || '' }}
           setForm={() => {}}
-          onSave={() => updateMut.mutate({ email: editUser.email, full_name: editUser.full_name, role: editUser.role, is_active: editUser.is_active })}
+          onSave={() => updateMut.mutate({ email: editUser.email, full_name: editUser.full_name, role: editUser.role, is_active: editUser.is_active, home_dir: editUser.home_dir || null })}
           onClose={() => setEditUser(null)}
           loading={updateMut.isPending}
           editData={editUser}
@@ -254,6 +254,18 @@ function UserModal({ title, form, setForm, onSave, onClose, loading, showPasswor
               <input className="input" type="password" value={form.password} onChange={(e) => setField('password', e.target.value)} />
             </div>
           )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Home-Verzeichnis</label>
+            <input
+              className="input font-mono text-sm"
+              placeholder="/Users/username"
+              value={data.home_dir || ''}
+              onChange={(e) => setField('home_dir', e.target.value || null)}
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Startpfad im Datei-Browser. Leer lassen für Standard (~).
+            </p>
+          </div>
           <div className="flex gap-2 pt-2">
             <button onClick={onSave} disabled={loading} className="btn-primary flex-1 justify-center">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Speichern'}

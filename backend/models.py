@@ -15,6 +15,7 @@ class UserBase(BaseModel):
     email: str
     full_name: str
     role: str = "viewer"
+    home_dir: Optional[str] = None
 
 
 class UserCreate(UserBase):
@@ -27,6 +28,7 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     is_active: Optional[bool] = None
     password: Optional[str] = None
+    home_dir: Optional[str] = None
 
 
 class UserResponse(UserBase):
