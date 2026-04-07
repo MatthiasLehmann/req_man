@@ -422,12 +422,7 @@ class QualityResultParser:
     """Parst die JSON-Antwort des LLM zu AiQualityResult."""
 
     def parse(self, raw_json: str, uid: str, model: str, profile_name: str) -> AiQualityResult:
-        json_str = raw_json.strip()
-        if "```" in json_str:
-            match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", json_str)
-            if match:
-                json_str = match.group(1)
-
+        json_str = self._extract_json(raw_json)
         data = json.loads(json_str)
 
         raw_scores = data.get("scores", {})
@@ -471,6 +466,33 @@ class QualityResultParser:
             profile_used=profile_name,
             timestamp=datetime.now(timezone.utc).isoformat(),
         )
+
+    @staticmethod
+    def _extract_json(raw: str) -> str:
+        """Extrahiert und bereinigt JSON aus einer LLM-Antwort.
+
+        Behandelt:
+        - Markdown-Codeblöcke (```json ... ```)
+        - Text vor/nach dem JSON-Objekt
+        - Trailing commas vor } oder ] (häufiger LLM-Fehler)
+        """
+        text = raw.strip()
+
+        # 1. Markdown-Codeblock extrahieren
+        md_match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", text)
+        if md_match:
+            text = md_match.group(1).strip()
+
+        # 2. Erstes { bis letztes } extrahieren (ignoriert Text davor/danach)
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            text = text[start:end + 1]
+
+        # 3. Trailing commas entfernen
+        text = re.sub(r",\s*([}\]])", r"\1", text)
+
+        return text
 
 
 # ─── Haupt-Analyzer ───────────────────────────────────────────────────────────
