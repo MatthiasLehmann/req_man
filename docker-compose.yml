@@ -23,8 +23,9 @@ services:
       - AI_PROVIDER=${AI_PROVIDER:-ollama}
       - AI_BASE_URL=${AI_BASE_URL:-http://ollama:11434/v1}
       - AI_MODEL=${AI_MODEL:-llama3.2}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # Nur setzen wenn in .env konfiguriert – leerer Wert würde Fehler auslösen
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-not-set}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-not-set}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
     volumes:
       # Persistente Daten: SQLite-Datenbank, projects.json, attributes.yml

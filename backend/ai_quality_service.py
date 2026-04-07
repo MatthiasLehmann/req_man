@@ -147,8 +147,13 @@ class OpenAiCompatibleProvider:
 
         provider = os.environ.get("AI_PROVIDER", "openai").lower()
 
-        # API-Key: für lokale Provider wird "ollama" o.ä. als Dummy verwendet
-        api_key = os.environ.get("OPENAI_API_KEY", "ollama" if provider == "ollama" else None)
+        # API-Key: für lokale Provider wird ein Dummy-Wert verwendet.
+        # or-Verknüpfung behandelt leere Strings ("", "not-set") korrekt.
+        raw_key = os.environ.get("OPENAI_API_KEY", "")
+        local_providers = ("ollama", "openai_compatible", "lmstudio")
+        api_key = raw_key if raw_key and raw_key != "not-set" else (
+            "ollama" if provider in local_providers else None
+        )
         if not api_key:
             raise ValueError(
                 "OPENAI_API_KEY ist nicht gesetzt. "
