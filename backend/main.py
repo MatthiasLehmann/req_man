@@ -18,6 +18,9 @@ from routers import simulink_router
 
 app = FastAPI(title="ReqMan - Requirements Management", version="1.0.0")
 
+_cors_env = os.environ.get("CORS_ORIGINS", "")
+_extra_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -25,6 +28,7 @@ app.add_middleware(
         "http://localhost:5174",
         "http://localhost:5175",
         "http://localhost:3000",
+        *_extra_origins,
     ],
     allow_credentials=True,
     allow_methods=["*"],

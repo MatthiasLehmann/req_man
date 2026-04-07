@@ -1,0 +1,71 @@
+services:
+
+  # Reverse Proxy – einziger öffentlicher Einstiegspunkt
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+      - website
+    restart: unless-stopped
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-reqman-secret-key-change-in-production}
+      - AI_PROVIDER=${AI_PROVIDER:-ollama}
+      - AI_BASE_URL=${AI_BASE_URL:-http://ollama:11434/v1}
+      - AI_MODEL=${AI_MODEL:-llama3.2}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
+    volumes:
+      # Persistente Daten: SQLite-Datenbank, projects.json, attributes.yml
+      - ./data:/data
+      # Requirement-Projekte (doorstop YAML-Dateien)
+      - ./projects:/projects
+      # Hochgeladene Bilder/Dateien
+      - backend_uploads:/app/uploads
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  # React Frontend (gebaut, via nginx ausgeliefert)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+
+  # Astro Marketing-/Doku-Website
+  website:
+    build:
+      context: ./website
+      dockerfile: Dockerfile
+    restart: unless-stopped
+
+  # Lokaler KI-Server (OpenAI-kompatibler Endpunkt)
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    # GPU-Support (optional, auskommentiert lassen wenn kein NVIDIA-GPU vorhanden):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  ollama_data:
+  backend_uploads:
