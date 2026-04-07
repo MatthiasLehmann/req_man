@@ -173,14 +173,27 @@ class OpenAiCompatibleProvider:
         )
 
     def complete(self, system_prompt: str, user_prompt: str) -> str:
-        response = self._client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            max_tokens=1024,
-        )
+        try:
+            # response_format erzwingt valides JSON (Ollama + OpenAI unterstützen das)
+            response = self._client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=1024,
+                response_format={"type": "json_object"},
+            )
+        except Exception:
+            # Fallback für Provider die response_format nicht unterstützen
+            response = self._client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=1024,
+            )
         return response.choices[0].message.content or "{}"
 
 
@@ -423,7 +436,12 @@ class QualityResultParser:
 
     def parse(self, raw_json: str, uid: str, model: str, profile_name: str) -> AiQualityResult:
         json_str = self._extract_json(raw_json)
-        data = json.loads(json_str)
+        try:
+            data = json.loads(json_str)
+        except json.JSONDecodeError:
+            # Fallback: json-repair repariert häufige LLM-Fehler (fehlende Kommas etc.)
+            from json_repair import repair_json
+            data = json.loads(repair_json(json_str))
 
         raw_scores = data.get("scores", {})
         clarity     = _clamp(raw_scores.get("clarity"))
