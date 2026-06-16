@@ -21,21 +21,37 @@ class BrowseResponse(BaseModel):
     entries: List[DirEntry]
 
 
+def _within_base(path: str, base: str) -> bool:
+    """True wenn path innerhalb von base liegt (oder gleich base ist)."""
+    try:
+        return os.path.commonpath([path, base]) == base
+    except ValueError:
+        # Unterschiedliche Laufwerke (Windows) o. ä.
+        return False
+
+
 @router.get("/browse", response_model=BrowseResponse)
 async def browse_directory(
     path: str = Query(default=""),
     current_user: User = Depends(get_current_user),
 ):
-    # Standard-Startpfad: konfiguriertes home_dir des Users, sonst ~
-    default_path = current_user.home_dir or os.path.expanduser("~")
-    abs_path = os.path.abspath(os.path.expanduser(path if path else default_path))
+    # Sandbox-Basis: konfiguriertes home_dir des Users, sonst ~.
+    # Außerhalb dieser Basis ist kein Browsing erlaubt (Directory-Traversal-Schutz).
+    base = os.path.realpath(os.path.expanduser(current_user.home_dir or "~"))
 
+    requested = os.path.realpath(os.path.expanduser(path)) if path else base
+
+    # Pfade außerhalb der Basis werden auf die Basis zurückgesetzt.
+    if not _within_base(requested, base):
+        requested = base
+
+    abs_path = requested
     if not os.path.isdir(abs_path):
-        abs_path = os.path.dirname(abs_path)
-        if not os.path.isdir(abs_path):
-            abs_path = default_path
+        abs_path = base
 
-    parent = str(os.path.dirname(abs_path)) if abs_path != os.path.dirname(abs_path) else None
+    # Parent nur freigeben, solange er noch innerhalb der Basis liegt.
+    parent_dir = os.path.dirname(abs_path)
+    parent = parent_dir if (abs_path != base and _within_base(parent_dir, base)) else None
 
     entries: List[DirEntry] = []
     try:
