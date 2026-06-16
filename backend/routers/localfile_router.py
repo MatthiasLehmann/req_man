@@ -29,8 +29,10 @@ _ALLOWED_BASES = [os.path.realpath(os.path.expanduser("~"))]
 def _is_allowed(path: str) -> bool:
     try:
         real = os.path.realpath(path)
-        return any(real.startswith(base) for base in _ALLOWED_BASES)
-    except Exception:
+        # commonpath statt startswith: verhindert, dass z. B. "/Users/x_evil"
+        # die Basis "/Users/x" als Präfix-Treffer besteht.
+        return any(os.path.commonpath([real, base]) == base for base in _ALLOWED_BASES)
+    except (ValueError, OSError):
         return False
 
 

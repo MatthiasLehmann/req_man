@@ -8,7 +8,19 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from database import get_db, User
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "reqman-secret-key-change-in-production-2024")
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    # Kein hartkodierter Default mehr: ein zufälliger Schlüssel wird pro Prozess
+    # erzeugt. Folge: bestehende Tokens werden bei jedem Neustart ungültig.
+    # Für Produktion MUSS SECRET_KEY als Env-Variable gesetzt werden.
+    import secrets
+    SECRET_KEY = secrets.token_urlsafe(64)
+    print(
+        "⚠ SECRET_KEY ist nicht gesetzt – es wird ein flüchtiger Zufallsschlüssel "
+        "verwendet. Tokens werden bei jedem Neustart ungültig. "
+        "Für Produktion bitte die Umgebungsvariable SECRET_KEY setzen."
+    )
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours
 

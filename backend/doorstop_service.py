@@ -477,7 +477,6 @@ def delete_item(project_id: str, uid: str) -> bool:
         tree = _build_tree(path)
         prefix = uid.split("-")[0]
         doc = tree.find_document(prefix)
-        item = tree.find_item(uid)
         doc.remove_item(uid)
         return True
     except doorstop.DoorstopError:

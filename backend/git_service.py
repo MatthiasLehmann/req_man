@@ -8,7 +8,7 @@ import fnmatch
 from pathlib import Path
 from typing import Optional
 
-from git import Actor, InvalidGitRepositoryError, Repo
+from git import NULL_TREE, Actor, InvalidGitRepositoryError, Repo
 
 
 def get_or_init_repo(project_path: str) -> Repo:
@@ -107,10 +107,13 @@ def get_validation_commits_for_item(project_path: str, item_id: str) -> list:
         for commit in repo.iter_commits():
             parents = commit.parents
             if parents:
-                diffs = commit.diff(parents[0])
+                # Richtung parent -> commit: hinzugefügte Dateien erscheinen in b_path.
+                diffs = parents[0].diff(commit)
             else:
-                # Initial commit: compare against empty tree
-                diffs = commit.diff(None)
+                # Initial commit: gegen den leeren Baum diffen.
+                # R=True kehrt die Richtung um, sodass die enthaltenen Dateien
+                # ebenfalls als Additions (b_path) erscheinen.
+                diffs = commit.diff(NULL_TREE, R=True)
 
             for diff in diffs:
                 b_path = getattr(diff, "b_path", None) or ""

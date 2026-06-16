@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -16,7 +17,16 @@ from routers import export_router
 from routers import ai_quality_router
 from routers import simulink_router
 
-app = FastAPI(title="ReqMan - Requirements Management", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    create_default_admin()
+    print("✓ ReqMan backend started")
+    print("  API docs: http://localhost:8000/docs")
+    yield
+
+
+app = FastAPI(title="ReqMan - Requirements Management", version="1.0.0", lifespan=lifespan)
 
 _cors_env = os.environ.get("CORS_ORIGINS", "")
 _extra_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
@@ -90,11 +100,3 @@ def create_default_admin():
             print("  → Change the password immediately after first login!")
     finally:
         db.close()
-
-
-@app.on_event("startup")
-async def startup():
-    init_db()
-    create_default_admin()
-    print("✓ ReqMan backend started")
-    print("  API docs: http://localhost:8000/docs")

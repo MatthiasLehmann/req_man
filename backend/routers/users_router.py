@@ -9,6 +9,16 @@ from models import UserCreate, UserUpdate, UserResponse
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 
+def _is_last_active_admin(db: Session, user: User) -> bool:
+    """True, wenn user der einzige aktive Admin im System ist."""
+    if user.role != "admin" or not user.is_active:
+        return False
+    active_admins = db.query(User).filter(
+        User.role == "admin", User.is_active == True  # noqa: E712
+    ).count()
+    return active_admins <= 1
+
+
 @router.get("", response_model=List[UserResponse])
 async def list_users(
     db: Session = Depends(get_db),
@@ -72,6 +82,16 @@ async def update_user(
         user.email = user_data.email
     if user_data.full_name is not None:
         user.full_name = user_data.full_name
+    # Schutz: Der letzte aktive Admin darf weder herabgestuft noch deaktiviert werden,
+    # da sonst niemand mehr administrieren könnte (kompletter Lockout).
+    demoting = user_data.role is not None and user_data.role != "admin"
+    deactivating = user_data.is_active is False
+    if (demoting or deactivating) and _is_last_active_admin(db, user):
+        raise HTTPException(
+            status_code=400,
+            detail="Der letzte aktive Admin kann nicht deaktiviert oder herabgestuft werden.",
+        )
+
     if user_data.role is not None:
         if user_data.role not in ("admin", "editor", "viewer"):
             raise HTTPException(status_code=400, detail="Invalid role")
@@ -99,5 +119,10 @@ async def delete_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if _is_last_active_admin(db, user):
+        raise HTTPException(
+            status_code=400,
+            detail="Der letzte aktive Admin kann nicht gelöscht werden.",
+        )
     db.delete(user)
     db.commit()
