@@ -182,9 +182,9 @@ export default function DocumentTree({ projectId, selectedPrefix, onSelectDocume
                 <input
                   className="input uppercase"
                   value={newPrefix}
-                  onChange={(e) => setNewPrefix(e.target.value.toUpperCase())}
+                  onChange={(e) => setNewPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
                   placeholder="z.B. REQ, SYS, TEST"
-                  maxLength={10}
+                  maxLength={20}
                   autoFocus
                 />
                 <p className="text-xs text-gray-400 mt-1">Wird als Präfix für alle Anforderungs-IDs verwendet</p>

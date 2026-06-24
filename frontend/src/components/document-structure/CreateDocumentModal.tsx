@@ -90,7 +90,7 @@ export default function CreateDocumentModal({ projectId, documents, documentType
               className="input w-full font-mono"
               placeholder="z.B. SYS"
               value={prefix}
-              onChange={(e) => setPrefix(e.target.value.toUpperCase())}
+              onChange={(e) => setPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
               maxLength={20}
               required
             />
