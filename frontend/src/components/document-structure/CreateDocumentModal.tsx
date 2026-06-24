@@ -91,7 +91,7 @@ export default function CreateDocumentModal({ projectId, documents, documentType
               placeholder="z.B. SYS"
               value={prefix}
               onChange={(e) => setPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
-              maxLength={20}
+              maxLength={255}
               required
             />
           </div>

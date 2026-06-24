@@ -184,7 +184,7 @@ export default function DocumentTree({ projectId, selectedPrefix, onSelectDocume
                   value={newPrefix}
                   onChange={(e) => setNewPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
                   placeholder="z.B. REQ, SYS, TEST"
-                  maxLength={20}
+                  maxLength={255}
                   autoFocus
                 />
                 <p className="text-xs text-gray-400 mt-1">Wird als Präfix für alle Anforderungs-IDs verwendet</p>
