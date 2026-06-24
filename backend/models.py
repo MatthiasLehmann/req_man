@@ -1,6 +1,33 @@
-from pydantic import BaseModel
+import re
+
+from pydantic import BaseModel, field_validator
 from typing import Optional, List, Any, Dict
 from datetime import datetime
+
+
+# Dokument-Präfixe werden als Verzeichnisnamen auf der Platte und als Präfix
+# jeder Anforderungs-ID (z. B. REQ-001) verwendet. Die ID-Logik der App liest
+# den Präfix über `^[A-Za-z]+` wieder aus, deshalb sind nur Buchstaben erlaubt.
+MAX_PREFIX_LENGTH = 20
+_PREFIX_RE = re.compile(r"^[A-Za-z]+$")
+
+
+def validate_prefix(value: Optional[str], *, allow_empty: bool = False) -> Optional[str]:
+    """Normalisiert und validiert ein Dokument-Präfix (nur Buchstaben, max. Länge)."""
+    if value is None:
+        return value
+    cleaned = value.strip()
+    if not cleaned:
+        if allow_empty:
+            return ""
+        raise ValueError("Präfix darf nicht leer sein")
+    if len(cleaned) > MAX_PREFIX_LENGTH:
+        raise ValueError(
+            f"Präfix darf höchstens {MAX_PREFIX_LENGTH} Zeichen lang sein"
+        )
+    if not _PREFIX_RE.match(cleaned):
+        raise ValueError("Präfix darf nur Buchstaben (A–Z) enthalten")
+    return cleaned.upper()
 
 
 # Auth models
@@ -66,6 +93,11 @@ class DocumentCreate(BaseModel):
     parent: Optional[str] = None
     sep: Optional[str] = None
 
+    @field_validator("prefix")
+    @classmethod
+    def _check_prefix(cls, v: str) -> str:
+        return validate_prefix(v)
+
 
 class DocumentResponse(BaseModel):
     prefix: str
@@ -128,6 +160,11 @@ class DocumentTypeCreate(BaseModel):
     description: str = ""
     properties: List[PropertyDefinition] = []
 
+    @field_validator("default_prefix")
+    @classmethod
+    def _check_default_prefix(cls, v: str) -> str:
+        return validate_prefix(v, allow_empty=True)
+
 
 class DocumentTypeUpdate(BaseModel):
     name: Optional[str] = None
@@ -135,6 +172,11 @@ class DocumentTypeUpdate(BaseModel):
     default_prefix: Optional[str] = None
     description: Optional[str] = None
     properties: Optional[List[PropertyDefinition]] = None
+
+    @field_validator("default_prefix")
+    @classmethod
+    def _check_default_prefix(cls, v: Optional[str]) -> Optional[str]:
+        return validate_prefix(v, allow_empty=True)
 
 
 class DocumentTypeResponse(BaseModel):
