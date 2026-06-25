@@ -7,16 +7,10 @@ import {
   ArrowUp, ArrowDown, ArrowUpDown, Search, X, Filter,
 } from 'lucide-react';
 import clsx from 'clsx';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { listDocuments, listItems, getAttributes } from '../api/client';
 import { useProjectStore } from '../store/projectStore';
 import { Item, AttributeDefinition } from '../types';
-
-/** Erkennt ob ein Text HTML enthält (TipTap) oder reines Markdown/Plaintext ist */
-function isHtml(text: string): boolean {
-  return /<[a-z][\s\S]*>/i.test(text);
-}
+import RequirementContent from '../components/requirements/RequirementContent';
 
 // ─── Level-Hilfsfunktionen ────────────────────────────────────────────────────
 
@@ -175,14 +169,7 @@ function CellValue({ col, item }: { col: ColDef; item: Item }) {
         '[&_pre>code]:bg-transparent [&_pre>code]:text-inherit',
         '[&_pre>code]:p-0 [&_pre>code]:border-0',
       ].join(' ');
-      if (isHtml(raw)) {
-        return <div className={proseClass} dangerouslySetInnerHTML={{ __html: raw }} />;
-      }
-      return (
-        <div className={proseClass}>
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{raw}</ReactMarkdown>
-        </div>
-      );
+      return <RequirementContent value={raw} className={proseClass} />;
     }
     case 'active':    return <BoolCell value={item.active} />;
     case 'normative': return <BoolCell value={item.normative} />;

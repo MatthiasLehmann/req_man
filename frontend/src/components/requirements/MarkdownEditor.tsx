@@ -1,8 +1,6 @@
-import { useEditor, EditorContent, ReactNodeViewRenderer } from '@tiptap/react';
+import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
-import Highlight from '@tiptap/extension-highlight';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import CharacterCount from '@tiptap/extension-character-count';
@@ -10,84 +8,9 @@ import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
-import Image from '@tiptap/extension-image';
 import { Markdown } from 'tiptap-markdown';
 import { htmlToMarkdown } from '../../utils/htmlToMarkdown';
-
-// ─── Underline + Highlight mit Markdown-Serializer ───────────────────────────
-// Kein Standard-Markdown-Äquivalent → als Raw-HTML in Markdown speichern.
-
-const UnderlineWithMarkdown = Underline.extend({
-  addStorage() {
-    return {
-      markdown: {
-        serialize: { open: '<u>', close: '</u>', mixable: true, expelEnclosingWhitespace: true },
-        parse: {},
-      },
-    };
-  },
-});
-
-const HighlightWithMarkdown = Highlight.extend({
-  addStorage() {
-    return {
-      markdown: {
-        serialize: { open: '<mark>', close: '</mark>', mixable: true, expelEnclosingWhitespace: true },
-        parse: {},
-      },
-    };
-  },
-});
-
-// ─── LocalImage: Image-Extension mit Pfad+Hash-Attributen + React-NodeView ──
-
-const LocalImage = Image.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      'data-local-path': {
-        default: null,
-        parseHTML: (el) => el.getAttribute('data-local-path'),
-        renderHTML: (attrs) =>
-          attrs['data-local-path'] ? { 'data-local-path': attrs['data-local-path'] } : {},
-      },
-      'data-hash': {
-        default: null,
-        parseHTML: (el) => el.getAttribute('data-hash'),
-        renderHTML: (attrs) =>
-          attrs['data-hash'] ? { 'data-hash': attrs['data-hash'] } : {},
-      },
-    };
-  },
-  addStorage() {
-    return {
-      markdown: {
-        // Lokale Bilder → vollständiger <img>-Tag (Attribute bleiben erhalten)
-        // Normale Bilder → Standard-Markdown-Syntax ![alt](url)
-        serialize(state: { write: (s: string) => void; closeBlock: (n: unknown) => void }, node: { attrs: Record<string, string | null> }) {
-          const { src, alt } = node.attrs;
-          const localPath = node.attrs['data-local-path'];
-          const hash = node.attrs['data-hash'];
-          const esc = (s: string | null) => (s ?? '').replace(/"/g, '&quot;');
-
-          if (localPath && hash) {
-            state.write(
-              `<img src="${esc(src)}" alt="${esc(alt)}" data-local-path="${esc(localPath)}" data-hash="${esc(hash)}" />`
-            );
-          } else {
-            const escapedSrc = (src ?? '').replace(/[()]/g, (c) => '\\' + c);
-            state.write(`![${alt ?? ''}](${escapedSrc})`);
-          }
-          state.closeBlock(node);
-        },
-        parse: {},
-      },
-    };
-  },
-  addNodeView() {
-    return ReactNodeViewRenderer(LocalImageView);
-  },
-});
+import { UnderlineWithMarkdown, HighlightWithMarkdown, LocalImage } from './tiptapExtensions';
 import {
   Bold, Italic, Strikethrough, Code, List, ListOrdered,
   AlignLeft, AlignCenter, AlignRight, Underline as UnderlineIcon,
@@ -100,7 +23,6 @@ import clsx from 'clsx';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { pickLocalFile, localFileUrl } from '../../api/client';
-import LocalImageView from './LocalImageView';
 import { PlantUMLBlock } from '../../extensions/PlantUMLBlock';
 
 // ─── ToolbarButton ─────────────────────────────────────────────────────────
