@@ -103,7 +103,7 @@ export default function DocumentTypeForm({ selected, onSaved, onDeleted, canEdit
           value={defaultPrefix}
           onChange={(e) => setDefaultPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
           disabled={!canEdit}
-          maxLength={20}
+          maxLength={255}
         />
       </div>
 

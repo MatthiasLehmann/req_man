@@ -8,7 +8,10 @@ from datetime import datetime
 # Dokument-Präfixe werden als Verzeichnisnamen auf der Platte und als Präfix
 # jeder Anforderungs-ID (z. B. REQ-001) verwendet. Die ID-Logik der App liest
 # den Präfix über `^[A-Za-z]+` wieder aus, deshalb sind nur Buchstaben erlaubt.
-MAX_PREFIX_LENGTH = 20
+# Die Länge ist bewusst nicht künstlich begrenzt; die einzige harte Grenze ist
+# das Dateisystem (max. 255 Bytes pro Pfadkomponente), das wir als Obergrenze
+# spiegeln, um kryptische OS-Fehler beim Anlegen des Verzeichnisses zu vermeiden.
+MAX_PREFIX_LENGTH = 255
 _PREFIX_RE = re.compile(r"^[A-Za-z]+$")
 
 
