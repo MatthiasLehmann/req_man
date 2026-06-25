@@ -3,11 +3,70 @@ Service layer for interacting with doorstop projects.
 Wraps the doorstop Python API and adds project management.
 """
 import os
+import re
 import json
 import yaml
 import doorstop
+from urllib.parse import quote, unquote
 from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
+
+# ─── Bildpfade: absolut ⇄ relativ zur YAML-Datei ──────────────────────────────
+#
+# Lokale Bildreferenzen werden im Editor mit absolutem Pfad eingefügt – sowohl im
+# data-local-path-Attribut als auch in der src-URL (/api/localfile?path=…).
+# Damit ein Projekt portabel bleibt, speichern wir den Pfad relativ zum
+# Verzeichnis der Item-YAML-Datei und rechnen ihn beim Laden wieder in einen
+# absoluten Pfad zurück (Frontend und /api/localfile arbeiten weiterhin mit
+# absoluten Pfaden).
+_LOCAL_PATH_RE = re.compile(r'(data-local-path=")([^"]*)(")')
+# path=-Parameter innerhalb einer localfile-src-URL (Wert ist URL-kodiert)
+_LOCALFILE_SRC_RE = re.compile(r'((?:/api)?/localfile\?[^"\'<>]*?\bpath=)([^"\'&<>]*)')
+
+
+def _convert_path(raw: str, base_dir: str, *, to_relative: bool) -> Optional[str]:
+    """Wandelt einen einzelnen Pfad um. None = unverändert lassen."""
+    if not raw:
+        return None
+    if to_relative:
+        if not os.path.isabs(raw):
+            return None  # bereits relativ
+        try:
+            return os.path.relpath(raw, base_dir)
+        except ValueError:
+            # z. B. unterschiedliche Laufwerke unter Windows → absolut belassen
+            return None
+    else:
+        if os.path.isabs(raw):
+            return None  # bereits absolut
+        return os.path.normpath(os.path.join(base_dir, raw))
+
+
+def _rewrite_local_paths(text: str, base_dir: str, *, to_relative: bool) -> str:
+    """Schreibt data-local-path- und localfile-src-Pfade um (absolut ⇄ relativ)."""
+    if not text or "localfile" not in text and "data-local-path" not in text:
+        return text
+
+    def repl_attr(m: "re.Match[str]") -> str:
+        new = _convert_path(m.group(2), base_dir, to_relative=to_relative)
+        return m.group(0) if new is None else f"{m.group(1)}{new}{m.group(3)}"
+
+    def repl_src(m: "re.Match[str]") -> str:
+        # Der path-Wert in der URL ist URL-kodiert (%2F …).
+        new = _convert_path(unquote(m.group(2)), base_dir, to_relative=to_relative)
+        return m.group(0) if new is None else f"{m.group(1)}{quote(new, safe='')}"
+
+    text = _LOCAL_PATH_RE.sub(repl_attr, text)
+    text = _LOCALFILE_SRC_RE.sub(repl_src, text)
+    return text
+
+
+def _item_dir(item: doorstop.Item) -> Optional[str]:
+    """Verzeichnis der Item-YAML-Datei (Basis für relative Bildpfade)."""
+    try:
+        return os.path.dirname(os.path.realpath(str(item.path)))
+    except (OSError, ValueError, AttributeError):
+        return None
 
 PROJECTS_ROOT = os.path.join(os.path.dirname(__file__), '..', 'projects')
 PROJECTS_CONFIG = os.path.join(os.path.dirname(__file__), '..', 'data', 'projects.json')
@@ -314,10 +373,17 @@ def _item_to_dict(item: doorstop.Item) -> Dict:
     except Exception:
         pass
 
+    # Relative Bildpfade (data-local-path) zurück in absolute Pfade auflösen,
+    # damit das Frontend sie unverändert über /api/localfile laden kann.
+    text_val = (item.text or "").strip()
+    base_dir = _item_dir(item)
+    if base_dir:
+        text_val = _rewrite_local_paths(text_val, base_dir, to_relative=False)
+
     return {
         "uid": str(item.uid),
         "level": str(item.level),
-        "text": (item.text or "").strip(),
+        "text": text_val,
         "header": header_val,
         "normative": bool(item.normative),
         "active": bool(item.active),
@@ -346,7 +412,11 @@ def create_item(project_id: str, prefix: str, data: Dict) -> Dict:
 
         try:
             if data.get("text"):
-                item.text = data["text"]
+                base_dir = _item_dir(item)
+                item.text = (
+                    _rewrite_local_paths(data["text"], base_dir, to_relative=True)
+                    if base_dir else data["text"]
+                )
             if data.get("level"):
                 item.level = doorstop.core.types.Level(data["level"])
             if "header" in data:
@@ -397,7 +467,11 @@ def update_item(project_id: str, uid: str, data: Dict) -> Optional[Dict]:
 
         try:
             if "text" in data and data["text"] is not None:
-                item.text = data["text"]
+                base_dir = _item_dir(item)
+                item.text = (
+                    _rewrite_local_paths(data["text"], base_dir, to_relative=True)
+                    if base_dir else data["text"]
+                )
             if "level" in data and data["level"] is not None:
                 item.level = doorstop.core.types.Level(data["level"])
             if "header" in data:
