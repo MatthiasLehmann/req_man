@@ -3,11 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ReactFlow, Node, Edge, Background, Controls, MiniMap,
-  MarkerType, useNodesState, useEdgesState, Panel,
-  NodeProps
+  MarkerType, Panel, Position,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { GitBranch, Table2, List, ArrowLeft, Loader2, AlertCircle, ArrowDown, ArrowUp } from 'lucide-react';
+import { GitBranch, Table2, List, ArrowLeft, Loader2, AlertCircle, ArrowDown, ArrowUp, ChevronDown } from 'lucide-react';
 import clsx from 'clsx';
 import { getTraceability } from '../api/client';
 import { TraceabilityData, TraceabilityNode } from '../types';
@@ -28,12 +27,84 @@ function getDocColor(doc: string, docList: string[]): string {
 
 type ViewMode = 'graph' | 'matrix' | 'list' | 'topdown' | 'bottomup';
 
+// ─── Document Multi-Select Menu ────────────────────────────────────────────────
+
+function DocSelectMenu({
+  docList,
+  selectedDocs,
+  onToggle,
+}: {
+  docList: string[];
+  selectedDocs: Set<string>;
+  onToggle: (doc: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as globalThis.Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
+  const label = selectedDocs.size <= 3
+    ? [...selectedDocs].join(', ')
+    : `${selectedDocs.size} Dokumente`;
+  const minRequired = Math.min(2, docList.length);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="text-sm border border-gray-200 rounded px-2 py-1 flex items-center gap-1.5 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary-400"
+      >
+        <span className="font-mono">{label || 'Dokumente wählen'}</span>
+        <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-2xl z-20 p-2">
+          <p className="text-xs text-gray-400 px-2 pb-1">
+            Dokumente auswählen (mind. {minRequired})
+          </p>
+          <div className="max-h-64 overflow-auto">
+            {docList.map((doc) => {
+              const checked = selectedDocs.has(doc);
+              const disableUncheck = checked && selectedDocs.size <= minRequired;
+              return (
+                <label
+                  key={doc}
+                  className={clsx(
+                    'flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-gray-50',
+                    disableUncheck && 'opacity-60 cursor-not-allowed'
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="accent-primary-600"
+                    checked={checked}
+                    disabled={disableUncheck}
+                    onChange={() => onToggle(doc)}
+                  />
+                  <span className="text-sm font-mono">{doc}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TraceabilityPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('graph');
   const [filterDoc, setFilterDoc] = useState<string>('');
   const [selectedUid, setSelectedUid] = useState<string>('');
+  const [selectedDocsOverride, setSelectedDocsOverride] = useState<Set<string> | null>(null);
 
   // Reset horizontal scroll caused by ReactFlow when switching views
   useEffect(() => {
@@ -65,6 +136,39 @@ export default function TraceabilityPage() {
     );
   }, [data.links, filteredNodeIds]);
 
+  // Document multi-selection for Graph & Matrix views: always at least two
+  // documents selected, showing only the linkage between the chosen documents.
+  const selectedDocs = useMemo(
+    () => selectedDocsOverride ?? new Set(docList.slice(0, 2)),
+    [selectedDocsOverride, docList]
+  );
+
+  const toggleDoc = (doc: string) => {
+    setSelectedDocsOverride((prev) => {
+      const base = new Set(prev ?? docList.slice(0, 2));
+      if (base.has(doc)) {
+        const minRequired = Math.min(2, docList.length);
+        if (base.size > minRequired) base.delete(doc);
+      } else {
+        base.add(doc);
+      }
+      return base;
+    });
+  };
+
+  const multiDocNodes = useMemo(
+    () => data.nodes.filter((n) => selectedDocs.has(n.document)),
+    [data.nodes, selectedDocs]
+  );
+  const multiDocNodeIds = useMemo(
+    () => new Set(multiDocNodes.map((n) => n.uid)),
+    [multiDocNodes]
+  );
+  const multiDocLinks = useMemo(
+    () => data.links.filter((l) => multiDocNodeIds.has(l.source) && multiDocNodeIds.has(l.target)),
+    [data.links, multiDocNodeIds]
+  );
+
   if (!projectId) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -83,22 +187,28 @@ export default function TraceabilityPage() {
           <GitBranch className="w-5 h-5 text-primary-600" />
           <h2 className="font-semibold text-gray-800">Traceability</h2>
           <span className="text-xs text-gray-400">
-            {data.nodes.length} Anforderungen · {data.links.length} Verlinkungen
+            {viewMode === 'graph' || viewMode === 'matrix'
+              ? `${multiDocNodes.length} Anforderungen · ${multiDocLinks.length} Verlinkungen`
+              : `${data.nodes.length} Anforderungen · ${data.links.length} Verlinkungen`}
           </span>
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Document filter */}
-          <select
-            className="text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-400"
-            value={filterDoc}
-            onChange={(e) => setFilterDoc(e.target.value)}
-          >
-            <option value="">Alle Dokumente</option>
-            {docList.map((d) => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
+          {/* Document selection */}
+          {viewMode === 'graph' || viewMode === 'matrix' ? (
+            <DocSelectMenu docList={docList} selectedDocs={selectedDocs} onToggle={toggleDoc} />
+          ) : (
+            <select
+              className="text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-400"
+              value={filterDoc}
+              onChange={(e) => setFilterDoc(e.target.value)}
+            >
+              <option value="">Alle Dokumente</option>
+              {docList.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          )}
 
           {/* View mode */}
           <div className="flex border border-gray-200 rounded-lg overflow-hidden">
@@ -141,9 +251,9 @@ export default function TraceabilityPage() {
             </div>
           </div>
         ) : viewMode === 'graph' ? (
-          <GraphView nodes={filteredNodes} links={filteredLinks} docList={docList} />
+          <GraphView nodes={multiDocNodes} links={multiDocLinks} docList={docList} />
         ) : viewMode === 'matrix' ? (
-          <MatrixView nodes={filteredNodes} links={data.links} />
+          <MatrixView nodes={multiDocNodes} links={multiDocLinks} />
         ) : viewMode === 'list' ? (
           <ListView nodes={filteredNodes} links={filteredLinks} docList={docList} />
         ) : viewMode === 'topdown' ? (
@@ -167,72 +277,166 @@ function GraphView({
   links: { source: string; target: string; valid: boolean }[];
   docList: string[];
 }) {
-  const ITEM_WIDTH = 160;
-  const ITEM_HEIGHT = 70;
-  const COL_GAP = 220;
-  const ROW_GAP = 90;
+  const ITEM_WIDTH = 190;
+  const COL_GAP = 260;
+  const ROW_GAP = 56;
 
-  // Group by document
-  const byDoc: Record<string, TraceabilityNode[]> = {};
-  traceNodes.forEach((n) => {
-    byDoc[n.document] = [...(byDoc[n.document] || []), n];
-  });
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  const docOrder = docList.filter((d) => byDoc[d]);
+  const nodeMap = useMemo(
+    () => Object.fromEntries(traceNodes.map((n) => [n.uid, n])),
+    [traceNodes]
+  );
+
+  // A link means: source (lower/child item) traces up to target (higher/parent item).
+  // So the "children" of a node in a top-down tree are the items that link to it.
+  const childrenMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    links.forEach((l) => {
+      if (nodeMap[l.source] && nodeMap[l.target]) {
+        map[l.target] = [...(map[l.target] || []), l.source];
+      }
+    });
+    return map;
+  }, [links, nodeMap]);
+
+  const hasParentLink = useMemo(
+    () => new Set(links.filter((l) => nodeMap[l.source] && nodeMap[l.target]).map((l) => l.source)),
+    [links, nodeMap]
+  );
+
+  // Roots: items that don't link up to anything else in the current selection.
+  const roots = useMemo(
+    () => traceNodes.filter((n) => !hasParentLink.has(n.uid)),
+    [traceNodes, hasParentLink]
+  );
+
+  const toggle = (uid: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid);
+      else next.add(uid);
+      return next;
+    });
+  };
 
   const flowNodes: Node[] = [];
-  docOrder.forEach((doc, colIdx) => {
-    const docNodes = byDoc[doc] || [];
-    docNodes.forEach((n, rowIdx) => {
-      const color = getDocColor(doc, docList);
-      flowNodes.push({
-        id: n.uid,
-        position: { x: colIdx * COL_GAP, y: rowIdx * ROW_GAP },
-        data: { label: n.uid, text: n.text, level: n.level, active: n.active, color },
-        style: {
-          width: ITEM_WIDTH,
-          background: '#fff',
-          border: `2px solid ${color}`,
-          borderRadius: 8,
-          fontSize: 11,
-        },
-      });
-    });
-  });
+  const flowEdges: Edge[] = [];
+  const rendered = new Set<string>();
+  let rowCounter = 0;
 
-  const flowEdges: Edge[] = links.map((l, i) => ({
-    id: `e-${i}`,
-    source: l.source,
-    target: l.target,
-    animated: false,
-    style: { stroke: l.valid ? '#94a3b8' : '#ef4444', strokeWidth: 1.5 },
-    markerEnd: { type: MarkerType.ArrowClosed },
-  }));
+  function visit(uid: string, depth: number) {
+    if (rendered.has(uid)) return;
+    const node = nodeMap[uid];
+    if (!node) return;
+    rendered.add(uid);
+
+    const children = childrenMap[uid] || [];
+    const isExpanded = expanded.has(uid);
+    const color = getDocColor(node.document, docList);
+    const row = rowCounter++;
+
+    flowNodes.push({
+      id: uid,
+      position: { x: depth * COL_GAP, y: row * ROW_GAP },
+      sourcePosition: Position.Left,
+      targetPosition: Position.Right,
+      data: {
+        label: (
+          <div className="text-left leading-tight">
+            <div className="flex items-center gap-1 font-mono font-semibold text-gray-800">
+              {children.length > 0 && (
+                <span className="text-gray-400 shrink-0">{isExpanded ? '▼' : '▶'}</span>
+              )}
+              <span className="truncate">{uid}</span>
+              {children.length > 0 && (
+                <span className="text-gray-400 shrink-0">({children.length})</span>
+              )}
+            </div>
+            <div className="text-gray-500 truncate" style={{ fontSize: 10 }}>
+              {node.text}
+            </div>
+          </div>
+        ),
+      },
+      style: {
+        width: ITEM_WIDTH,
+        background: '#fff',
+        border: '1px solid #e5e7eb',
+        borderLeftWidth: 4,
+        borderLeftColor: color,
+        borderRadius: 8,
+        fontSize: 11,
+        padding: 6,
+        cursor: children.length > 0 ? 'pointer' : 'default',
+        textAlign: 'left',
+      },
+    });
+
+    if (isExpanded) {
+      children.forEach((childUid) => {
+        flowEdges.push({
+          id: `e-${childUid}-${uid}`,
+          source: childUid,
+          target: uid,
+          animated: false,
+          style: { stroke: '#94a3b8', strokeWidth: 1.5 },
+          markerEnd: { type: MarkerType.ArrowClosed },
+        });
+        visit(childUid, depth + 1);
+      });
+    }
+  }
+
+  roots.forEach((r) => visit(r.uid, 0));
+
+  const docOrder = docList.filter((d) => traceNodes.some((n) => n.document === d));
 
   return (
     <ReactFlow
       nodes={flowNodes}
       edges={flowEdges}
+      onNodeClick={(_, node) => {
+        if ((childrenMap[node.id] || []).length > 0) toggle(node.id);
+      }}
       fitView
       fitViewOptions={{ padding: 0.2 }}
-      minZoom={0.2}
+      minZoom={0.1}
       maxZoom={2}
     >
       <Background />
       <Controls />
       <MiniMap />
       <Panel position="top-left">
-        <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm text-xs space-y-1">
-          {docOrder.map((doc) => (
-            <div key={doc} className="flex items-center gap-2">
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ background: getDocColor(doc, docList) }}
-              />
-              <span className="font-mono">{doc}</span>
-              <span className="text-gray-400">({(byDoc[doc] || []).length})</span>
-            </div>
-          ))}
+        <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm text-xs space-y-2 max-w-[220px]">
+          <p className="text-gray-400">
+            Klicken Sie auf einen Knoten mit ▶, um die nächste verlinkte Ebene aufzuklappen.
+          </p>
+          <div className="space-y-1">
+            {docOrder.map((doc) => (
+              <div key={doc} className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full shrink-0"
+                  style={{ background: getDocColor(doc, docList) }}
+                />
+                <span className="font-mono">{doc}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 pt-1 border-t border-gray-100">
+            <button
+              onClick={() => setExpanded(new Set(traceNodes.map((n) => n.uid)))}
+              className="text-primary-600 hover:underline"
+            >
+              Alle aufklappen
+            </button>
+            <button
+              onClick={() => setExpanded(new Set())}
+              className="text-primary-600 hover:underline"
+            >
+              Alle einklappen
+            </button>
+          </div>
         </div>
       </Panel>
     </ReactFlow>
@@ -256,7 +460,7 @@ function MatrixView({
       {nodes.length > 40 && (
         <div className="flex items-center gap-2 p-3 mb-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-700">
           <AlertCircle className="w-4 h-4" />
-          Matrix zeigt die ersten 40 von {nodes.length} Anforderungen. Benutzen Sie den Filter.
+          Matrix zeigt die ersten 40 von {nodes.length} Anforderungen. Wählen Sie weniger Dokumente aus.
         </div>
       )}
       <div className="inline-block border border-gray-200 rounded-lg overflow-hidden shadow-sm">
