@@ -6,10 +6,19 @@ from database import User
 from auth import get_current_user, require_editor
 from models import ItemCreate, ItemUpdate, ItemResponse
 import doorstop_service as ds
+import git_service
 
 
 class LinkCreate(BaseModel):
     target_uid: str
+
+
+class CommitInfo(BaseModel):
+    hash: str
+    hash_short: str
+    date: str
+    author: str
+    message: str
 
 router = APIRouter(prefix="/api/projects/{project_id}", tags=["items"])
 
@@ -49,6 +58,22 @@ async def get_item(
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     return item
+
+
+@router.get("/items/{uid}/commits", response_model=List[CommitInfo])
+async def get_item_commits(
+    project_id: str,
+    uid: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Alle Git-Commits, deren Message die Anforderungs-UID referenziert."""
+    project = ds.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    item = ds.get_item(project_id, uid)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return git_service.get_commits_for_uid(project["path"], uid)
 
 
 @router.put("/items/{uid}", response_model=ItemResponse)

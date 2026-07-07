@@ -70,6 +70,8 @@ export const updateItem = (projectId: string, uid: string, data: object) =>
   api.put(`/projects/${projectId}/items/${uid}`, data);
 export const deleteItem = (projectId: string, uid: string) =>
   api.delete(`/projects/${projectId}/items/${uid}`);
+export const getItemCommits = (projectId: string, uid: string) =>
+  api.get(`/projects/${projectId}/items/${uid}/commits`);
 
 // Links
 export const addLink = (projectId: string, sourceUid: string, targetUid: string) =>

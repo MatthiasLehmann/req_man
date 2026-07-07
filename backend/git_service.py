@@ -5,6 +5,7 @@ Jedes Projekt bekommt sein eigenes Git-Repository im Projektverzeichnis.
 Git-Operationen werden ausschließlich über gitpython durchgeführt.
 """
 import fnmatch
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -90,6 +91,34 @@ def get_repo_log(project_path: str, max_count: int = 50) -> list:
                 "message": commit.message.strip(),
             })
         return result
+    except Exception:
+        return []
+
+
+def get_commits_for_uid(project_path: str, uid: str, max_count: int = 200) -> list:
+    """
+    Gibt alle Commits zurück, deren Commit-Message die Anforderungs-UID
+    referenziert (z. B. "fix: Login-Timeout REQ-042").
+
+    Die UID wird mit Wortgrenzen gematcht, damit REQ-042 nicht auch
+    REQ-0421 oder SYSREQ-042 trifft. Durchsucht maximal max_count Commits.
+    """
+    try:
+        repo = get_or_init_repo(project_path)
+        pattern = re.compile(rf"\b{re.escape(uid)}\b", re.IGNORECASE)
+        results = []
+
+        for commit in repo.iter_commits(max_count=max_count):
+            message = commit.message.strip()
+            if pattern.search(message):
+                results.append({
+                    "hash": commit.hexsha,
+                    "hash_short": commit.hexsha[:8],
+                    "date": commit.authored_datetime.isoformat(),
+                    "author": commit.author.name,
+                    "message": message,
+                })
+        return results
     except Exception:
         return []
 
