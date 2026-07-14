@@ -12,6 +12,7 @@ import { getProjectStructure, listDocumentTypes, assignDocumentType } from '../.
 import type { DocumentWithType, DocumentType } from '../../types';
 import DocumentNode, { DocumentNodeData } from './DocumentNode';
 import CreateDocumentModal from './CreateDocumentModal';
+import DocumentPropertiesForm from './DocumentPropertiesForm';
 import { useAuthStore } from '../../store/authStore';
 
 const NODE_TYPES: NodeTypes = { documentNode: DocumentNode };
@@ -249,21 +250,13 @@ export default function ProjectStructureTab({ projectId }: Props) {
             </div>
 
             {selectedDoc.document_type && selectedDoc.document_type.properties.length > 0 && (
-              <div>
-                <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                  Typ-Eigenschaften
-                </div>
-                <div className="space-y-1.5">
-                  {selectedDoc.document_type.properties.map((prop) => (
-                    <div key={prop.key} className="flex items-center justify-between">
-                      <span className="text-xs text-gray-500">{prop.label}</span>
-                      <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
-                        {prop.type}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <DocumentPropertiesForm
+                projectId={projectId}
+                prefix={selectedDoc.prefix}
+                properties={selectedDoc.document_type.properties}
+                values={selectedDoc.property_values ?? {}}
+                canEdit={canEdit}
+              />
             )}
 
             <button

@@ -177,6 +177,8 @@ export const getProjectStructure = (projectId: string) =>
   api.get<ProjectStructure>(`/projects/${projectId}/structure`);
 export const assignDocumentType = (projectId: string, prefix: string, typeId: string | null) =>
   api.put(`/projects/${projectId}/documents/${prefix}/type`, { document_type_id: typeId });
+export const updateDocumentProperties = (projectId: string, prefix: string, values: Record<string, string>) =>
+  api.put(`/projects/${projectId}/documents/${encodeURIComponent(prefix)}/properties`, { values });
 
 // Export
 export type ExportFormat = 'csv' | 'tsv' | 'xlsx' | 'yaml';
