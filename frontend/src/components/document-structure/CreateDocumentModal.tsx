@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { X } from 'lucide-react';
 import { createDocument, assignDocumentType } from '../../api/client';
+import { sanitizePrefixInput, validatePrefix, validateSepForPrefix, SEP_OPTIONS } from '../../utils/prefix';
 import type { DocumentType, DocumentWithType } from '../../types';
 
 interface Props {
@@ -16,6 +17,7 @@ export default function CreateDocumentModal({ projectId, documents, documentType
   const qc = useQueryClient();
   const [prefix, setPrefix] = useState('');
   const [parent, setParent] = useState('');
+  const [sep, setSep] = useState('-');
   const [selectedTypeId, setSelectedTypeId] = useState('');
 
   const handleTypeChange = (typeId: string) => {
@@ -31,6 +33,7 @@ export default function CreateDocumentModal({ projectId, documents, documentType
       const res = await createDocument(projectId, {
         prefix: prefix.toUpperCase(),
         parent: parent || undefined,
+        sep,
       });
       if (selectedTypeId) {
         await assignDocumentType(projectId, prefix.toUpperCase(), selectedTypeId);
@@ -51,7 +54,8 @@ export default function CreateDocumentModal({ projectId, documents, documentType
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!prefix.trim()) return toast.error('Prefix ist Pflichtfeld');
+    const error = validatePrefix(prefix) ?? validateSepForPrefix(prefix, sep);
+    if (error) return toast.error(error);
     createMut.mutate();
   };
 
@@ -88,12 +92,30 @@ export default function CreateDocumentModal({ projectId, documents, documentType
             </label>
             <input
               className="input w-full font-mono"
-              placeholder="z.B. SYS"
+              placeholder="z.B. SYS, SYS_A, REQ-2"
               value={prefix}
-              onChange={(e) => setPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
+              onChange={(e) => setPrefix(sanitizePrefixInput(e.target.value))}
               maxLength={255}
               required
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Trennzeichen
+            </label>
+            <select
+              className="input w-full"
+              value={sep}
+              onChange={(e) => setSep(e.target.value)}
+            >
+              {SEP_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              Anforderungs-IDs: <span className="font-mono">{(prefix || 'REQ') + sep + '001'}</span>
+            </p>
           </div>
 
           <div>

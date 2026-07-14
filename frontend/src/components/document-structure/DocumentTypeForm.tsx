@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Save, Trash2 } from 'lucide-react';
 import { createDocumentType, updateDocumentType, deleteDocumentType } from '../../api/client';
+import { sanitizePrefixInput } from '../../utils/prefix';
 import type { DocumentType } from '../../types';
 import PropertyEditor from './PropertyEditor';
 
@@ -99,9 +100,9 @@ export default function DocumentTypeForm({ selected, onSaved, onDeleted, canEdit
         <label className="block text-xs font-medium text-gray-700 mb-1">Standard-Prefix</label>
         <input
           className="input w-full"
-          placeholder="z.B. SH"
+          placeholder="z.B. SH, SYS_A, REQ-2"
           value={defaultPrefix}
-          onChange={(e) => setDefaultPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
+          onChange={(e) => setDefaultPrefix(sanitizePrefixInput(e.target.value))}
           disabled={!canEdit}
           maxLength={255}
         />

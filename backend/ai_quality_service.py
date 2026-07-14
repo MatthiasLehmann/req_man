@@ -30,6 +30,21 @@ from pydantic import BaseModel
 from typing_extensions import Protocol
 
 import doorstop_service as ds
+from doorstop.core.types import UID
+from doorstop import DoorstopError
+
+
+def _uid_to_prefix(uid: str) -> Optional[str]:
+    """Extrahiert das Dokument-Präfix aus einer UID über die doorstop-Grammatik.
+
+    Präfixe können Zahlen, '_', '-' und '.' enthalten (z. B. "SYS_A-001"),
+    ein simples ^[A-Za-z]+ reicht daher nicht.
+    """
+    try:
+        return str(UID(uid).prefix)
+    except DoorstopError:
+        return None
+
 
 # ─── Konfiguration ────────────────────────────────────────────────────────────
 
@@ -283,10 +298,10 @@ def get_quality_yaml_path(project_id: str, uid: str) -> Optional[Path]:
     if not project:
         return None
     project_path = Path(project["path"])
-    prefix = re.match(r"^([A-Za-z]+)", uid)
+    prefix = _uid_to_prefix(uid)
     if not prefix:
         return None
-    doc_prefix = prefix.group(1).upper()
+    doc_prefix = prefix.upper()
     doc_dir = project_path / doc_prefix
     if not doc_dir.exists():
         for d in project_path.iterdir():
@@ -389,8 +404,8 @@ Gib NUR das JSON zurück, keinerlei Markdown-Formatierung oder Erklärungstext.\
         links = item.get("links", [])
         custom_attrs = item.get("custom_attributes", {})
 
-        m = re.match(r"^([A-Za-z]+)", uid)
-        doc_prefix = m.group(1).upper() if m else "?"
+        prefix = _uid_to_prefix(uid)
+        doc_prefix = prefix.upper() if prefix else "?"
 
         relevant_keys = {"safety_level", "asil", "priority", "criticality", "sil"}
         custom_info = {

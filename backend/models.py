@@ -6,13 +6,22 @@ from datetime import datetime
 
 
 # Dokument-Präfixe werden als Verzeichnisnamen auf der Platte und als Präfix
-# jeder Anforderungs-ID (z. B. REQ-001) verwendet. Die ID-Logik der App liest
-# den Präfix über `^[A-Za-z]+` wieder aus, deshalb sind nur Buchstaben erlaubt.
+# jeder Anforderungs-ID (z. B. REQ-001) verwendet. Erlaubt ist die
+# doorstop-UID-Grammatik: Buchstaben, Zahlen sowie '_', '-' und '.'.
+# Ein Präfix muss mit einem Buchstaben beginnen und darf nicht mit einem
+# Trennzeichen enden, damit doorstop eine UID eindeutig in Präfix und Nummer
+# zerlegen kann; endet es auf eine Zahl oder enthält es Trennzeichen, erzwingt
+# create_document zusätzlich ein explizites UID-Trennzeichen '-'
+# (sonst wäre z. B. "REQ2001" mehrdeutig).
 # Die Länge ist bewusst nicht künstlich begrenzt; die einzige harte Grenze ist
 # das Dateisystem (max. 255 Bytes pro Pfadkomponente), das wir als Obergrenze
 # spiegeln, um kryptische OS-Fehler beim Anlegen des Verzeichnisses zu vermeiden.
 MAX_PREFIX_LENGTH = 255
-_PREFIX_RE = re.compile(r"^[A-Za-z]+$")
+_PREFIX_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
+_RESERVED_PREFIXES = {"all"}  # doorstop-Schlüsselwort (z. B. "doorstop publish all")
+
+# Von doorstop unterstützte UID-Trennzeichen (settings.SEP_CHARS) plus "kein".
+ALLOWED_SEPS = {"", "-", "_", "."}
 
 
 def validate_prefix(value: Optional[str], *, allow_empty: bool = False) -> Optional[str]:
@@ -29,7 +38,14 @@ def validate_prefix(value: Optional[str], *, allow_empty: bool = False) -> Optio
             f"Präfix darf höchstens {MAX_PREFIX_LENGTH} Zeichen lang sein"
         )
     if not _PREFIX_RE.match(cleaned):
-        raise ValueError("Präfix darf nur Buchstaben (A–Z) enthalten")
+        raise ValueError(
+            "Präfix muss mit einem Buchstaben beginnen und darf nur "
+            "Buchstaben, Zahlen, '_', '-' und '.' enthalten"
+        )
+    if cleaned[-1] in "-_.":
+        raise ValueError("Präfix darf nicht mit '-', '_' oder '.' enden")
+    if cleaned.lower() in _RESERVED_PREFIXES:
+        raise ValueError(f"'{cleaned}' ist in doorstop reserviert und kein gültiges Präfix")
     return cleaned.upper()
 
 
@@ -94,12 +110,21 @@ class ProjectResponse(BaseModel):
 class DocumentCreate(BaseModel):
     prefix: str
     parent: Optional[str] = None
-    sep: Optional[str] = None
+    sep: Optional[str] = "-"
 
     @field_validator("prefix")
     @classmethod
     def _check_prefix(cls, v: str) -> str:
         return validate_prefix(v)
+
+    @field_validator("sep")
+    @classmethod
+    def _check_sep(cls, v: Optional[str]) -> str:
+        if v is None:
+            return "-"
+        if v not in ALLOWED_SEPS:
+            raise ValueError("Trennzeichen muss '-', '_', '.' oder leer sein")
+        return v
 
 
 class DocumentResponse(BaseModel):

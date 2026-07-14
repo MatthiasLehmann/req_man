@@ -7,6 +7,7 @@ import {
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 import { listDocuments, createDocument, deleteDocument } from '../../api/client';
+import { sanitizePrefixInput, validatePrefix, validateSepForPrefix, SEP_OPTIONS } from '../../utils/prefix';
 import { Document } from '../../types';
 import { useAuthStore } from '../../store/authStore';
 
@@ -30,18 +31,20 @@ export default function DocumentTree({ projectId, selectedPrefix, onSelectDocume
   const [showCreate, setShowCreate] = useState(false);
   const [newPrefix, setNewPrefix] = useState('');
   const [newParent, setNewParent] = useState('');
+  const [newSep, setNewSep] = useState('-');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const qc = useQueryClient();
 
   const createMut = useMutation({
     mutationFn: () =>
-      createDocument(projectId, { prefix: newPrefix.toUpperCase(), parent: newParent || undefined }),
+      createDocument(projectId, { prefix: newPrefix.toUpperCase(), parent: newParent || undefined, sep: newSep }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['documents', projectId] });
       toast.success(`Dokument ${res.data.prefix} erstellt`);
       setShowCreate(false);
       setNewPrefix('');
       setNewParent('');
+      setNewSep('-');
       onSelectDocument(res.data.prefix);
     },
     onError: (e: any) => toast.error(e.response?.data?.detail || 'Fehler beim Erstellen'),
@@ -182,12 +185,29 @@ export default function DocumentTree({ projectId, selectedPrefix, onSelectDocume
                 <input
                   className="input uppercase"
                   value={newPrefix}
-                  onChange={(e) => setNewPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
-                  placeholder="z.B. REQ, SYS, TEST"
+                  onChange={(e) => setNewPrefix(sanitizePrefixInput(e.target.value))}
+                  placeholder="z.B. REQ, SYS_A, TEST-2"
                   maxLength={255}
                   autoFocus
                 />
                 <p className="text-xs text-gray-400 mt-1">Wird als Präfix für alle Anforderungs-IDs verwendet</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Trennzeichen
+                </label>
+                <select
+                  className="input"
+                  value={newSep}
+                  onChange={(e) => setNewSep(e.target.value)}
+                >
+                  {SEP_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Anforderungs-IDs: <span className="font-mono">{(newPrefix || 'REQ') + newSep + '001'}</span>
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -206,7 +226,11 @@ export default function DocumentTree({ projectId, selectedPrefix, onSelectDocume
               </div>
               <div className="flex gap-2 pt-2">
                 <button
-                  onClick={() => createMut.mutate()}
+                  onClick={() => {
+                    const error = validatePrefix(newPrefix) ?? validateSepForPrefix(newPrefix, newSep);
+                    if (error) return void toast.error(error);
+                    createMut.mutate();
+                  }}
                   disabled={!newPrefix || createMut.isPending}
                   className="btn-primary flex-1 justify-center"
                 >

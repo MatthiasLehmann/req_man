@@ -311,6 +311,13 @@ def create_document(project_id: str, prefix: str, parent: Optional[str] = None, 
     if not project:
         raise ValueError(f"Project {project_id} not found")
 
+    # Endet das Präfix auf eine Zahl oder enthält es Trennzeichen, braucht die
+    # UID ein explizites Trennzeichen – doorstop zerlegt eine UID am letzten
+    # Trennzeichen bzw. an der Buchstabe/Zahl-Grenze, "REQ2001" oder
+    # "MY_DOC001" wären sonst mehrdeutig.
+    if not sep and (prefix[-1].isdigit() or any(c in "-_." for c in prefix)):
+        sep = "-"
+
     path = project["path"]
     doc_path = os.path.join(path, prefix)
 
@@ -321,7 +328,7 @@ def create_document(project_id: str, prefix: str, parent: Optional[str] = None, 
         return _document_to_dict(doc)
     except doorstop.DoorstopError:
         # If tree doesn't exist yet, create first document directly
-        doc = doorstop.Document.new(None, doc_path, path, prefix)
+        doc = doorstop.Document.new(None, doc_path, path, prefix, sep=sep or None)
         doc.save()
         return {
             "prefix": prefix,
