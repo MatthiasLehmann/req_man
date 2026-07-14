@@ -197,6 +197,8 @@ class DocumentTypeResponse(BaseModel):
 class DocumentWithType(DocumentResponse):
     document_type_id: Optional[str] = None
     document_type: Optional[DocumentTypeResponse] = None
+    # Eigenschaftswerte pro Dokument (aus extensions.reqman.properties der .doorstop.yml)
+    property_values: Dict[str, str] = {}
 
 
 class ProjectStructureResponse(BaseModel):
@@ -205,6 +207,10 @@ class ProjectStructureResponse(BaseModel):
 
 class AssignDocumentTypeRequest(BaseModel):
     document_type_id: Optional[str] = None
+
+
+class DocumentPropertiesUpdate(BaseModel):
+    values: Dict[str, str] = {}
 
 
 # Attribute config models

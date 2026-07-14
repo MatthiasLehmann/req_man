@@ -8,8 +8,10 @@ from database import get_db, DocumentType, DocumentTypeAssignment, User
 from auth import get_current_user, require_editor, require_admin
 from models import (
     DocumentTypeCreate, DocumentTypeUpdate, DocumentTypeResponse,
-    ProjectStructureResponse, DocumentWithType, AssignDocumentTypeRequest
+    ProjectStructureResponse, DocumentWithType, AssignDocumentTypeRequest,
+    DocumentPropertiesUpdate
 )
+import doorstop
 import doorstop_service as ds
 
 router = APIRouter(prefix="/api", tags=["document-types"])
@@ -170,3 +172,21 @@ async def assign_document_type(
         ))
     db.commit()
     return {"ok": True}
+
+
+@router.put("/projects/{project_id}/documents/{prefix}/properties", status_code=200)
+async def update_document_properties(
+    project_id: str,
+    prefix: str,
+    data: DocumentPropertiesUpdate,
+    current_user: User = Depends(require_editor),
+):
+    try:
+        saved = ds.set_document_properties(project_id, prefix, data.values)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except doorstop.DoorstopError:
+        raise HTTPException(status_code=404, detail=f"Document {prefix} not found")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Fehler beim Speichern: {e}")
+    return {"ok": True, "values": saved}

@@ -21,6 +21,24 @@ export default function PropertyEditor({ properties, onChange, readOnly }: Props
 
   const remove = (i: number) => onChange(properties.filter((_, idx) => idx !== i));
 
+  // Beim Tippen 1:1 übernehmen (split/join mit ',' ist verlustfrei),
+  // erst beim Verlassen des Felds trimmen und leere Einträge entfernen
+  const updateOptions = (i: number, raw: string) => {
+    const next = properties.map((p, idx) =>
+      idx === i ? { ...p, options: raw.split(',') } : p
+    );
+    onChange(next);
+  };
+
+  const normalizeOptions = (i: number) => {
+    const next = properties.map((p, idx) =>
+      idx === i
+        ? { ...p, options: (p.options ?? []).map((o) => o.trim()).filter(Boolean) }
+        : p
+    );
+    onChange(next);
+  };
+
   return (
     <div>
       <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
@@ -31,39 +49,51 @@ export default function PropertyEditor({ properties, onChange, readOnly }: Props
       )}
       <div className="space-y-2">
         {properties.map((prop, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <input
-              className="input text-xs flex-1"
-              placeholder="Schlüssel"
-              value={prop.key}
-              onChange={(e) => update(i, 'key', e.target.value)}
-              disabled={readOnly}
-            />
-            <input
-              className="input text-xs flex-1"
-              placeholder="Bezeichnung"
-              value={prop.label}
-              onChange={(e) => update(i, 'label', e.target.value)}
-              disabled={readOnly}
-            />
-            <select
-              className="input text-xs w-24"
-              value={prop.type}
-              onChange={(e) => update(i, 'type', e.target.value as PropertyDefinition['type'])}
-              disabled={readOnly}
-            >
-              <option value="text">Text</option>
-              <option value="date">Datum</option>
-              <option value="select">Auswahl</option>
-            </select>
-            {!readOnly && (
-              <button
-                type="button"
-                onClick={() => remove(i)}
-                className="text-red-400 hover:text-red-600 p-1"
+          <div key={i}>
+            <div className="flex items-center gap-2">
+              <input
+                className="input text-xs flex-1"
+                placeholder="Schlüssel"
+                value={prop.key}
+                onChange={(e) => update(i, 'key', e.target.value)}
+                disabled={readOnly}
+              />
+              <input
+                className="input text-xs flex-1"
+                placeholder="Bezeichnung"
+                value={prop.label}
+                onChange={(e) => update(i, 'label', e.target.value)}
+                disabled={readOnly}
+              />
+              <select
+                className="input text-xs w-24"
+                value={prop.type}
+                onChange={(e) => update(i, 'type', e.target.value as PropertyDefinition['type'])}
+                disabled={readOnly}
               >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+                <option value="text">Text</option>
+                <option value="date">Datum</option>
+                <option value="select">Auswahl</option>
+              </select>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => remove(i)}
+                  className="text-red-400 hover:text-red-600 p-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            {prop.type === 'select' && (
+              <input
+                className="input text-xs w-full mt-1"
+                placeholder="Optionen (kommagetrennt), z. B. Entwurf, In Prüfung, Freigegeben"
+                value={(prop.options ?? []).join(',')}
+                onChange={(e) => updateOptions(i, e.target.value)}
+                onBlur={() => normalizeOptions(i)}
+                disabled={readOnly}
+              />
             )}
           </div>
         ))}

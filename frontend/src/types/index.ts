@@ -197,6 +197,8 @@ export interface DocumentType {
 export interface DocumentWithType extends Document {
   document_type_id: string | null;
   document_type: DocumentType | null;
+  /** Eigenschaftswerte pro Dokument (gespeichert in der .doorstop.yml) */
+  property_values: Record<string, string>;
 }
 
 export interface ProjectStructure {

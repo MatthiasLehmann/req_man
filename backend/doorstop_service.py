@@ -238,7 +238,72 @@ def _document_to_dict(doc: doorstop.Document) -> Dict:
         "item_count": len(doc.items),
         "parent": parent_prefix,
         "children": children,
+        "property_values": _read_document_properties(str(doc.path)),
     }
+
+
+# Dokument-Eigenschaftswerte liegen in der .doorstop.yml unter
+# extensions.reqman.properties – "extensions" ist der von doorstop für
+# Fremddaten vorgesehene Bereich (wird beim Laden nicht validiert).
+# Achtung: doorstops Document.save() schreibt nur settings/attributes zurück,
+# daher lesen und schreiben wir die Datei hier direkt.
+
+def _document_config_path(doc_path: str) -> str:
+    return os.path.join(doc_path, ".doorstop.yml")
+
+
+def _read_document_properties(doc_path: str) -> Dict[str, Any]:
+    try:
+        with open(_document_config_path(doc_path), encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError):
+        return {}
+    extensions = data.get("extensions")
+    if not isinstance(extensions, dict):
+        return {}
+    reqman = extensions.get("reqman")
+    if not isinstance(reqman, dict):
+        return {}
+    props = reqman.get("properties")
+    return props if isinstance(props, dict) else {}
+
+
+def set_document_properties(project_id: str, prefix: str, values: Dict[str, str]) -> Dict[str, str]:
+    project = get_project(project_id)
+    if not project:
+        raise ValueError(f"Project {project_id} not found")
+
+    tree = _build_tree(project["path"])
+    doc = tree.find_document(prefix)  # wirft DoorstopError bei unbekanntem Prefix
+    config = _document_config_path(str(doc.path))
+
+    with open(config, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+
+    extensions = data.get("extensions")
+    if not isinstance(extensions, dict):
+        extensions = {}
+        data["extensions"] = extensions
+    reqman = extensions.get("reqman")
+    if not isinstance(reqman, dict):
+        reqman = {}
+        extensions["reqman"] = reqman
+
+    # Leere Werte nicht persistieren, damit die YAML schlank bleibt
+    cleaned = {str(k): str(v) for k, v in values.items() if str(v).strip()}
+    if cleaned:
+        reqman["properties"] = cleaned
+    else:
+        reqman.pop("properties", None)
+        if not reqman:
+            extensions.pop("reqman", None)
+        if not extensions:
+            data.pop("extensions", None)
+
+    with open(config, "w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    return cleaned
 
 
 def create_document(project_id: str, prefix: str, parent: Optional[str] = None, sep: str = "") -> Dict:
@@ -265,6 +330,7 @@ def create_document(project_id: str, prefix: str, parent: Optional[str] = None, 
             "item_count": 0,
             "parent": parent,
             "children": [],
+            "property_values": {},
         }
 
 
