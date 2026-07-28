@@ -12,12 +12,21 @@ FRONTEND_DIR="$SCRIPT_DIR/frontend"
 AI_PROVIDER="${AI_PROVIDER:-}"
 AI_MODEL="${AI_MODEL:-}"
 AI_BASE_URL="${AI_BASE_URL:-}"
+HOST=""   # leer = nur localhost; via --host [adresse] fürs Netzwerk
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --provider) AI_PROVIDER="$2"; shift 2 ;;
     --model)    AI_MODEL="$2";    shift 2 ;;
     --base-url) AI_BASE_URL="$2"; shift 2 ;;
+    --host|--network)
+      # optionaler Wert: "--host" allein => 0.0.0.0, sonst "--host 0.0.0.0"
+      if [[ -n "$2" && "$2" != --* ]]; then HOST="$2"; shift 2; else HOST="0.0.0.0"; shift 1; fi ;;
+    -h|--help)
+      echo "Nutzung: ./start.sh [--provider anthropic|ollama|openai] [--model <m>] [--host [adresse]]"
+      echo "  --host            Backend+Frontend im Netzwerk verfügbar machen (bindet 0.0.0.0)"
+      echo "  --host 0.0.0.0    explizite Bind-Adresse"
+      exit 0 ;;
     *) echo "Unbekannte Option: $1"; exit 1 ;;
   esac
 done
@@ -41,6 +50,23 @@ if [ -z "$AI_BASE_URL" ] && [ "$AI_PROVIDER" = "ollama" ]; then
 fi
 
 export AI_PROVIDER AI_MODEL AI_BASE_URL
+
+# ── Netzwerk-Modus (--host) ──────────────────────────────────────────────────
+# LAN-IP über das aktive Default-Interface (macOS), mit Fallbacks
+_DEF_IFACE="$(route -n get default 2>/dev/null | awk '/interface:/{print $2}')"
+LAN_IP="$(ipconfig getifaddr "$_DEF_IFACE" 2>/dev/null || ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "")"
+[ -z "$LAN_IP" ] && LAN_IP="$(ifconfig 2>/dev/null | awk '/inet /{print $2}' | grep -v '^127\.' | head -1)"
+if [ -n "$HOST" ]; then
+  export VITE_HOST="$HOST"          # Vite an alle Interfaces binden
+  export VITE_ALLOW_ALL_HOSTS=1     # Vite-6-Hostname-Sperre aufheben
+  # CORS um die LAN-Origin ergänzen (falls Frontend direkt aufs Backend zeigt)
+  if [ -n "$LAN_IP" ]; then
+    export CORS_ORIGINS="${CORS_ORIGINS:+$CORS_ORIGINS,}http://$LAN_IP:5173,http://$LAN_IP:8000"
+  fi
+  echo "  Netzwerk    : aktiv (Bind $HOST)"
+  [ -n "$LAN_IP" ] && echo "  LAN-Adresse : http://$LAN_IP:5173"
+  echo ""
+fi
 
 # ── Voraussetzungen prüfen ───────────────────────────────────────────────────
 echo "╔══════════════════════════════════════════╗"
@@ -115,7 +141,11 @@ BACKEND_PID=$!
 echo "  ✓ Backend started (PID: $BACKEND_PID)"
 
 cd "$FRONTEND_DIR"
-npm run dev &
+if [ -n "$HOST" ]; then
+  npm run dev -- --host "$HOST" &
+else
+  npm run dev &
+fi
 FRONTEND_PID=$!
 echo "  ✓ Frontend started (PID: $FRONTEND_PID)"
 
@@ -124,6 +154,12 @@ echo "════════════════════════�
 echo "  Backend API:  http://localhost:8000"
 echo "  API Docs:     http://localhost:8000/docs"
 echo "  Frontend:     http://localhost:5173"
+if [ -n "$HOST" ] && [ -n "$LAN_IP" ]; then
+echo ""
+echo "  Im Netzwerk:  http://$LAN_IP:5173   (Frontend)"
+echo "                http://$LAN_IP:8000   (Backend API)"
+echo "  Hinweis: Beim ersten Zugriff ggf. macOS-Firewall-Freigabe für node/python bestätigen."
+fi
 echo ""
 echo "  Default Login: admin / admin123"
 echo "══════════════════════════════════════════"
