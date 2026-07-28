@@ -235,7 +235,7 @@ def _document_to_dict(doc: doorstop.Document) -> Dict:
         "prefix": doc.prefix,
         "path": str(doc.path),
         "sep": doc.sep,
-        "item_count": len(doc.items),
+        "item_count": len(_real_items(doc)),
         "parent": parent_prefix,
         "children": children,
         "property_values": _read_document_properties(str(doc.path)),
@@ -357,6 +357,29 @@ def delete_document(project_id: str, prefix: str) -> bool:
         return False
 
 
+# ─── Sidecar-Metadateien ausblenden ───────────────────────────────────────────
+#
+# Sidecar-Dateien wie <UID>.ai-quality.yml und <UID>.simulink.yml liegen im selben
+# Ordner wie die Anforderungen. doorstop durchsucht diesen Ordner rekursiv
+# (os.walk) und akzeptiert jede Datei, deren Namensstamm die (sehr permissive)
+# UID-Prüfung besteht – dadurch werden die Sidecars fälschlich als eigene Items
+# geladen (z. B. NEED001.ai-quality). Sie dürfen nirgends als Anforderung
+# auftauchen: nicht in der Liste, im Baum, in Zählungen oder Coverage/Metriken.
+# Erkennung erfolgt zentral am UID-Suffix; der Punkt vor dem Suffix ist literal,
+# unabhängig vom UID-Trennzeichen des Dokuments. Siehe Issue #17.
+SIDECAR_SUFFIXES = (".ai-quality", ".simulink")
+
+
+def _is_sidecar(uid) -> bool:
+    """True, wenn die UID zu einer Sidecar-Metadatei gehört (kein echtes Item)."""
+    return str(uid).lower().endswith(SIDECAR_SUFFIXES)
+
+
+def _real_items(doc) -> List:
+    """doc.items ohne Sidecar-Metadateien (echte Anforderungen)."""
+    return [item for item in doc.items if not _is_sidecar(item.uid)]
+
+
 def list_items(project_id: str, prefix: str) -> List[Dict]:
     project = get_project(project_id)
     if not project:
@@ -366,7 +389,7 @@ def list_items(project_id: str, prefix: str) -> List[Dict]:
     try:
         tree = _build_tree(path)
         doc = tree.find_document(prefix)
-        return [_item_to_dict(item) for item in sorted(doc.items, key=lambda i: str(i.level))]
+        return [_item_to_dict(item) for item in sorted(_real_items(doc), key=lambda i: str(i.level))]
     except doorstop.DoorstopError:
         return []
 
@@ -380,6 +403,8 @@ def get_item(project_id: str, uid: str) -> Optional[Dict]:
     try:
         tree = _build_tree(path)
         item = tree.find_item(uid)
+        if _is_sidecar(item.uid):
+            return None  # Sidecar-Metadatei ist keine abrufbare Anforderung
         return _item_to_dict(item)
     except doorstop.DoorstopError:
         return None
@@ -684,7 +709,7 @@ def get_traceability(project_id: str) -> Dict:
         all_uids = set()
 
         for doc in tree.documents:
-            for item in doc.items:
+            for item in _real_items(doc):
                 uid = str(item.uid)
                 all_uids.add(uid)
                 nodes.append({
@@ -697,7 +722,7 @@ def get_traceability(project_id: str) -> Dict:
                 })
 
         for doc in tree.documents:
-            for item in doc.items:
+            for item in _real_items(doc):
                 src_uid = str(item.uid)
                 for link in item.links:
                     target_uid = str(link)
@@ -727,7 +752,7 @@ def get_metrics(project_id: str) -> Dict:
         tree = _build_tree(path)
 
         for doc in tree.documents:
-            items = list(doc.items)
+            items = _real_items(doc)
             total = len(items)
             active = sum(1 for i in items if i.active)
             normative = sum(1 for i in items if i.normative)
