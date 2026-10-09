@@ -50,7 +50,7 @@ frontend/src/
     dashboard/   Projektübersicht
     help/        Hilfe und Workflow-Dokumentation
   shared/
-    api/         API-Client (später generiert)
+    api/         API-Client, gegen generierte OpenAPI-Typen (schema.d.ts) typisiert
     types/       gemeinsame Typen
     auth/        Login, Token, Rollen
     store/       Projektauswahl
@@ -109,8 +109,10 @@ Headless-CMS (Strapi, Contentful), Backstage und Grafana (Shell + Plugins).
 
 ## Umsetzungsschritte
 
-1. OpenAPI-Client generieren (npm-Skript `generate:api`), parallel zu `client.ts` einführen und
-   Aufrufe schrittweise umstellen; Endpunkte ohne Response-Modell im Backend ergänzen.
+1. ✅ API-Typen aus OpenAPI generieren (#27). Umgesetzt als reine Typgenerierung
+   (`openapi-typescript`); axios und die Funktionen in `client.ts` bleiben, sind aber gegen das
+   Schema typisiert. `shared/types` leitet sich aus den generierten Typen ab. `npm run check:api`
+   erkennt veraltete Typen. Offen: Response-Modelle und Literal-Typen im Backend (#28).
 2. ✅ Ordnerstruktur `features/` und `shared/` anlegen, Seiten und Komponenten verschieben (#25).
 3. ✅ Seiten mit `React.lazy` laden (#25). Ergebnis: beim Start 272 kB JS statt 1.858 kB;
    ProseMirror als eigener Chunk, keine Chunk-Größenwarnung mehr.

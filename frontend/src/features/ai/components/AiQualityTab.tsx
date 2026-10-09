@@ -40,8 +40,8 @@ const SEVERITY_ORDER: AiQualitySeverity[] = ['critical', 'high', 'medium', 'low'
 
 // ─── Score-Balken ────────────────────────────────────────────────────────────
 
-function ScoreBar({ label, value }: { label: string; value?: number }) {
-  if (value === undefined || value === null) return null;
+function ScoreBar({ label, value }: { label: string; value: number | null }) {
+  if (value == null) return null;
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs text-gray-500 w-24 shrink-0">{label}</span>
@@ -179,10 +179,10 @@ export default function AiQualityTab({ projectId, uid }: Props) {
         </div>
 
         {/* ── Kategorie-Scores ── */}
-        {(result.score.clarity !== undefined ||
-          result.score.testability !== undefined ||
-          result.score.completeness !== undefined ||
-          result.score.consistency !== undefined) && (
+        {(result.score.clarity != null ||
+          result.score.testability != null ||
+          result.score.completeness != null ||
+          result.score.consistency != null) && (
           <div className="space-y-1.5 p-3 bg-gray-50 rounded-lg border border-gray-100">
             <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Kategorien
