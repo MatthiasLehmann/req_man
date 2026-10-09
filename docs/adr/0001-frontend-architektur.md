@@ -42,22 +42,32 @@ Das Frontend bleibt vorerst **eine App**, wird aber nach Fachbereichen geglieder
 ```
 frontend/src/
   features/
-    editor/      Anforderungen, Dokumentstruktur, Linking
+    editor/      Anforderungen, Dokumentstruktur, Linking, Simulink-Tab
     review/      Review-Status, Validierung
     ai/          KI-Qualitätsanalyse
     trace/       Traceability, Matrix, Metriken
     admin/       Benutzer, Attribute
+    dashboard/   Projektübersicht
+    help/        Hilfe und Workflow-Dokumentation
   shared/
-    api/         generierter Client
-    ui/          Layout, MarkdownEditor, RequirementContent, gemeinsame Komponenten
+    api/         API-Client (später generiert)
+    types/       gemeinsame Typen
     auth/        Login, Token, Rollen
+    store/       Projektauswahl
+    layout/      Layout, Header, Sidebar
+    ui/          kleine gemeinsame Komponenten (HelpTooltip)
+    richtext/    TipTap-Editor, Anforderungsdarstellung, PlantUML
 ```
 
 Regeln:
 
-- Jedes Feature hat eigene Routen und wird per `React.lazy` nachgeladen (Code-Splitting).
-- Features importieren nur aus `shared/`, nicht aus anderen Features.
-- Was zwei Features brauchen, wandert nach `shared/`.
+- Jedes Feature hat eine `index.ts` als öffentliche API. Seiten werden dort per `React.lazy`
+  exportiert, sodass jede Seite ein eigener Chunk ist und nur ihre Bibliotheken nachlädt.
+- `shared/` importiert nichts aus `features/`.
+- Features importieren andere Features nur über deren `index.ts`, nie über tiefe Pfade.
+  Beispiel: Der Editor bindet `ValidationBadge` aus `review` und `AiQualityTab` aus `ai` ein.
+- Was mehrere Features brauchen und keinem fachlich gehört, wandert nach `shared/`.
+- Die Regeln prüft `npm run check:boundaries` (`frontend/scripts/check-boundaries.mjs`).
 
 ### 4. KI als eigener Client über einen MCP-Server
 
@@ -92,8 +102,8 @@ Headless-CMS (Strapi, Contentful), Backstage und Grafana (Shell + Plugins).
 **Negativ / Risiken**
 
 - Einmaliger Umbau: Dateien verschieben, Importe anpassen, `client.ts`-Aufrufe ersetzen.
-- Die Abhängigkeitsregel zwischen Features muss eingehalten werden (optional per ESLint-Regel
-  `import/no-restricted-paths` absichern).
+- Die Abhängigkeitsregeln müssen eingehalten werden; `npm run check:boundaries` prüft sie
+  (bewusst ohne ESLint, um keine weitere Toolchain einzuführen).
 - Der generierte Client ist nur so gut wie das OpenAPI-Schema: Endpunkte ohne Pydantic-Response-Modell
   liefern ungenaue Typen und müssen im Backend nachgeschärft werden.
 
@@ -101,9 +111,10 @@ Headless-CMS (Strapi, Contentful), Backstage und Grafana (Shell + Plugins).
 
 1. OpenAPI-Client generieren (npm-Skript `generate:api`), parallel zu `client.ts` einführen und
    Aufrufe schrittweise umstellen; Endpunkte ohne Response-Modell im Backend ergänzen.
-2. Ordnerstruktur `features/` und `shared/` anlegen, Seiten und Komponenten verschieben.
-3. Routen pro Feature mit `React.lazy` laden.
-4. Abhängigkeitsregel per ESLint absichern.
+2. ✅ Ordnerstruktur `features/` und `shared/` anlegen, Seiten und Komponenten verschieben (#25).
+3. ✅ Seiten mit `React.lazy` laden (#25). Ergebnis: beim Start 272 kB JS statt 1.858 kB;
+   ProseMirror als eigener Chunk, keine Chunk-Größenwarnung mehr.
+4. ✅ Abhängigkeitsregeln per Skript absichern (#25).
 5. MCP-Server-Prototyp mit lesenden Werkzeugen (Projekte, Dokumente, Items, Traces), danach
    vorschlagende Werkzeuge (Review-Kommentare, Qualitätsbewertung).
 

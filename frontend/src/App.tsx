@@ -1,16 +1,13 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuthStore } from './store/authStore';
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import RequirementsPage from './pages/RequirementsPage';
-import TraceabilityPage from './pages/TraceabilityPage';
-import MetricsPage from './pages/MetricsPage';
-import MatrixPage from './pages/MatrixPage';
-import LinkingPage from './pages/LinkingPage';
-import AdminPage from './pages/AdminPage';
-import HelpPage from './pages/HelpPage';
-import DocumentStructurePage from './pages/DocumentStructurePage';
-import Layout from './components/layout/Layout';
+import { useAuthStore } from './shared/auth/authStore';
+import LoginPage from './shared/auth/LoginPage';
+import Layout from './shared/layout/Layout';
+// Die Seiten der Features sind lazy – sie werden erst beim Aufruf der Route geladen.
+import { DashboardPage } from './features/dashboard';
+import { RequirementsPage, LinkingPage, DocumentStructurePage } from './features/editor';
+import { TraceabilityPage, MetricsPage, MatrixPage } from './features/trace';
+import { AdminPage } from './features/admin';
+import { HelpPage } from './features/help';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuthStore();
