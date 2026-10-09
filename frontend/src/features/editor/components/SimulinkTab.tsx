@@ -28,7 +28,7 @@ function LinkTypeBadge({ type }: { type: string }) {
 
 // ── Block-Karte ───────────────────────────────────────────────────────────────
 
-function openInVSCode(file: string, line?: number) {
+function openInVSCode(file: string, line: number | null) {
   const loc = line ? `${file}:${line}` : file;
   window.open(`vscode://file/${loc}`, '_self');
 }

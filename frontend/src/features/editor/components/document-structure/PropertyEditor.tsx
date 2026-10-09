@@ -7,7 +7,7 @@ interface Props {
   readOnly?: boolean;
 }
 
-const EMPTY_PROP: PropertyDefinition = { key: '', label: '', type: 'text' };
+const EMPTY_PROP: PropertyDefinition = { key: '', label: '', type: 'text', options: null };
 
 export default function PropertyEditor({ properties, onChange, readOnly }: Props) {
   const add = () => onChange([...properties, { ...EMPTY_PROP }]);

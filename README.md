@@ -86,7 +86,20 @@ nginx/       Reverse-Proxy-Konfiguration für Docker
 cd backend && .venv/bin/python -m pytest -q
 cd frontend && npx tsc --noEmit
 cd frontend && npm run check:boundaries   # Modulgrenzen zwischen features/ und shared/
+cd frontend && npm run check:api          # API-Typen passen zum Backend
 ```
+
+## API-Typen
+
+Die TypeScript-Typen der API werden aus dem OpenAPI-Schema des Backends erzeugt
+(`frontend/openapi.json`, `frontend/src/shared/api/schema.d.ts`). Nach jeder Änderung an
+Pydantic-Modellen oder Endpunkten im Backend:
+
+```bash
+cd frontend && npm run generate:api
+```
+
+Danach zeigt `npx tsc --noEmit` alle Stellen im Frontend, die an die Änderung angepasst werden müssen.
 
 ## Hinweise
 
