@@ -71,7 +71,8 @@ Ollama-Container als lokaler KI-Server mitgestartet. Persistente Daten liegen in
 
 ```
 backend/     FastAPI-App (main.py, routers/, Services für doorstop, KI, Git, Simulink)
-frontend/    React-App (src/pages, src/components, src/store)
+frontend/    React-App: src/features (editor, review, ai, trace, …) und src/shared,
+             siehe docs/adr/0001-frontend-architektur.md
 website/     Projekt-Landingpage (Astro)
 docs/        Konzepte und Workflows (Review/Validierung, Simulink, Sidecar-Metadateien)
 data/        Laufzeitdaten: SQLite-Datenbank, projects.json, attributes.yml
@@ -84,6 +85,7 @@ nginx/       Reverse-Proxy-Konfiguration für Docker
 ```bash
 cd backend && .venv/bin/python -m pytest -q
 cd frontend && npx tsc --noEmit
+cd frontend && npm run check:boundaries   # Modulgrenzen zwischen features/ und shared/
 ```
 
 ## Hinweise
