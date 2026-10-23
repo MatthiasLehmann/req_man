@@ -442,6 +442,40 @@ class TestProviders:
         monkeypatch.delenv("AI_MODEL", raising=False)
         assert aqs.resolve_model(None, {"model": "claude-sonnet-4-6"}) == "llama3.2"
 
+    def test_sampling_defaults_are_deterministic(self, monkeypatch):
+        monkeypatch.delenv("AI_TEMPERATURE", raising=False)
+        monkeypatch.delenv("AI_SEED", raising=False)
+        assert aqs.get_temperature() == 0.0
+        assert aqs.get_seed() == 42
+
+    def test_sampling_env_override(self, monkeypatch):
+        monkeypatch.setenv("AI_TEMPERATURE", "0.7")
+        monkeypatch.setenv("AI_SEED", "none")
+        assert aqs.get_temperature() == 0.7
+        assert aqs.get_seed() is None
+
+    def test_openai_provider_sends_temperature_and_seed(self, monkeypatch):
+        monkeypatch.delenv("AI_TEMPERATURE", raising=False)
+        monkeypatch.delenv("AI_SEED", raising=False)
+        calls = []
+
+        class FakeCompletions:
+            def create(self, **kwargs):
+                calls.append(kwargs)
+                msg = MagicMock()
+                msg.choices = [MagicMock()]
+                msg.choices[0].message.content = "{}"
+                return msg
+
+        provider = object.__new__(aqs.OpenAiCompatibleProvider)
+        provider.model = "llama3.2"
+        provider._client = MagicMock()
+        provider._client.chat.completions = FakeCompletions()
+        provider.complete("sys", "user")
+
+        assert calls[0]["temperature"] == 0.0
+        assert calls[0]["seed"] == 42
+
 
 # ─── QualityAnalyzer Tests (mit MockProvider) ─────────────────────────────────
 

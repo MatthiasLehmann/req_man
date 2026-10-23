@@ -62,6 +62,11 @@ DEFAULT_MODELS: Dict[str, str] = {
 DEFAULT_PROFILE = "standard"
 REQUEST_TIMEOUT = 60.0
 
+# Sampling: temperature 0 und fester Seed, damit gleiche Eingaben möglichst
+# gleiche Ergebnisse liefern (L10 in #33). Per Umgebungsvariable überschreibbar.
+DEFAULT_TEMPERATURE = 0.0
+DEFAULT_SEED = 42
+
 PROFILES_DIR = Path(__file__).parent.parent / "data" / "ai_quality_profiles"
 
 
@@ -72,6 +77,25 @@ def get_default_model() -> str:
     if env_model:
         return env_model
     return DEFAULT_MODELS.get(provider, DEFAULT_MODELS["anthropic"])
+
+
+def get_temperature() -> float:
+    """Sampling-Temperatur aus AI_TEMPERATURE, Standard 0 (reproduzierbar)."""
+    try:
+        return float(os.environ.get("AI_TEMPERATURE", DEFAULT_TEMPERATURE))
+    except ValueError:
+        return DEFAULT_TEMPERATURE
+
+
+def get_seed() -> Optional[int]:
+    """Seed aus AI_SEED, Standard 42. AI_SEED=none schaltet ihn ab."""
+    raw = os.environ.get("AI_SEED", str(DEFAULT_SEED))
+    if raw.lower() in ("", "none", "off"):
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return DEFAULT_SEED
 
 
 # ─── Pydantic-Modelle ─────────────────────────────────────────────────────────
@@ -143,6 +167,8 @@ class AnthropicProvider:
         message = self._client.messages.create(
             model=model or self.model,
             max_tokens=1024,
+            # Anthropic kennt keinen Seed, nur die Temperatur
+            temperature=get_temperature(),
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
             timeout=REQUEST_TIMEOUT,
@@ -192,6 +218,10 @@ class OpenAiCompatibleProvider:
 
     def complete(self, system_prompt: str, user_prompt: str, model: Optional[str] = None) -> str:
         used_model = model or self.model
+        sampling: Dict[str, Any] = {"temperature": get_temperature()}
+        seed = get_seed()
+        if seed is not None:
+            sampling["seed"] = seed
         try:
             # response_format erzwingt valides JSON (Ollama + OpenAI unterstützen das)
             response = self._client.chat.completions.create(
@@ -202,9 +232,10 @@ class OpenAiCompatibleProvider:
                 ],
                 max_tokens=1024,
                 response_format={"type": "json_object"},
+                **sampling,
             )
         except Exception:
-            # Fallback für Provider die response_format nicht unterstützen
+            # Fallback für Provider die response_format oder seed nicht unterstützen
             response = self._client.chat.completions.create(
                 model=used_model,
                 messages=[
@@ -212,6 +243,7 @@ class OpenAiCompatibleProvider:
                     {"role": "user", "content": user_prompt},
                 ],
                 max_tokens=1024,
+                temperature=sampling["temperature"],
             )
         return response.choices[0].message.content or "{}"
 
