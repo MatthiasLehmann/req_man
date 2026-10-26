@@ -289,7 +289,9 @@ export interface paths {
         /**
          * Delete Project
          * @description Entfernt ein Projekt aus der Registry.
-         *     Mit ?delete_files=true wird das Verzeichnis physisch gelöscht.
+         *     Mit ?delete_files=true werden zusätzlich die von ReqMan angelegten Dateien
+         *     gelöscht (Dokumente, Anforderungen, Sidecars, Validierungsberichte).
+         *     Fremde Dateien im Projektordner bleiben erhalten.
          */
         delete: operations["delete_project_api_projects__project_id__delete"];
         options?: never;

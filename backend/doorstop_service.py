@@ -98,6 +98,25 @@ def get_project(project_id: str) -> Optional[Dict]:
     return next((p for p in projects if p["id"] == project_id), None)
 
 
+# ─── Geschützte Speicherpfade ─────────────────────────────────────────────────
+#
+# Ein Projektordner gehört ReqMan (Git-Repo, Dokumente, Validierungen). Laufwerks-
+# wurzeln und die Standardordner des Benutzers enthalten fast immer fremde Dateien
+# und dürfen deshalb nie selbst Projektordner sein – Unterordner davon schon.
+_PROTECTED_USER_DIRS = ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos", "OneDrive")
+
+
+def _check_project_path(path: str) -> None:
+    norm = os.path.normcase(os.path.abspath(path))
+    home = Path.home()
+    protected = {home, Path(PROJECTS_ROOT), *(home / d for d in _PROTECTED_USER_DIRS)}
+    if os.path.dirname(norm) == norm or norm in {os.path.normcase(os.path.abspath(p)) for p in protected}:
+        raise ValueError(
+            f"'{path}' kann kein Projektordner sein (Laufwerk, Benutzer- oder Systemordner). "
+            "Bitte einen eigenen Unterordner angeben."
+        )
+
+
 def create_project(name: str, description: str = "", path: str = "") -> Dict:
     """Legt ein neues, leeres Doorstop-Projekt an dem angegebenen Pfad an."""
     import uuid
@@ -107,6 +126,7 @@ def create_project(name: str, description: str = "", path: str = "") -> Dict:
         raise ValueError("Ein Speicherpfad ist erforderlich.")
 
     path = os.path.abspath(path)
+    _check_project_path(path)
     os.makedirs(path, exist_ok=True)
 
     # Git-Repo initialisieren (idempotent – existiert es schon, wird es genutzt)
@@ -137,6 +157,7 @@ def import_project(path: str, name: Optional[str] = None, description: str = "")
     path = os.path.abspath(path)
     if not os.path.isdir(path):
         raise ValueError(f"Verzeichnis nicht gefunden: {path}")
+    _check_project_path(path)
 
     # Prüfen ob das Verzeichnis ein gültiges Doorstop-Projekt enthält
     try:
@@ -168,13 +189,67 @@ def import_project(path: str, name: Optional[str] = None, description: str = "")
     return project
 
 
-def delete_project(project_id: str, delete_files: bool = False) -> bool:
+def _rmdir_if_empty(path: Path) -> None:
+    try:
+        path.rmdir()
+    except OSError:
+        pass  # nicht leer oder nicht vorhanden – bleibt stehen
+
+
+def _remove_document_files(doc: doorstop.Document) -> None:
     """
-    Entfernt ein Projekt aus der Registry.
-    Mit delete_files=True wird auch das Verzeichnis physisch gelöscht.
+    Löscht die Dateien eines Dokuments, die ReqMan/doorstop selbst anlegt:
+    Items, Sidecars (<UID>.ai-quality.yml, <UID>.simulink.yml), .doorstop.yml und
+    assets/. Andere Dateien im Dokumentordner bleiben erhalten.
     """
     import shutil
 
+    doc_dir = Path(str(doc.path))
+    for item in doc.items:  # enthält auch die Sidecars, siehe _is_sidecar
+        Path(str(item.path)).unlink(missing_ok=True)
+    (doc_dir / ".doorstop.yml").unlink(missing_ok=True)
+    assets = doc_dir / doorstop.Document.ASSETS
+    if assets.is_dir():
+        shutil.rmtree(assets)
+    _rmdir_if_empty(doc_dir)
+
+
+def _remove_project_files(path: str) -> None:
+    """
+    Löscht die von ReqMan angelegten Dateien eines Projekts. Fremde Dateien im
+    Projektordner bleiben erhalten. Nur wenn danach außer .git/.gitignore nichts
+    mehr übrig ist, wird der ganze Ordner entfernt.
+    """
+    import shutil
+
+    root = Path(path)
+    if not root.is_dir():
+        return
+
+    try:
+        documents = list(_build_tree(path).documents)
+    except doorstop.DoorstopError:
+        documents = []
+    # Tiefste Dokumente zuerst, damit verschachtelte Elternordner danach leer sind
+    for doc in sorted(documents, key=lambda d: len(Path(str(d.path)).parts), reverse=True):
+        _remove_document_files(doc)
+
+    validation = root / "validation"
+    if validation.is_dir():
+        for report in validation.glob("*-val-*.yml"):
+            report.unlink()
+        _rmdir_if_empty(validation)
+
+    if all(p.name in (".git", ".gitignore") for p in root.iterdir()):
+        shutil.rmtree(root)
+
+
+def delete_project(project_id: str, delete_files: bool = False) -> bool:
+    """
+    Entfernt ein Projekt aus der Registry.
+    Mit delete_files=True werden zusätzlich die von ReqMan angelegten Dateien
+    gelöscht (siehe _remove_project_files) – nie fremde Dateien im Projektordner.
+    """
     config = _load_projects_config()
     projects = config.get("projects", [])
     project = next((p for p in projects if p["id"] == project_id), None)
@@ -183,9 +258,7 @@ def delete_project(project_id: str, delete_files: bool = False) -> bool:
         return False
 
     if delete_files:
-        path = project["path"]
-        if os.path.isdir(path):
-            shutil.rmtree(path)
+        _remove_project_files(project["path"])
 
     config["projects"] = [p for p in projects if p["id"] != project_id]
     _save_projects_config(config)
@@ -350,8 +423,7 @@ def delete_document(project_id: str, prefix: str) -> bool:
     try:
         tree = _build_tree(path)
         doc = tree.find_document(prefix)
-        import shutil
-        shutil.rmtree(str(doc.path))
+        _remove_document_files(doc)
         return True
     except (doorstop.DoorstopError, FileNotFoundError):
         return False
