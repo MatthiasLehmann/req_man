@@ -2,7 +2,8 @@
 Tests für doorstop_service.py
 
 Fokus: Sidecar-Metadateien (<UID>.ai-quality.yml, <UID>.simulink.yml) dürfen nicht
-als eigene Anforderungen auftauchen (Issue #17).
+als eigene Anforderungen auftauchen (Issue #17). Projekte löschen darf nur von
+ReqMan angelegte Dateien entfernen (Issue #34).
 
 Ausführen:
     cd backend && .venv/bin/pytest test_doorstop_service.py -v
@@ -75,3 +76,83 @@ class TestRealItemsFiltersSidecars:
         # … _real_items blendet die Sidecars aus.
         real_uids = [str(i.uid) for i in ds._real_items(doc)]
         assert real_uids == [uid]
+
+
+# ─── Projekte anlegen und löschen ────────────────────────────────────────────
+
+
+@pytest.fixture
+def registry(tmp_path, monkeypatch):
+    """Eigene Projekt-Registry je Test."""
+    monkeypatch.setattr(ds, "PROJECTS_CONFIG", str(tmp_path / "projects.json"))
+    return tmp_path
+
+
+def _project_with_item(path: Path, prefix: str = "REQ") -> str:
+    """Legt ein Projekt mit einem Dokument, einem Item, Sidecar und Validierungsbericht an."""
+    project = ds.create_project("Test", path=str(path))
+    ds.create_document(project["id"], prefix)
+    doc = doorstop.Document(str(path / prefix), root=str(path))
+    uid = str(doc.add_item().uid)
+    (path / prefix / f"{uid}.ai-quality.yml").write_text(f"requirement_uid: {uid}\n", encoding="utf-8")
+    (path / "validation").mkdir(exist_ok=True)
+    (path / "validation" / f"{uid}-val-20261026-001.yml").write_text("status: APPROVED\n", encoding="utf-8")
+    return project["id"]
+
+
+class TestDeleteProject:
+    def test_project_directly_on_desktop_keeps_foreign_files(self, registry):
+        desktop = registry / "Desktop"
+        (desktop / "Thesis").mkdir(parents=True)
+        (desktop / "Thesis" / "kapitel1.docx").write_text("x", encoding="utf-8")
+        (desktop / "notizen.txt").write_text("x", encoding="utf-8")
+        project_id = _project_with_item(desktop)
+
+        assert ds.delete_project(project_id, delete_files=True)
+
+        assert (desktop / "Thesis" / "kapitel1.docx").exists()
+        assert (desktop / "notizen.txt").exists()
+        assert not (desktop / "REQ").exists()
+        assert not (desktop / "validation").exists()
+        assert ds.get_project(project_id) is None
+
+    def test_keeps_nested_project(self, registry):
+        outer, inner = registry / "Desktop", registry / "Desktop" / "reqs"
+        outer_id = _project_with_item(outer, "REQ")
+        inner_id = _project_with_item(inner, "SYS")
+
+        assert ds.delete_project(outer_id, delete_files=True)
+
+        assert not (outer / "REQ").exists()
+        assert (inner / "SYS" / ".doorstop.yml").exists()
+        assert len(list((inner / "SYS").glob("SYS*.yml"))) == 2  # Item + Sidecar
+        assert (inner / "validation").exists()
+        assert ds.get_project(inner_id) is not None
+
+    def test_removes_pure_project_folder(self, registry):
+        path = registry / "projekte" / "demo"
+        project_id = _project_with_item(path)
+
+        assert ds.delete_project(project_id, delete_files=True)
+
+        assert not path.exists()
+
+    def test_without_delete_files_touches_nothing(self, registry):
+        path = registry / "projekte" / "demo"
+        project_id = _project_with_item(path)
+
+        assert ds.delete_project(project_id)
+
+        assert (path / "REQ" / ".doorstop.yml").exists()
+        assert ds.get_project(project_id) is None
+
+    def test_delete_document_keeps_foreign_files(self, registry):
+        path = registry / "projekte" / "demo"
+        project_id = _project_with_item(path)
+        (path / "REQ" / "skizze.png").write_bytes(b"png")
+
+        assert ds.delete_document(project_id, "REQ")
+
+        assert (path / "REQ" / "skizze.png").exists()
+        assert not (path / "REQ" / ".doorstop.yml").exists()
+        assert list((path / "REQ").glob("*.yml")) == []
