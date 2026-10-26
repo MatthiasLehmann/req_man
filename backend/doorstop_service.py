@@ -98,25 +98,6 @@ def get_project(project_id: str) -> Optional[Dict]:
     return next((p for p in projects if p["id"] == project_id), None)
 
 
-# ─── Geschützte Speicherpfade ─────────────────────────────────────────────────
-#
-# Ein Projektordner gehört ReqMan (Git-Repo, Dokumente, Validierungen). Laufwerks-
-# wurzeln und die Standardordner des Benutzers enthalten fast immer fremde Dateien
-# und dürfen deshalb nie selbst Projektordner sein – Unterordner davon schon.
-_PROTECTED_USER_DIRS = ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos", "OneDrive")
-
-
-def _check_project_path(path: str) -> None:
-    norm = os.path.normcase(os.path.abspath(path))
-    home = Path.home()
-    protected = {home, Path(PROJECTS_ROOT), *(home / d for d in _PROTECTED_USER_DIRS)}
-    if os.path.dirname(norm) == norm or norm in {os.path.normcase(os.path.abspath(p)) for p in protected}:
-        raise ValueError(
-            f"'{path}' kann kein Projektordner sein (Laufwerk, Benutzer- oder Systemordner). "
-            "Bitte einen eigenen Unterordner angeben."
-        )
-
-
 def create_project(name: str, description: str = "", path: str = "") -> Dict:
     """Legt ein neues, leeres Doorstop-Projekt an dem angegebenen Pfad an."""
     import uuid
@@ -126,7 +107,6 @@ def create_project(name: str, description: str = "", path: str = "") -> Dict:
         raise ValueError("Ein Speicherpfad ist erforderlich.")
 
     path = os.path.abspath(path)
-    _check_project_path(path)
     os.makedirs(path, exist_ok=True)
 
     # Git-Repo initialisieren (idempotent – existiert es schon, wird es genutzt)
@@ -157,7 +137,6 @@ def import_project(path: str, name: Optional[str] = None, description: str = "")
     path = os.path.abspath(path)
     if not os.path.isdir(path):
         raise ValueError(f"Verzeichnis nicht gefunden: {path}")
-    _check_project_path(path)
 
     # Prüfen ob das Verzeichnis ein gültiges Doorstop-Projekt enthält
     try:
@@ -214,11 +193,23 @@ def _remove_document_files(doc: doorstop.Document) -> None:
     _rmdir_if_empty(doc_dir)
 
 
-def _remove_project_files(path: str) -> None:
+def _is_within(path: Path, folder: Path) -> bool:
+    try:
+        path.resolve().relative_to(folder.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _remove_project_files(path: str, other_project_paths: List[str]) -> None:
     """
     Löscht die von ReqMan angelegten Dateien eines Projekts. Fremde Dateien im
     Projektordner bleiben erhalten. Nur wenn danach außer .git/.gitignore nichts
     mehr übrig ist, wird der ganze Ordner entfernt.
+
+    Projekte dürfen überall liegen, auch ineinander (z. B. eins auf dem Desktop,
+    eins in einem Unterordner davon). doorstop findet dann auch die Dokumente des
+    inneren Projekts – die gehören diesem Projekt nicht und bleiben erhalten.
     """
     import shutil
 
@@ -226,12 +217,29 @@ def _remove_project_files(path: str) -> None:
     if not root.is_dir():
         return
 
-    try:
-        documents = list(_build_tree(path).documents)
-    except doorstop.DoorstopError:
-        documents = []
+    nested = {
+        os.path.normcase(str(Path(p).resolve()))
+        for p in other_project_paths
+        if _is_within(Path(p), root) and Path(p).resolve() != root.resolve()
+    }
+
+    # Dokumente direkt über ihre .doorstop.yml suchen statt über doorstop.build:
+    # Mit einem inneren Projekt gäbe es zwei Wurzeldokumente, der Baum ließe sich
+    # nicht bauen und es würde gar nichts gelöscht.
+    doc_dirs = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [
+            d for d in dirnames
+            if not d.startswith(".") and os.path.normcase(str(Path(dirpath, d).resolve())) not in nested
+        ]
+        if ".doorstop.yml" in filenames:
+            doc_dirs.append(dirpath)
     # Tiefste Dokumente zuerst, damit verschachtelte Elternordner danach leer sind
-    for doc in sorted(documents, key=lambda d: len(Path(str(d.path)).parts), reverse=True):
+    for doc_dir in sorted(doc_dirs, key=lambda d: len(Path(d).parts), reverse=True):
+        try:
+            doc = doorstop.Document(doc_dir, root=str(root))
+        except doorstop.DoorstopError:
+            continue  # kein gültiges Dokument – Dateien nicht anfassen
         _remove_document_files(doc)
 
     validation = root / "validation"
@@ -258,7 +266,7 @@ def delete_project(project_id: str, delete_files: bool = False) -> bool:
         return False
 
     if delete_files:
-        _remove_project_files(project["path"])
+        _remove_project_files(project["path"], [p["path"] for p in projects if p["id"] != project_id])
 
     config["projects"] = [p for p in projects if p["id"] != project_id]
     _save_projects_config(config)

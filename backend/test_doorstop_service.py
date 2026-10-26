@@ -83,39 +83,51 @@ class TestRealItemsFiltersSidecars:
 
 @pytest.fixture
 def registry(tmp_path, monkeypatch):
-    """Eigene Projekt-Registry und eigenes Home-Verzeichnis je Test."""
+    """Eigene Projekt-Registry je Test."""
     monkeypatch.setattr(ds, "PROJECTS_CONFIG", str(tmp_path / "projects.json"))
-    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "home"))
     return tmp_path
 
 
-def _project_with_item(path: Path) -> str:
-    """Legt ein Projekt mit Dokument REQ, einem Item, Sidecar und Validierungsbericht an."""
+def _project_with_item(path: Path, prefix: str = "REQ") -> str:
+    """Legt ein Projekt mit einem Dokument, einem Item, Sidecar und Validierungsbericht an."""
     project = ds.create_project("Test", path=str(path))
-    ds.create_document(project["id"], "REQ")
-    doc = doorstop.build(root=str(path)).find_document("REQ")
+    ds.create_document(project["id"], prefix)
+    doc = doorstop.Document(str(path / prefix), root=str(path))
     uid = str(doc.add_item().uid)
-    (path / "REQ" / f"{uid}.ai-quality.yml").write_text(f"requirement_uid: {uid}\n", encoding="utf-8")
-    (path / "validation").mkdir()
+    (path / prefix / f"{uid}.ai-quality.yml").write_text(f"requirement_uid: {uid}\n", encoding="utf-8")
+    (path / "validation").mkdir(exist_ok=True)
     (path / "validation" / f"{uid}-val-20261026-001.yml").write_text("status: APPROVED\n", encoding="utf-8")
     return project["id"]
 
 
 class TestDeleteProject:
-    def test_keeps_foreign_files(self, registry):
-        path = registry / "home" / "Desktop" / "arbeit"
-        (path / "Thesis").mkdir(parents=True)
-        (path / "Thesis" / "kapitel1.docx").write_text("x", encoding="utf-8")
-        (path / "notizen.txt").write_text("x", encoding="utf-8")
-        project_id = _project_with_item(path)
+    def test_project_directly_on_desktop_keeps_foreign_files(self, registry):
+        desktop = registry / "Desktop"
+        (desktop / "Thesis").mkdir(parents=True)
+        (desktop / "Thesis" / "kapitel1.docx").write_text("x", encoding="utf-8")
+        (desktop / "notizen.txt").write_text("x", encoding="utf-8")
+        project_id = _project_with_item(desktop)
 
         assert ds.delete_project(project_id, delete_files=True)
 
-        assert (path / "Thesis" / "kapitel1.docx").exists()
-        assert (path / "notizen.txt").exists()
-        assert not (path / "REQ").exists()
-        assert not (path / "validation").exists()
+        assert (desktop / "Thesis" / "kapitel1.docx").exists()
+        assert (desktop / "notizen.txt").exists()
+        assert not (desktop / "REQ").exists()
+        assert not (desktop / "validation").exists()
         assert ds.get_project(project_id) is None
+
+    def test_keeps_nested_project(self, registry):
+        outer, inner = registry / "Desktop", registry / "Desktop" / "reqs"
+        outer_id = _project_with_item(outer, "REQ")
+        inner_id = _project_with_item(inner, "SYS")
+
+        assert ds.delete_project(outer_id, delete_files=True)
+
+        assert not (outer / "REQ").exists()
+        assert (inner / "SYS" / ".doorstop.yml").exists()
+        assert len(list((inner / "SYS").glob("SYS*.yml"))) == 2  # Item + Sidecar
+        assert (inner / "validation").exists()
+        assert ds.get_project(inner_id) is not None
 
     def test_removes_pure_project_folder(self, registry):
         path = registry / "projekte" / "demo"
@@ -144,28 +156,3 @@ class TestDeleteProject:
         assert (path / "REQ" / "skizze.png").exists()
         assert not (path / "REQ" / ".doorstop.yml").exists()
         assert list((path / "REQ").glob("*.yml")) == []
-
-
-class TestProtectedProjectPaths:
-    @pytest.mark.parametrize("sub", ["", "Desktop", "Documents", "Downloads", "OneDrive"])
-    def test_create_rejects_user_folders(self, registry, sub):
-        path = registry / "home" / sub
-        path.mkdir(parents=True, exist_ok=True)
-        with pytest.raises(ValueError):
-            ds.create_project("Test", path=str(path))
-        assert not (path / ".git").exists()
-
-    def test_create_rejects_drive_root(self, registry):
-        with pytest.raises(ValueError):
-            ds.create_project("Test", path=os.path.abspath(os.sep))
-
-    def test_create_allows_subfolder_of_desktop(self, registry):
-        project = ds.create_project("Test", path=str(registry / "home" / "Desktop" / "reqs"))
-        assert ds.get_project(project["id"]) is not None
-
-    def test_import_rejects_user_folder(self, registry):
-        path = registry / "home" / "Desktop"
-        path.mkdir(parents=True)
-        doorstop.build(root=str(path)).create_document(str(path / "REQ"), "REQ")
-        with pytest.raises(ValueError):
-            ds.import_project(str(path))
