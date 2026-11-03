@@ -90,9 +90,11 @@ class MockProvider:
     def __init__(self, response: str = SAMPLE_JSON_RESPONSE):
         self.response = response
         self.calls: list = []
+        self.models: list = []
 
-    def complete(self, system_prompt: str, user_prompt: str) -> str:
+    def complete(self, system_prompt: str, user_prompt: str, model: str | None = None) -> str:
         self.calls.append((system_prompt, user_prompt))
+        self.models.append(model)
         return self.response
 
 
@@ -422,6 +424,23 @@ class TestProviders:
         assert aqs._model_matches_provider("gpt-4o-mini", "anthropic") is False
         assert aqs._model_matches_provider("gpt-4o-mini", "openai") is True
         assert aqs._model_matches_provider("llama3.2", "ollama") is True
+        # Profil-Standard "claude-sonnet-4-6" kennt ein lokaler Ollama-Server nicht
+        assert aqs._model_matches_provider("claude-sonnet-4-6", "ollama") is False
+        assert aqs._model_matches_provider("gpt-4o-mini", "ollama") is False
+
+    def test_resolve_model_priority(self, monkeypatch):
+        profile = {"model": "claude-sonnet-4-6"}
+        monkeypatch.setenv("AI_PROVIDER", "anthropic")
+        monkeypatch.delenv("AI_MODEL", raising=False)
+        assert aqs.resolve_model("claude-opus-x", profile) == "claude-opus-x"
+        assert aqs.resolve_model(None, profile) == "claude-sonnet-4-6"
+        monkeypatch.setenv("AI_MODEL", "claude-haiku-x")
+        assert aqs.resolve_model(None, profile) == "claude-haiku-x"
+
+    def test_resolve_model_ollama_ignores_claude_profile(self, monkeypatch):
+        monkeypatch.setenv("AI_PROVIDER", "ollama")
+        monkeypatch.delenv("AI_MODEL", raising=False)
+        assert aqs.resolve_model(None, {"model": "claude-sonnet-4-6"}) == "llama3.2"
 
 
 # ─── QualityAnalyzer Tests (mit MockProvider) ─────────────────────────────────
@@ -480,6 +499,26 @@ class TestQualityAnalyzer:
 
         assert result.score.overall == 26  # (20+5+30+50)/4 = 26.25 → 26
         assert len(result.issues) == 2
+
+    @patch("doorstop_service.get_item")
+    @patch("doorstop_service.get_project")
+    @patch("ai_quality_service.save_quality_result")
+    def test_analyze_model_used_matches_called_model(
+        self, mock_save, mock_get_project, mock_get_item, monkeypatch
+    ):
+        """Regression: model_used zeigte das Profil-Modell, obwohl Ollama antwortete."""
+        import asyncio
+        monkeypatch.setenv("AI_PROVIDER", "ollama")
+        monkeypatch.setenv("AI_MODEL", "llama3.2")
+        mock_get_item.return_value = SAMPLE_ITEM
+        mock_get_project.return_value = {"id": "proj1", "path": "/tmp/proj"}
+
+        mock_provider = MockProvider(SAMPLE_JSON_RESPONSE)
+        analyzer = aqs.QualityAnalyzer(provider=mock_provider)
+        result = asyncio.run(analyzer.analyze("proj1", "SRS001", profile_name="standard"))
+
+        assert mock_provider.models == ["llama3.2"]
+        assert result.model_used == "llama3.2"
 
 
 # ─── Pydantic-Modell-Validierung ─────────────────────────────────────────────

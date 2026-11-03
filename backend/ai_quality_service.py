@@ -113,8 +113,11 @@ class AiQualityRequest(BaseModel):
 class LlmProvider(Protocol):
     """Minimales Protokoll: jeder Provider implementiert genau diese Methode."""
 
-    def complete(self, system_prompt: str, user_prompt: str) -> str:
-        """Sendet die Prompts an das LLM und gibt den Antwort-Text zurück."""
+    def complete(self, system_prompt: str, user_prompt: str, model: Optional[str] = None) -> str:
+        """Sendet die Prompts an das LLM und gibt den Antwort-Text zurück.
+
+        ``model`` überschreibt das beim Erzeugen gesetzte Modell für diesen Aufruf.
+        """
         ...
 
 
@@ -136,9 +139,9 @@ class AnthropicProvider:
         self.model = model
         self._client = _anthropic.Anthropic(api_key=api_key)
 
-    def complete(self, system_prompt: str, user_prompt: str) -> str:
+    def complete(self, system_prompt: str, user_prompt: str, model: Optional[str] = None) -> str:
         message = self._client.messages.create(
-            model=self.model,
+            model=model or self.model,
             max_tokens=1024,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
@@ -187,11 +190,12 @@ class OpenAiCompatibleProvider:
             timeout=REQUEST_TIMEOUT,
         )
 
-    def complete(self, system_prompt: str, user_prompt: str) -> str:
+    def complete(self, system_prompt: str, user_prompt: str, model: Optional[str] = None) -> str:
+        used_model = model or self.model
         try:
             # response_format erzwingt valides JSON (Ollama + OpenAI unterstützen das)
             response = self._client.chat.completions.create(
-                model=self.model,
+                model=used_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
@@ -202,7 +206,7 @@ class OpenAiCompatibleProvider:
         except Exception:
             # Fallback für Provider die response_format nicht unterstützen
             response = self._client.chat.completions.create(
-                model=self.model,
+                model=used_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
@@ -563,42 +567,56 @@ class QualityAnalyzer:
                 f"Anforderungstext zu kurz ({len(text)} Zeichen). Mindestens 10 Zeichen erforderlich."
             )
 
-        # Profil laden; Modell: Anfrage > Profil > Provider-Standard
         profile = load_profile(profile_name)
-        if model:
-            used_model = model
-        elif profile.get("model"):
-            # Profil-Modell nur verwenden wenn es zum konfigurierten Provider passt
-            # (Anthropic-Modelle beginnen mit "claude-", OpenAI mit "gpt-" usw.)
-            provider_name = os.environ.get("AI_PROVIDER", DEFAULT_PROVIDER).lower()
-            profile_model = profile["model"]
-            if _model_matches_provider(profile_model, provider_name):
-                used_model = profile_model
-            else:
-                used_model = get_default_model()
-        else:
-            used_model = get_default_model()
+        used_model = resolve_model(model, profile)
 
         system_prompt = self._prompt_builder.build_system_prompt(profile)
         user_prompt = self._prompt_builder.build_user_prompt(item, profile)
 
-        # LLM aufrufen (synchron – im FastAPI-Kontext per run_in_executor)
-        raw = self._provider.complete(system_prompt, user_prompt)
+        # LLM aufrufen (synchron – im FastAPI-Kontext per run_in_executor).
+        # Das Modell wird explizit übergeben, damit model_used im Ergebnis
+        # immer dem tatsächlich angefragten Modell entspricht.
+        raw = self._provider.complete(system_prompt, user_prompt, model=used_model)
         result = self._parser.parse(raw, uid, used_model, profile_name)
 
         save_quality_result(project_id, uid, result)
         return result
 
 
+def resolve_model(requested: Optional[str], profile: Dict[str, Any]) -> str:
+    """Bestimmt das Modell für eine Analyse.
+
+    Reihenfolge: Anfrage > AI_MODEL (Startkonfiguration) > Profil > Provider-Standard.
+    AI_MODEL steht vor dem Profil, damit z. B. ``start.sh --model`` nicht von
+    einem Profil-Modell überschrieben wird.
+    """
+    if requested:
+        return requested
+    env_model = os.environ.get("AI_MODEL")
+    if env_model:
+        return env_model
+    profile_model = profile.get("model")
+    provider_name = os.environ.get("AI_PROVIDER", DEFAULT_PROVIDER).lower()
+    if profile_model and _model_matches_provider(profile_model, provider_name):
+        return profile_model
+    return get_default_model()
+
+
+_ANTHROPIC_PREFIXES = ("claude",)
+_OPENAI_PREFIXES = ("gpt-", "o1", "o3", "o4")
+
+
 def _model_matches_provider(model_name: str, provider: str) -> bool:
     """Prüft ob ein Modellname zum konfigurierten Provider passt."""
     model_lower = model_name.lower()
     if provider == "anthropic":
-        return model_lower.startswith("claude")
+        return model_lower.startswith(_ANTHROPIC_PREFIXES)
     if provider == "openai":
-        return model_lower.startswith(("gpt-", "o1", "o3", "o4"))
-    # Für ollama/openai_compatible: immer akzeptieren (Nutzer weiß was er tut)
-    return True
+        return model_lower.startswith(_OPENAI_PREFIXES)
+    # Für ollama/openai_compatible: alles akzeptieren außer Modellen, die
+    # erkennbar zu Anthropic oder OpenAI gehören (z. B. Profil-Standard
+    # "claude-sonnet-4-6" – den kennt ein lokaler Ollama-Server nicht)
+    return not model_lower.startswith(_ANTHROPIC_PREFIXES + _OPENAI_PREFIXES)
 
 
 # ─── Modul-Level Singleton (lazy) ─────────────────────────────────────────────
