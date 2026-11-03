@@ -53,7 +53,9 @@ async def delete_project(
 ):
     """
     Entfernt ein Projekt aus der Registry.
-    Mit ?delete_files=true wird das Verzeichnis physisch gelöscht.
+    Mit ?delete_files=true werden zusätzlich die von ReqMan angelegten Dateien
+    gelöscht (Dokumente, Anforderungen, Sidecars, Validierungsberichte).
+    Fremde Dateien im Projektordner bleiben erhalten.
     """
     ok = ds.delete_project(project_id, delete_files=delete_files)
     if not ok:

@@ -3100,7 +3100,7 @@
     },
     "/api/projects/{project_id}": {
       "delete": {
-        "description": "Entfernt ein Projekt aus der Registry.\nMit ?delete_files=true wird das Verzeichnis physisch gelöscht.",
+        "description": "Entfernt ein Projekt aus der Registry.\nMit ?delete_files=true werden zusätzlich die von ReqMan angelegten Dateien\ngelöscht (Dokumente, Anforderungen, Sidecars, Validierungsberichte).\nFremde Dateien im Projektordner bleiben erhalten.",
         "operationId": "delete_project_api_projects__project_id__delete",
         "parameters": [
           {

@@ -343,11 +343,15 @@ function DeleteModal({ project, onClose }: { project: Project; onClose: () => vo
             className="mt-0.5 accent-red-600"
           />
           <span className="text-sm text-red-700">
-            <strong>Dateien dauerhaft vom Dateisystem löschen</strong>
+            <strong>Projektdateien dauerhaft vom Dateisystem löschen</strong>
             <br />
             <span className="font-mono text-xs break-all">{project.path}</span>
             <br />
-            <span className="text-xs opacity-75 mt-0.5 block">Dieser Vorgang kann nicht rückgängig gemacht werden.</span>
+            <span className="text-xs opacity-75 mt-0.5 block">
+              Gelöscht werden nur von ReqMan angelegte Dateien (Dokumente, Anforderungen,
+              Validierungen). Andere Dateien im Ordner bleiben erhalten.
+              Dieser Vorgang kann nicht rückgängig gemacht werden.
+            </span>
           </span>
         </label>
 
