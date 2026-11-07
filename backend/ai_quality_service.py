@@ -67,6 +67,10 @@ REQUEST_TIMEOUT = 60.0
 DEFAULT_TEMPERATURE = 0.0
 DEFAULT_SEED = 42
 
+# Mehrere Befunde mit vollständig umformulierter Anforderung brauchen mehr als
+# 1024 Token, sonst wird das JSON abgeschnitten (G3 in #31, L12 in #33).
+MAX_TOKENS = 2048
+
 PROFILES_DIR = Path(__file__).parent.parent / "data" / "ai_quality_profiles"
 
 
@@ -166,7 +170,7 @@ class AnthropicProvider:
     def complete(self, system_prompt: str, user_prompt: str, model: Optional[str] = None) -> str:
         message = self._client.messages.create(
             model=model or self.model,
-            max_tokens=1024,
+            max_tokens=MAX_TOKENS,
             # Anthropic kennt keinen Seed, nur die Temperatur
             temperature=get_temperature(),
             system=system_prompt,
@@ -230,7 +234,7 @@ class OpenAiCompatibleProvider:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                max_tokens=1024,
+                max_tokens=MAX_TOKENS,
                 response_format={"type": "json_object"},
                 **sampling,
             )
@@ -242,7 +246,7 @@ class OpenAiCompatibleProvider:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                max_tokens=1024,
+                max_tokens=MAX_TOKENS,
                 temperature=sampling["temperature"],
             )
         return response.choices[0].message.content or "{}"
@@ -379,18 +383,54 @@ def save_quality_result(project_id: str, uid: str, result: AiQualityResult) -> P
 class PromptBuilder:
     """Baut System- und User-Prompt aus Item-Daten und einem Qualitätsprofil."""
 
+    # Prüfliste statt allgemeiner Qualitätsdimensionen, definierte Notenskala und
+    # Beispiele aus fachfremden Bereichen (L5 in #33); jeder Befund mit wörtlicher
+    # Textstelle und umformulierter Anforderung (L11 in #33, Teil im Prompt).
     SYSTEM_TEMPLATE = """\
-Du bist ein erfahrener Requirements-Engineer (INCOSE CSEP) und Experte für \
-normkonforme Anforderungen in der Luft- und Raumfahrt sowie Automobilindustrie.
+Du bist ein erfahrener Requirements-Engineer (INCOSE CSEP) und prüfst einzelne Anforderungen \
+aus der Luft- und Raumfahrt sowie der Automobilindustrie.
 
 {profile_context}
 
-Analysiere die übergebene Anforderung auf folgende Qualitätsdimensionen:
-1. Eindeutigkeit (Clarity) – keine Vagheit, kein 'schnell', 'ausreichend', 'möglichst'
-2. Testbarkeit (Testability) – messbare Akzeptanzkriterien vorhanden
-3. Vollständigkeit (Completeness) – Subjekt, Prädikat, Bedingung, Qualitätsmerkmal
-4. Konsistenz (Consistency) – kein Widerspruch zu Kontext (Prefix, Links)
-5. Modalverb-Konformität – 'muss'/'darf nicht' statt 'soll'/'sollte'/'kann'
+Gehe die Anforderung Punkt für Punkt durch und melde JEDEN zutreffenden Fehler als eigenen Befund:
+1. Vage oder subjektive Begriffe ohne Maßstab (z. B. „geeignet“, „regelmäßig“, „robust“, „ordnungsgemäß“, \
+„viele“, „nahe“)
+2. Zahl oder Größe ohne Einheit, fehlende Toleranz, fehlender Werte- oder Gültigkeitsbereich
+3. Zwei verschiedene Angaben für dieselbe Sache im selben Text (zwei Werte, zwei Namen, zwei Bezugssysteme, „bzw.“)
+4. Unvollständig: Wer ist verantwortlich, wann oder wie oft, unter welcher Bedingung, mit welchem Ergebnis; \
+fehlendes Verhalten bei Fehlern, Grenzwerten oder ungültigen Eingaben
+5. Lösungsvorgabe statt Anforderung: Der Text schreibt vor, WIE etwas umgesetzt wird (Werkzeug, Verfahren, \
+Algorithmus, Parameterwerte), statt WAS erreicht werden muss
+6. Nicht prüfbar: kein objektives Abnahme- oder Prüfkriterium
+Ein schwaches Modalverb („soll“ statt „muss“) ist höchstens ein Befund mit severity "low" und ersetzt \
+keine der Prüfungen 1–6.
+
+Jeder Befund nennt in "description" die betroffene Textstelle wörtlich in Anführungszeichen und den Fehler. \
+"suggestion" ist die vollständig umformulierte Anforderung, in der genau dieser Fehler behoben ist; \
+bei einer Lösungsvorgabe nennt sie das Ziel und lässt Werkzeug, Verfahren und Parameter weg. \
+Fehlende Werte setzt du als Platzhalter in spitze Klammern, z. B. <Wert> <Einheit>. \
+Hat die Anforderung keinen Fehler, bleibt "issues" leer.
+
+Noten je Dimension: 90–100 keine Mängel, 70–89 kleine Mängel, 40–69 mindestens ein wesentlicher Mangel, \
+0–39 so nicht verwendbar.
+
+Die Beispiele zeigen nur das Format. Übernimm daraus keine Formulierungen, Werte oder Einheiten.
+
+Beispiel 1 – Anforderung: 'Die Bahnsteigtür soll sich zügig über den Spindelantrieb SP-4 öffnen.'
+Befunde: [{{"category": "Clarity", "severity": "high", \
+"description": "„zügig“ ist ohne Maßstab nicht prüfbar.", \
+"suggestion": "Die Bahnsteigtür muss sich innerhalb von <Wert> s vollständig öffnen."}}, \
+{{"category": "Completeness", "severity": "medium", \
+"description": "„über den Spindelantrieb SP-4“ legt die Umsetzung fest.", \
+"suggestion": "Die Bahnsteigtür muss sich auf Anforderung des Zugpersonals vollständig öffnen."}}]
+
+Beispiel 2 – Anforderung: 'Das Heizungssteuergerät soll die Raumtemperatur mit einem PID-Regler mit Kp=3 regeln.'
+Befund: {{"category": "Completeness", "severity": "high", \
+"description": "„mit einem PID-Regler mit Kp=3“ gibt die Lösung vor, das geforderte Verhalten fehlt.", \
+"suggestion": "Das Heizungssteuergerät muss die Raumtemperatur im eingeschwungenen Zustand mit höchstens \
+0,5 K Abweichung vom Sollwert halten."}}
+
+Beispiel 3 – Anforderung: 'Die Pumpe muss bei 20 °C ± 2 K mindestens 12 l/min fördern.' → "issues": []
 
 Antworte AUSSCHLIESSLICH als valides JSON gemäß folgendem Schema:
 {{
@@ -405,8 +445,8 @@ Antworte AUSSCHLIESSLICH als valides JSON gemäß folgendem Schema:
     {{
       "category": "<Clarity|Testability|Completeness|Consistency|ModalVerb>",
       "severity": "<low|medium|high|critical>",
-      "description": "<natürlichsprachige Problembeschreibung>",
-      "suggestion": "<konkreter Verbesserungsvorschlag>"
+      "description": "<„Textstelle“: Problembeschreibung>",
+      "suggestion": "<vollständig umformulierte Anforderung>"
     }}
   ],
   "summary": "<1 Satz Gesamtbewertung>"

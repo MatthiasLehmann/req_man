@@ -117,6 +117,25 @@ class TestPromptBuilder:
         assert "overall_score" in prompt
         assert "issues" in prompt
 
+    def test_system_prompt_has_checklist(self):
+        prompt = self.builder.build_system_prompt({})
+        for punkt in ("ohne Einheit", "Lösungsvorgabe", "verantwortlich", "Nicht prüfbar", "bzw."):
+            assert punkt in prompt
+
+    def test_system_prompt_defines_score_scale(self):
+        prompt = self.builder.build_system_prompt({})
+        assert "90–100 keine Mängel" in prompt
+        assert "0–39" in prompt
+
+    def test_system_prompt_examples_render(self):
+        # Die Beispiele enthalten JSON; die geschweiften Klammern müssen das format() überstehen
+        prompt = self.builder.build_system_prompt({"name": "X"})
+        assert '{"category": "Clarity"' in prompt
+        assert "Übernimm daraus keine Formulierungen" in prompt
+
+    def test_max_tokens_raised(self):
+        assert aqs.MAX_TOKENS == 2048
+
     def test_build_user_prompt_with_context(self):
         profile = {"name": "INCOSE Standard"}
         prompt = self.builder.build_user_prompt(SAMPLE_ITEM, profile)
