@@ -466,6 +466,192 @@ Gib NUR das JSON zurück, keinerlei Markdown-Formatierung oder Erklärungstext.\
         return "\n".join(lines)
 
 
+# ─── Feste Regeln ─────────────────────────────────────────────────────────────
+
+# Eindeutig entscheidbare Prüfungen laufen im Code statt in der KI (L6 in #33).
+# Die Befunde sind reproduzierbar und stehen vor den KI-Befunden. Gegenüber V3
+# ohne Modalverb-Regel (meldete 64 % der korrigierten Anforderungen) und ohne
+# Hinweis an die KI (V3: die KI wiederholte die Regelbefunde nur).
+RULE_PREFIX = "Regelprüfung: "
+
+# Unbestimmte Begriffe nach ISO/IEC/IEEE 29148 (5.2.7) und INCOSE Guide to Writing
+# Requirements (R7 vage Begriffe, R8 Schlupflöcher, R26 Absolutes), gilt für alle Profile.
+VAGUE_TERMS = (
+    "angemessen", "ausreichend", "hinreichend", "geeignet", "geeigneten", "geeignetem", "geeigneter",
+    "regelmäßig", "ordnungsgemäß", "robust", "zuverlässig", "schnell", "zügig", "einfach",
+    "benutzerfreundlich", "flexibel", "effizient", "optimal", "möglichst", "nach Möglichkeit",
+    "falls möglich", "bei Bedarf", "gegebenenfalls", "ggf.", "eventuell", "etwa", "ungefähr", "ca.",
+    "nahe", "viele", "wenige", "einige", "mehrere", "relevant", "relevanten", "relevante",
+    "im Wesentlichen", "weitgehend", "gut", "alle denkbaren", "usw.", "etc.", "und so weiter",
+)
+
+# „bzw.“ und „und/oder“ lassen offen, welche von zwei Angaben gilt (INCOSE R15/R19).
+AMBIGUOUS_CONJUNCTIONS = ("bzw.", "beziehungsweise", "und/oder")
+
+# Einheiten, nach denen eine Zahl als bemaßt gilt
+UNITS = (
+    "%", "‰", "°", "°C", "K", "s", "ms", "µs", "us", "ns", "min", "h", "d", "Hz", "kHz", "MHz", "GHz",
+    "m", "mm", "cm", "km", "µm", "m/s", "m/s²", "m/s^2", "km/h", "kn", "ft", "g", "kg", "t", "N", "kN",
+    "Nm", "Pa", "kPa", "MPa", "bar", "mbar", "V", "mV", "kV", "A", "mA", "W", "kW", "MW", "Wh", "kWh",
+    "J", "kJ", "l", "ml", "l/min", "dB", "dBm", "rad", "deg", "U/min", "rpm", "bit", "Bit", "B", "Byte",
+    "kB", "MB", "GB", "Bit/s", "kbit/s", "Mbit/s", "fps", "Zeichen", "Pixel", "px", "lx", "cd", "mol",
+)
+
+_NUMBER = re.compile(r"(?<![\w=.,/-])(\d+(?:[.,]\d+)?)(?![\w.,]*\d)\s*([^\s,;.)]*)")
+
+# Präpositionen, nach denen eine Zahl eine Größe ist, und Wörter, die einen Bereich fortsetzen
+MEASURE_PREPOSITIONS = ("von", "mit", "auf", "um", "bei", "nach", "innerhalb", "binnen", "alle", "je", "pro",
+                        "unter", "über", "maximal", "minimal", "mindestens", "höchstens", "bis")
+RANGE_WORDS = ("bis", "und", "oder", "/", "…", "...")
+
+
+def _find_words(text: str, words: Any) -> List[str]:
+    """Findet ganze Wörter (ohne Groß-/Kleinschreibung), in Reihenfolge der Liste."""
+    found = []
+    for word in words:
+        pattern = r"(?<!\w)" + re.escape(str(word)) + r"(?!\w)"
+        if re.search(pattern, text, re.IGNORECASE):
+            found.append(str(word))
+    return found
+
+
+def _numbers_without_unit(text: str) -> List[str]:
+    """Zahlen ohne Einheit, bewusst vorsichtig: nur eine Zahl direkt nach einer
+    Präposition wie „von“ oder „mit“ („Zeitschritt von 1“), auf die weder eine
+    Einheit noch ein Bereichsende („0 bis 20 km“) folgt. Anzahlen („2000
+    Iterationen“), Zuweisungen („κ = 1,4“), Bezeichner („M-77“, „6-DOF“) und
+    Norm- oder Versionsnummern zählen nicht."""
+    found = []
+    for match in _NUMBER.finditer(text):
+        number, following = match.group(1), match.group(2)
+        before = text[:match.start()].split()
+        previous = before[-1] if before else ""
+        if previous.lower() not in MEASURE_PREPOSITIONS:
+            continue
+        if following in UNITS or following.rstrip("²³") in UNITS:
+            continue
+        if following[:1].isupper() or following[:1] in "-–×x." or following.lower() in RANGE_WORDS:
+            continue
+        found.append(number)
+    return found
+
+
+def check_rules(item: Dict[str, Any], profile: Dict[str, Any], context: Dict[str, Any]) -> List[AiQualityIssue]:
+    """Prüft feste Regeln: unbestimmte und verbotene Begriffe, mehrdeutige
+    Verknüpfungen, Zahlen ohne Einheit, fehlender Link nach oben und fehlende
+    Pflichtattribute."""
+    text = item.get("text") or ""
+    normative = bool(item.get("normative", False))
+    issues: List[AiQualityIssue] = []
+
+    terms = list(dict.fromkeys(list(profile.get("forbidden_keywords") or []) + list(VAGUE_TERMS)))
+    vague = _find_words(text, terms)
+    if vague:
+        issues.append(AiQualityIssue(
+            category="Clarity",
+            severity="medium",
+            description=RULE_PREFIX + "Unbestimmte Begriffe: " + ", ".join(f"'{w}'" for w in vague),
+            suggestion="Begriffe durch eindeutige, messbare Angaben ersetzen (Wert, Einheit, Toleranz).",
+        ))
+
+    ambiguous = _find_words(text, AMBIGUOUS_CONJUNCTIONS)
+    if ambiguous:
+        issues.append(AiQualityIssue(
+            category="Consistency",
+            severity="medium",
+            description=RULE_PREFIX + "Mehrdeutige Verknüpfung: " + ", ".join(f"'{w}'" for w in ambiguous)
+                        + " lässt offen, welche Angabe gilt",
+            suggestion="Genau eine Angabe festlegen (ein Wert, ein Name, ein Bezugssystem) "
+                       "oder die Fälle als getrennte Anforderungen formulieren.",
+        ))
+
+    unitless = _numbers_without_unit(text)
+    if unitless:
+        issues.append(AiQualityIssue(
+            category="Completeness",
+            severity="medium",
+            description=RULE_PREFIX + "Zahl ohne Einheit: " + ", ".join(f"'{n}'" for n in unitless),
+            suggestion="Zu jedem Zahlenwert die Einheit angeben, z. B. s, ms, m/s oder Hz.",
+        ))
+
+    parent = context.get("parent_document")
+    if normative and parent and not item.get("derived") and not item.get("links"):
+        issues.append(AiQualityIssue(
+            category="Traceability",
+            severity="high",
+            description=RULE_PREFIX + f"Kein Link zum Parent-Dokument {parent}, "
+                        "obwohl die Anforderung nicht als abgeleitet markiert ist.",
+            suggestion=f"Mit der übergeordneten Anforderung in {parent} verlinken "
+                       "oder die Anforderung begründet als abgeleitet (derived) kennzeichnen.",
+        ))
+
+    missing = context.get("missing_attributes") or []
+    if missing:
+        issues.append(AiQualityIssue(
+            category="Completeness",
+            severity="medium",
+            description=RULE_PREFIX + "Pflichtattribute fehlen: " + ", ".join(missing),
+            suggestion="Fehlende Pflichtattribute ergänzen: " + ", ".join(missing) + ".",
+        ))
+
+    return issues
+
+
+def build_item_context(project_id: str, item: Dict[str, Any], profile: Dict[str, Any]) -> Dict[str, Any]:
+    """Sammelt Angaben außerhalb des Items für die Regeln: Parent-Dokument und
+    fehlende Pflichtattribute (aus der Attribut-Konfiguration mit ``required:
+    true`` und optional ``required_attributes`` im Profil)."""
+    prefix = (_uid_to_prefix(item.get("uid", "")) or "").upper()
+    context: Dict[str, Any] = {"parent_document": None}
+    try:
+        for doc in ds.list_documents(project_id):
+            if str(doc.get("prefix", "")).upper() == prefix:
+                parent = doc.get("parent")
+                context["parent_document"] = str(parent) if parent else None
+                break
+    except Exception:
+        pass
+
+    expected: Dict[str, str] = {}
+    try:
+        for attr in ds.load_attribute_config():
+            applies = [str(p).upper() for p in attr.get("applies_to") or []]
+            if attr.get("required") and (not applies or prefix in applies):
+                expected[attr["key"]] = attr.get("display_name") or attr["key"]
+    except Exception:
+        pass
+    for key in profile.get("required_attributes") or []:
+        expected.setdefault(key, key)
+
+    values = item.get("custom_attributes", {})
+    context["missing_attributes"] = [
+        name for key, name in expected.items()
+        if values.get(key) in (None, "", [])
+    ]
+    return context
+
+
+def _keywords(text: str) -> set:
+    """Wörter ab 4 Zeichen in Kleinschreibung, für den Duplikat-Vergleich."""
+    return {w for w in re.findall(r"\w+", text.lower()) if len(w) >= 4}
+
+
+def drop_rule_duplicates(ai_issues: List[AiQualityIssue], rule_issues: List[AiQualityIssue]) -> List[AiQualityIssue]:
+    """Entfernt KI-Befunde, die nur einen Regelbefund wiederholen (mindestens
+    60 % gemeinsame Wörter mit dem Regelbefund)."""
+    rule_words = [_keywords(i.description[len(RULE_PREFIX):]) for i in rule_issues]
+    kept = []
+    for issue in ai_issues:
+        words = _keywords(issue.description)
+        duplicate = any(
+            words and rw and len(words & rw) / min(len(words), len(rw)) >= 0.6
+            for rw in rule_words
+        )
+        if not duplicate:
+            kept.append(issue)
+    return kept
+
+
 # ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
 
 
@@ -610,6 +796,9 @@ class QualityAnalyzer:
         # immer dem tatsächlich angefragten Modell entspricht.
         raw = self._provider.complete(system_prompt, user_prompt, model=used_model)
         result = self._parser.parse(raw, uid, used_model, profile_name)
+        # Regelbefunde zuerst; KI-Befunde, die nur eine Regel wiederholen, entfallen
+        rule_issues = check_rules(item, profile, build_item_context(project_id, item, profile))
+        result.issues = rule_issues + drop_rule_duplicates(result.issues, rule_issues)
 
         save_quality_result(project_id, uid, result)
         return result

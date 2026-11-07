@@ -585,3 +585,64 @@ class TestPydanticModels:
         d = result.model_dump()
         assert d["requirement_uid"] == "TST001"
         assert d["score"]["overall"] == 90
+
+
+# ─── Feste Regeln (V5) ────────────────────────────────────────────────────────
+
+def _rules(text, profile=None, context=None, **item):
+    item = {"text": text, "normative": True, **item}
+    return [i.description for i in aqs.check_rules(item, profile or {}, context or {})]
+
+
+class TestRules:
+    def test_vague_term(self):
+        found = _rules("Die Pumpe muss ausreichend fördern.")
+        assert any("Unbestimmte Begriffe" in d and "ausreichend" in d for d in found)
+
+    def test_profile_forbidden_keyword(self):
+        found = _rules("Der Wert muss sofort vorliegen.", profile={"forbidden_keywords": ["sofort"]})
+        assert any("sofort" in d for d in found)
+
+    def test_ambiguous_conjunction(self):
+        found = _rules("Das Signal x_soll bzw. x_ref muss begrenzt sein.")
+        assert any("Mehrdeutige Verknüpfung" in d for d in found)
+
+    def test_number_without_unit(self):
+        assert any("Zahl ohne Einheit: '1'" in d for d in _rules("Die Simulation muss mit einem Zeitschritt von 1 rechnen."))
+
+    def test_numbers_with_unit_count_or_designator_are_fine(self):
+        for text in (
+            "Das Ladegerät muss den Akku bei 25 °C in 90 min von 10 % auf 80 % laden.",
+            "Der Zähler muss 3 Versuche zulassen.",
+            "Der Regler muss mit Kp=2,0 arbeiten.",
+            "Zeitstempel müssen ISO 8601 und Version 2.1 entsprechen.",
+            "Der Motor M-77 muss abschalten.",
+        ):
+            assert not any("Zahl ohne Einheit" in d for d in _rules(text)), text
+
+    def test_no_modal_verb_rule(self):
+        # Die Modalverb-Regel aus V3 meldete 64 % der korrigierten Anforderungen
+        assert _rules("Das System soll beim Start 2 s lang piepen.") == []
+
+    def test_missing_link_only_with_parent(self):
+        assert any("Kein Link" in d for d in _rules("Das System muss starten.", context={"parent_document": "SYS"}))
+        assert _rules("Das System muss starten.", context={"parent_document": None}) == []
+        assert _rules("Das System muss starten.", context={"parent_document": "SYS"}, links=["SYS001"]) == []
+
+    def test_missing_attributes(self):
+        found = _rules("Das System muss starten.", context={"missing_attributes": ["Verifikationsmethode"]})
+        assert any("Pflichtattribute fehlen: Verifikationsmethode" in d for d in found)
+
+    def test_rule_findings_have_prefix(self):
+        issues = aqs.check_rules({"text": "Die Pumpe muss ausreichend fördern.", "normative": True}, {}, {})
+        assert issues and all(i.description.startswith(aqs.RULE_PREFIX) for i in issues)
+
+    def test_drop_rule_duplicates(self):
+        rule = aqs.AiQualityIssue(category="Clarity", severity="medium",
+                                  description=aqs.RULE_PREFIX + "Unbestimmte Begriffe: 'ausreichend'",
+                                  suggestion="x")
+        dup = aqs.AiQualityIssue(category="Clarity", severity="low",
+                                 description="Unbestimmte Begriffe wie 'ausreichend'", suggestion="y")
+        own = aqs.AiQualityIssue(category="Completeness", severity="high",
+                                 description="Es fehlt das Verhalten bei Sensorausfall", suggestion="z")
+        assert aqs.drop_rule_duplicates([dup, own], [rule]) == [own]
