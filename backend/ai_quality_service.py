@@ -535,6 +535,16 @@ VAGUE_TERMS = (
 # „bzw.“ und „und/oder“ lassen offen, welche von zwei Angaben gilt (INCOSE R15/R19).
 AMBIGUOUS_CONJUNCTIONS = ("bzw.", "beziehungsweise", "und/oder")
 
+# Verben, mit denen eine Anforderung ein Mittel statt eines Ziels vorschreibt (INCOSE R31 „solution free“)
+SOLUTION_VERBS = ("verwenden", "verwendet", "einsetzen", "eingesetzt", "nutzen", "genutzt", "benutzen", "benutzt",
+                  "implementieren", "implementiert", "einbauen", "eingebaut")
+MODAL_VERBS = ("soll", "sollen", "sollte", "sollten", "muss", "müssen", "darf", "dürfen", "kann", "können")
+
+# Passiv ohne Handelnden (INCOSE R2: aktiv formulieren, Verantwortlichen nennen); das Partizip darf eine
+# trennbare Vorsilbe haben („freigegeben“, „eingesetzt“)
+_PASSIVE = re.compile(r"\b(wird|werden|wurde|wurden)\b(?:\s+\S+){0,6}?\s+(\w*ge\w+(?:t|en)|\w+iert)\b", re.IGNORECASE)
+_AGENT = re.compile(r"\b(durch|von|vom|seitens)\s", re.IGNORECASE)
+
 # Einheiten, nach denen eine Zahl als bemaßt gilt
 UNITS = (
     "%", "‰", "°", "°C", "K", "s", "ms", "µs", "us", "ns", "min", "h", "d", "Hz", "kHz", "MHz", "GHz",
@@ -583,6 +593,34 @@ def _numbers_without_unit(text: str) -> List[str]:
     return found
 
 
+def _alternatives(text: str) -> List[str]:
+    """Die Wörter direkt vor und nach „bzw.“ bzw. „und/oder“, z. B. „acc_command bzw. a_cmd“."""
+    found = []
+    for match in re.finditer(r"(\S+)\s+(bzw\.|beziehungsweise|und/oder)\s+(\S+)", text, re.IGNORECASE):
+        found.append(f"'{match.group(1)}' {match.group(2)} '{match.group(3).rstrip('.,;')}'")
+    return found
+
+
+def _prescribed_means(text: str) -> Optional[str]:
+    """Der Teil zwischen Modalverb und Verb wie „verwenden“, z. B. „den Solver X … verwenden“."""
+    words = text.rstrip(".").split()
+    lower = [w.lower().strip(",;") for w in words]
+    for i, word in enumerate(lower):
+        if word in SOLUTION_VERBS:
+            start = max((j for j in range(i) if lower[j] in MODAL_VERBS), default=-1)
+            if start >= 0 and i - start > 1:
+                return " ".join(words[start + 1:i + 1])
+    return None
+
+
+def _passive_without_agent(text: str) -> Optional[str]:
+    """Passivsatz ohne „durch“/„von“, z. B. „werden vor Verwendung freigegeben“."""
+    match = _PASSIVE.search(text)
+    if match and not _AGENT.search(text):
+        return match.group(0)
+    return None
+
+
 def check_rules(item: Dict[str, Any], profile: Dict[str, Any], context: Dict[str, Any]) -> List[AiQualityIssue]:
     """Prüft feste Regeln: unbestimmte und verbotene Begriffe, mehrdeutige
     Verknüpfungen, Zahlen ohne Einheit, fehlender Link nach oben und fehlende
@@ -606,7 +644,8 @@ def check_rules(item: Dict[str, Any], profile: Dict[str, Any], context: Dict[str
         issues.append(AiQualityIssue(
             category="Consistency",
             severity="medium",
-            description=RULE_PREFIX + "Mehrdeutige Verknüpfung: " + ", ".join(f"'{w}'" for w in ambiguous)
+            description=RULE_PREFIX + "Mehrdeutige Verknüpfung: "
+                        + (", ".join(_alternatives(text)) or ", ".join(f"'{w}'" for w in ambiguous))
                         + " lässt offen, welche Angabe gilt",
             suggestion="Genau eine Angabe festlegen (ein Wert, ein Name, ein Bezugssystem) "
                        "oder die Fälle als getrennte Anforderungen formulieren.",
@@ -619,6 +658,25 @@ def check_rules(item: Dict[str, Any], profile: Dict[str, Any], context: Dict[str
             severity="medium",
             description=RULE_PREFIX + "Zahl ohne Einheit: " + ", ".join(f"'{n}'" for n in unitless),
             suggestion="Zu jedem Zahlenwert die Einheit angeben, z. B. s, ms, m/s oder Hz.",
+        ))
+
+    means = _prescribed_means(text) if normative else None
+    if means:
+        issues.append(AiQualityIssue(
+            category="Completeness",
+            severity="medium",
+            description=RULE_PREFIX + f"Lösungsvorgabe: „{means}“ schreibt ein Mittel vor statt eines Ziels",
+            suggestion="Lösungsneutral formulieren: die geforderte Eigenschaft oder das Ergebnis angeben und die "
+                       "Wahl von Werkzeug, Verfahren und Parametern der Umsetzung überlassen.",
+        ))
+
+    passive = _passive_without_agent(text) if normative else None
+    if passive:
+        issues.append(AiQualityIssue(
+            category="Completeness",
+            severity="medium",
+            description=RULE_PREFIX + f"Passiv ohne Verantwortlichen: „{passive}“ – wer führt die Handlung aus?",
+            suggestion="Aktiv formulieren und den Verantwortlichen als Subjekt nennen.",
         ))
 
     parent = context.get("parent_document")

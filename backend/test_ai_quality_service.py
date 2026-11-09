@@ -670,3 +670,27 @@ class TestRules:
         own = aqs.AiQualityIssue(category="Completeness", severity="high",
                                  description="Es fehlt das Verhalten bei Sensorausfall", suggestion="z")
         assert aqs.drop_rule_duplicates([dup, own], [rule]) == [own]
+
+
+class TestRulesV8:
+    def test_solution_prescribed(self):
+        found = _rules("Das Heizgerät muss einen PID-Regler mit Kp=3 einsetzen.")
+        assert any("Lösungsvorgabe: „einen PID-Regler mit Kp=3 einsetzen“" in d for d in found)
+
+    def test_no_solution_rule_without_means(self):
+        assert not any("Lösungsvorgabe" in d for d in _rules("Die Pumpe muss 12 l/min fördern."))
+
+    def test_passive_without_agent(self):
+        found = _rules("Die Kennfelder werden vor Verwendung freigegeben.")
+        assert any("Passiv ohne Verantwortlichen: „werden vor Verwendung freigegeben“" in d for d in found)
+
+    def test_passive_with_agent_is_fine(self):
+        assert not any("Passiv" in d for d in _rules("Die Daten werden täglich vom Administrator gesichert."))
+
+    def test_ambiguous_conjunction_names_alternatives(self):
+        found = _rules("Das Signal x_soll bzw. x_ref muss begrenzt sein.")
+        assert any("'x_soll' bzw. 'x_ref'" in d for d in found)
+
+    def test_informative_text_not_checked(self):
+        assert _rules("Die Kennfelder werden vor Verwendung freigegeben.", normative=False) == []
+
