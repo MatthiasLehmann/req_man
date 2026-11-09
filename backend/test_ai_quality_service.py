@@ -141,6 +141,12 @@ class TestPromptBuilder:
         assert '{"category": "Clarity"' in prompt
         assert "Übernimm daraus keine Formulierungen" in prompt
 
+    def test_suggestion_only_affected_words(self):
+        # V16: kein Umformulieren der ganzen Anforderung, keine erfundenen Werte/Einheiten/Namen
+        prompt = self.builder.build_system_prompt({})
+        assert "Formuliere nie die ganze Anforderung um" in prompt
+        assert "ein bis zwei" in prompt
+
     def test_system_prompt_defines_cautious_severity(self):
         prompt = self.builder.build_system_prompt({})
         assert '"high" nur, wenn die Anforderung so nicht umsetzbar oder nicht prüfbar ist' in prompt

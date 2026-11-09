@@ -610,9 +610,10 @@ Im Zweifel den niedrigeren Schweregrad wählen.
 Ziel ist, den Autor auf den Fehler hinzuweisen, nicht die Anforderung neu zu schreiben. \
 Jeder Befund nennt in "description" in EINEM kurzen Satz die betroffene Textstelle wörtlich in \
 Anführungszeichen und was daran fehlt oder falsch ist. \
-"suggestion" ist optional: Schreibe dort nur dann einen kurzen Vorschlag, wenn er sicher richtig ist und \
-nichts erfindet. Werte, die nicht im Text stehen, nie erfinden, sondern als Platzhalter in spitze Klammern \
-setzen, z. B. <Wert> <Einheit>. Bist du nicht sicher, lass "suggestion" leer (""). \
+"suggestion" ist optional: höchstens ein kurzer Halbsatz, der sich nur auf die betroffenen ein bis zwei \
+Wörter bezieht und sagt, was dort zu tun ist (z. B. was angegeben, ergänzt oder festgelegt werden muss). \
+Formuliere nie die ganze Anforderung um und schlage keine konkreten Werte, Einheiten oder Namen vor, die \
+nicht im Text stehen. Schreibe den Vorschlag nur, wenn er sicher richtig ist; sonst lass "suggestion" leer (""). \
 Melde keine Befunde, die du nicht begründen kannst. \
 Hat die Anforderung keinen Fehler, bleibt "issues" leer.
 
@@ -650,7 +651,7 @@ Antworte AUSSCHLIESSLICH als valides JSON gemäß folgendem Schema:
       "category": "<Clarity|Testability|Completeness|Consistency>",
       "severity": "<low|medium|high|critical>",
       "description": "<„Textstelle“: was fehlt oder falsch ist, ein Satz>",
-      "suggestion": "<kurzer Vorschlag nur wenn sicher, sonst leer>"
+      "suggestion": "<Halbsatz zu den betroffenen Wörtern, nur wenn sicher, sonst leer>"
     }}
   ],
   "summary": "<1 Satz Gesamtbewertung>"
