@@ -652,9 +652,17 @@ class TestRules:
         ):
             assert not any("Zahl ohne Einheit" in d for d in _rules(text)), text
 
-    def test_no_modal_verb_rule(self):
-        # Die Modalverb-Regel aus V3 meldete 64 % der korrigierten Anforderungen
-        assert _rules("Das System soll beim Start 2 s lang piepen.") == []
+    def test_modal_verb_rule_low(self):
+        # V14: Modalverb nur per Regel, Schwere low (kein Fehlalarm high/critical)
+        issues = aqs.check_rules({"text": "Das System soll beim Start 2 s lang piepen.", "normative": True}, {}, {})
+        assert [i.category for i in issues] == ["ModalVerb"]
+        assert issues[0].severity == "low"
+        assert _rules("Das System muss beim Start 2 s lang piepen.") == []
+        assert _rules("Das System soll beim Start 2 s lang piepen.", normative=False) == []
+
+    def test_prompt_does_not_mention_modal_verbs(self):
+        prompt = aqs.PromptBuilder().build_system_prompt({})
+        assert "Modalverb" not in prompt and "ModalVerb" not in prompt
 
     def test_missing_link_only_with_parent(self):
         assert any("Kein Link" in d for d in _rules("Das System muss starten.", context={"parent_document": "SYS"}))

@@ -404,8 +404,6 @@ fehlendes Verhalten bei Fehlern, Grenzwerten oder ungültigen Eingaben
 5. Lösungsvorgabe statt Anforderung: Der Text schreibt vor, WIE etwas umgesetzt wird (Werkzeug, Verfahren, \
 Algorithmus, Parameterwerte), statt WAS erreicht werden muss
 6. Nicht prüfbar: kein objektives Abnahme- oder Prüfkriterium
-Ein schwaches Modalverb („soll“ statt „muss“) ist höchstens ein Befund mit severity "low" und ersetzt \
-keine der Prüfungen 1–6.
 
 Schweregrad: "high" nur, wenn die Anforderung so nicht umsetzbar oder nicht prüfbar ist. "medium", wenn \
 eine Angabe fehlt oder unklar ist, die Anforderung aber prüfbar bleibt. "low" für Formulierung und Stil. \
@@ -452,7 +450,7 @@ Antworte AUSSCHLIESSLICH als valides JSON gemäß folgendem Schema:
   }},
   "issues": [
     {{
-      "category": "<Clarity|Testability|Completeness|Consistency|ModalVerb>",
+      "category": "<Clarity|Testability|Completeness|Consistency>",
       "severity": "<low|medium|high|critical>",
       "description": "<„Textstelle“: was fehlt oder falsch ist, ein Satz>",
       "suggestion": "<kurzer Vorschlag nur wenn sicher, sonst leer>"
@@ -541,6 +539,9 @@ AMBIGUOUS_CONJUNCTIONS = ("bzw.", "beziehungsweise", "und/oder")
 SOLUTION_VERBS = ("verwenden", "verwendet", "einsetzen", "eingesetzt", "nutzen", "genutzt", "benutzen", "benutzt",
                   "implementieren", "implementiert", "einbauen", "eingebaut")
 MODAL_VERBS = ("soll", "sollen", "sollte", "sollten", "muss", "müssen", "darf", "dürfen", "kann", "können")
+WEAK_MODAL_VERBS = ("soll", "sollen", "sollte", "sollten", "kann", "können", "könnte", "könnten",
+                    "should", "may", "might", "could")
+STRONG_MODAL_VERBS = ("muss", "müssen", "darf", "dürfen", "shall", "must")
 
 # Passiv ohne Handelnden (INCOSE R2: aktiv formulieren, Verantwortlichen nennen); das Partizip darf eine
 # trennbare Vorsilbe haben („freigegeben“, „eingesetzt“)
@@ -626,7 +627,7 @@ def _passive_without_agent(text: str) -> Optional[str]:
 def check_rules(item: Dict[str, Any], profile: Dict[str, Any], context: Dict[str, Any]) -> List[AiQualityIssue]:
     """Prüft feste Regeln: unbestimmte und verbotene Begriffe, mehrdeutige
     Verknüpfungen, Zahlen ohne Einheit, fehlender Link nach oben und fehlende
-    Pflichtattribute."""
+    Pflichtattribute; V14 zusätzlich schwache Modalverben (Schwere low)."""
     text = item.get("text") or ""
     normative = bool(item.get("normative", False))
     issues: List[AiQualityIssue] = []
@@ -690,6 +691,19 @@ def check_rules(item: Dict[str, Any], profile: Dict[str, Any], context: Dict[str
                         "obwohl die Anforderung nicht als abgeleitet markiert ist.",
             suggestion=f"Mit der übergeordneten Anforderung in {parent} verlinken "
                        "oder die Anforderung begründet als abgeleitet (derived) kennzeichnen.",
+        ))
+
+    # V14: Modalverb nur per Regel, die KI wird darauf nicht hingewiesen. Schwere "low" (Stil), damit
+    # Korpora mit durchgehend „soll“ keine Fehlalarme high/critical erzeugen. Erkennt nur die eindeutigen
+    # Fälle (schwaches Modalverb ohne verbindliches im selben Text).
+    weak = _find_words(text, WEAK_MODAL_VERBS)
+    if normative and weak and not _find_words(text, STRONG_MODAL_VERBS):
+        issues.append(AiQualityIssue(
+            category="ModalVerb",
+            severity="low",
+            description=RULE_PREFIX + "Normative Anforderung ohne verbindliches Modalverb: "
+                        + ", ".join(f"'{w}'" for w in weak),
+            suggestion="Verbindlich formulieren mit 'muss' bzw. 'darf nicht'.",
         ))
 
     missing = context.get("missing_attributes") or []
@@ -905,7 +919,9 @@ class QualityAnalyzer:
         result = self._parser.parse(raw, uid, used_model, profile_name)
         # Regelbefunde zuerst; KI-Befunde, die nur eine Regel wiederholen, entfallen
         rule_issues = check_rules(item, profile, build_item_context(project_id, item, profile))
-        result.issues = rule_issues + drop_rule_duplicates(result.issues, rule_issues)
+        # V14: Modalverb prüft nur die Regel; KI-Befunde dazu entfallen
+        ai_issues = [i for i in result.issues if (i.category or "").strip().lower() != "modalverb"]
+        result.issues = rule_issues + drop_rule_duplicates(ai_issues, rule_issues)
 
         save_quality_result(project_id, uid, result)
         return result
