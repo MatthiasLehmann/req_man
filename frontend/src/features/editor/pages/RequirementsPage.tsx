@@ -1,12 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, FileText, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, FileText, AlertTriangle, PanelsTopLeft, Table2 } from 'lucide-react';
+import clsx from 'clsx';
 import { getProject } from '../../../shared/api/client';
 import { useProjectStore } from '../../../shared/store/projectStore';
 import DocumentTree from '../components/DocumentTree';
 import ItemList from '../components/ItemList';
 import ItemEditor from '../components/ItemEditor';
+import RequirementsTable from '../components/table/RequirementsTable';
+
+const VIEW_KEY = 'reqman_requirements_view';
+type ViewMode = 'editor' | 'table';
 
 // ─── Resize-Divider ───────────────────────────────────────────────────────────
 
@@ -160,6 +165,15 @@ export default function RequirementsPage() {
   );
   const [editorDirty, setEditorDirty] = useState(false);
 
+  // Ansicht: Liste + Editor (Standard) oder Tabelle wie in Excel
+  const [view, setViewState] = useState<ViewMode>(() => {
+    try { return localStorage.getItem(VIEW_KEY) === 'table' ? 'table' : 'editor'; } catch { return 'editor'; }
+  });
+  const setView = (v: ViewMode) => {
+    setViewState(v);
+    try { localStorage.setItem(VIEW_KEY, v); } catch { /* nur für diese Sitzung */ }
+  };
+
   // Ausstehende Aktion (Item-/Dok-Wechsel oder Sidebar-Navigation)
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
@@ -250,9 +264,32 @@ export default function RequirementsPage() {
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────
+  const viewSwitch = (
+    <div className="flex items-center justify-end gap-2 px-3 h-9 border-b border-gray-200 bg-gray-50 shrink-0">
+      <span className="text-xs text-gray-400 mr-1">Ansicht</span>
+      <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
+        {([
+          ['editor', 'Liste + Editor', PanelsTopLeft],
+          ['table', 'Tabelle', Table2],
+        ] as const).map(([mode, label, Icon]) => (
+          <button
+            key={mode}
+            onClick={() => view !== mode && guardedAction(() => setView(mode))}
+            className={clsx('inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md transition-colors',
+              view === mode ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100')}
+          >
+            <Icon className="w-3.5 h-3.5" /> {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <>
-      <div ref={containerRef} className="flex h-full">
+      <div className="flex flex-col h-full">
+      {viewSwitch}
+      <div ref={containerRef} className="flex flex-1 min-h-0">
         {/* Dokumenten-Baum (linkes Panel) */}
         <div
           style={{ width: widths.tree }}
@@ -272,6 +309,25 @@ export default function RequirementsPage() {
 
         <ResizeDivider onDragStart={startDrag('tree')} />
 
+        {view === 'table' ? (
+          <div className="flex-1 min-w-0 overflow-hidden">
+            {selectedPrefix ? (
+              <RequirementsTable
+                key={selectedPrefix}
+                projectId={projectId}
+                prefix={selectedPrefix}
+                onOpenItem={(uid) => { setSelectedUid(uid); setView('editor'); }}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                <div className="text-center">
+                  <FileText className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                  <p>Dokument auswählen</p>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (<>
         {/* Item-Liste (mittleres Panel) */}
         <div
           style={{ width: widths.list }}
@@ -317,6 +373,8 @@ export default function RequirementsPage() {
             </div>
           )}
         </div>
+        </>)}
+      </div>
       </div>
 
       {/* Ungespeichert-Warndialog */}
