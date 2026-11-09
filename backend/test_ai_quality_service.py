@@ -530,7 +530,10 @@ class TestQualityAnalyzer:
         analyzer = aqs.QualityAnalyzer(provider=mock_provider)
         result = asyncio.run(analyzer.analyze("proj1", "SRS001"))
 
-        assert result.score.overall == 72
+        # V19: 72,5 (Teilnoten, Gewichte 1,0) − 5 (Consistency medium) = 67,5 → 68
+        assert result.score.overall == 68
+        assert result.score.min_score == 70
+        assert result.score.passed is False
         assert result.requirement_uid == "SRS001"
         mock_save.assert_called_once()
         assert len(mock_provider.calls) == 1  # Provider wurde genau einmal aufgerufen
@@ -563,8 +566,11 @@ class TestQualityAnalyzer:
         analyzer = aqs.QualityAnalyzer(provider=mock_provider)
         result = asyncio.run(analyzer.analyze("proj1", "SRS002"))
 
-        assert result.score.overall == 26  # (20+5+30+50)/4 = 26.25 → 26
+        # V19: 26,25 − 5 (Regel: 'möglichst', 'schnell', ersetzt den KI-Clarity-Befund)
+        # − 20 (Testability critical) = 1,25 → 1
+        assert result.score.overall == 1
         assert len(result.issues) == 2
+        assert result.issues[0].description.startswith(aqs.RULE_PREFIX)
 
     @patch("doorstop_service.get_item")
     @patch("doorstop_service.get_project")
@@ -710,3 +716,70 @@ class TestRulesV8:
     def test_informative_text_not_checked(self):
         assert _rules("Die Kennfelder werden vor Verwendung freigegeben.", normative=False) == []
 
+
+
+# ─── Gesamtnote im Code (V19, L9 in #33) ──────────────────────────────────────
+
+
+def _issue(category="Clarity", severity="medium"):
+    return aqs.AiQualityIssue(category=category, severity=severity, description="d", suggestion="s")
+
+
+def _score(c=80, t=80, k=80, s=80):
+    return aqs.AiQualityScore(overall=0, clarity=c, testability=t, completeness=k, consistency=s)
+
+
+class TestComputeScore:
+    def test_no_issues_equal_weights_is_mean(self):
+        result = aqs.compute_score(_score(80, 60, 70, 90), [], {})
+        assert result.overall == 75
+        assert result.min_score is None and result.passed is None
+
+    def test_profile_weights_shift_base(self):
+        profile = {"categories": {"clarity": {"weight": 3.0}, "testability": {"weight": 1.0},
+                                  "completeness": {"weight": 0.0}, "consistency": {"weight": 0.0}}}
+        assert aqs.compute_score(_score(100, 60, 0, 0), [], profile).overall == 90
+
+    def test_disabled_category_ignored(self):
+        profile = {"categories": {"testability": {"weight": 2.0, "enabled": False}}}
+        assert aqs.compute_score(_score(80, 0, 80, 80), [], profile).overall == 80
+
+    def test_penalty_by_severity(self):
+        issues = [_issue(severity=s) for s in ("low", "medium", "high", "critical")]
+        assert aqs.compute_score(_score(), issues, {}).overall == 80 - 2 - 5 - 10 - 20
+
+    def test_unknown_severity_counts_as_medium(self):
+        assert aqs.compute_score(_score(), [_issue(severity="???")], {}).overall == 75
+
+    def test_penalty_weighted_by_category(self):
+        profile = {"categories": {"testability": {"weight": 1.5}, "modal_verb": {"weight": 0.8}}}
+        issues = [_issue("Testability", "high"), _issue("ModalVerb", "low")]
+        # Grundnote 80 (alle Teilnoten gleich) − 15 − 1,6 = 63,4 → 63
+        assert aqs.compute_score(_score(), issues, profile).overall == 63
+
+    def test_rule_issues_count(self):
+        rule = aqs.AiQualityIssue(category="Traceability", severity="high",
+                                  description=aqs.RULE_PREFIX + "x", suggestion="")
+        assert aqs.compute_score(_score(), [rule], {}).overall == 70
+
+    def test_clamped_at_zero(self):
+        assert aqs.compute_score(_score(10, 10, 10, 10), [_issue(severity="critical")], {}).overall == 0
+
+    def test_passed_against_min_score(self):
+        profile = {"min_score": 75}
+        assert aqs.compute_score(_score(), [_issue(severity="medium")], profile).passed is True
+        assert aqs.compute_score(_score(), [_issue(severity="high")], profile).passed is False
+
+    def test_no_subscores_uses_llm_overall(self):
+        score = aqs.AiQualityScore(overall=90)
+        assert aqs.compute_score(score, [_issue(severity="low")], {}).overall == 88
+
+    def test_real_profiles_load(self):
+        for name in ("standard", "iso26262", "aspice", "do178c"):
+            profile = aqs.load_profile(name)
+            result = aqs.compute_score(_score(), [], profile)
+            assert result.overall == 80 and result.passed == (80 >= profile["min_score"])
+
+    def test_old_result_without_new_fields_loads(self):
+        old = {"overall": 70, "clarity": 70}
+        assert aqs.AiQualityScore(**old).passed is None

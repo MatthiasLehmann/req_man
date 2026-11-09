@@ -118,6 +118,9 @@ class AiQualityScore(BaseModel):
     testability: Optional[int] = None
     completeness: Optional[int] = None
     consistency: Optional[int] = None
+    # V19 (L9): Mindestnote des Profils und ob die Gesamtnote sie erreicht
+    min_score: Optional[int] = None
+    passed: Optional[bool] = None
 
 
 class AiQualityResult(BaseModel):
@@ -773,6 +776,62 @@ def drop_rule_duplicates(ai_issues: List[AiQualityIssue], rule_issues: List[AiQu
     return kept
 
 
+# ─── Gesamtnote (L9 in #33) ───────────────────────────────────────────────────
+
+# Die Gesamtnote rechnet der Code, nicht die KI:
+#   Grundnote = mit den Profilgewichten gewichteter Mittelwert der KI-Teilnoten
+#   Abzug     = Summe über alle Befunde (KI und Regelprüfung) von
+#               Punkte(Schweregrad) × Profilgewicht der Befund-Kategorie
+#   Gesamt    = Grundnote − Abzug, begrenzt auf 0–100
+#   bestanden = Gesamt ≥ min_score des Profils
+# Die Punkte verdoppeln sich je Stufe (vorab festgelegt, nicht am Korpus
+# angepasst): ein kritischer Befund senkt eine perfekte Note unter jede
+# Mindestnote der Profile (70–80), ein mittlerer kostet so viel wie ein
+# KI-Notenschritt von 5 Punkten.
+SEVERITY_PENALTY = {"low": 2, "medium": 5, "high": 10, "critical": 20}
+SCORE_KEYS = ("clarity", "testability", "completeness", "consistency")
+_CATEGORY_KEYS = {
+    "clarity": "clarity", "testability": "testability", "completeness": "completeness",
+    "consistency": "consistency", "modalverb": "modal_verb", "modal_verb": "modal_verb",
+}
+
+
+def category_weight(profile: Dict[str, Any], key: Optional[str]) -> float:
+    """Gewicht einer Kategorie im Profil; unbekannt 1,0, abgeschaltet 0."""
+    cfg = (profile.get("categories") or {}).get(key) if key else None
+    if not isinstance(cfg, dict):
+        return 1.0
+    if cfg.get("enabled") is False:
+        return 0.0
+    try:
+        return max(0.0, float(cfg.get("weight", 1.0)))
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def issue_penalty(issue: AiQualityIssue, profile: Dict[str, Any]) -> float:
+    key = _CATEGORY_KEYS.get(re.sub(r"[\s-]", "", (issue.category or "").lower()))
+    points = SEVERITY_PENALTY.get((issue.severity or "").strip().lower(), SEVERITY_PENALTY["medium"])
+    return points * category_weight(profile, key)
+
+
+def compute_score(score: AiQualityScore, issues: List[AiQualityIssue], profile: Dict[str, Any]) -> AiQualityScore:
+    """Berechnet Gesamtnote und Bestanden-Kennzeichen (siehe oben)."""
+    parts = [(getattr(score, k), category_weight(profile, k)) for k in SCORE_KEYS]
+    parts = [(v, w) for v, w in parts if v is not None and w > 0]
+    if parts:
+        base = sum(v * w for v, w in parts) / sum(w for _, w in parts)
+    else:
+        base = score.overall
+    overall = max(0, min(100, int(round(base - sum(issue_penalty(i, profile) for i in issues)))))
+    min_score = _clamp(profile.get("min_score"))
+    return score.model_copy(update={
+        "overall": overall,
+        "min_score": min_score,
+        "passed": None if min_score is None else overall >= min_score,
+    })
+
+
 # ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
 
 
@@ -922,6 +981,8 @@ class QualityAnalyzer:
         # V14: Modalverb prüft nur die Regel; KI-Befunde dazu entfallen
         ai_issues = [i for i in result.issues if (i.category or "").strip().lower() != "modalverb"]
         result.issues = rule_issues + drop_rule_duplicates(ai_issues, rule_issues)
+        # V19: Gesamtnote aus Teilnoten, Profilgewichten und Befunden
+        result.score = compute_score(result.score, result.issues, profile)
 
         save_quality_result(project_id, uid, result)
         return result
