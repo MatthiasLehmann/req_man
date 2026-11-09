@@ -625,7 +625,7 @@ Die Beispiele zeigen nur das Format. Übernimm daraus keine Formulierungen, Wert
 Beispiel 1 – Anforderung: 'Die Bahnsteigtür soll sich zügig über den Spindelantrieb SP-4 öffnen.'
 Befunde: [{{"category": "Clarity", "severity": "high", \
 "description": "„zügig“ ist ohne Maßstab nicht prüfbar.", \
-"suggestion": "Öffnungszeit angeben: innerhalb von <Wert> s."}}, \
+"suggestion": "Öffnungszeit mit Wert und Einheit angeben."}}, \
 {{"category": "Completeness", "severity": "medium", \
 "description": "„über den Spindelantrieb SP-4“ legt die Umsetzung fest.", \
 "suggestion": ""}}]
@@ -1067,6 +1067,29 @@ def compute_score(score: AiQualityScore, issues: List[AiQualityIssue], profile: 
         "min_score": min_score,
         "passed": None if min_score is None else overall >= min_score,
     })
+_QUOTED = re.compile(r"[„“\"'‚‘]([^„“\"'‚‘]{1,80})[“”\"'‘’]")
+
+
+def _quoted_words(text: str) -> set:
+    """Wörter (ab 3 Zeichen) und Zahlen aus zitierten Textstellen, ohne Modalverben."""
+    words = set()
+    for part in _QUOTED.findall(text or ""):
+        for w in re.findall(r"\w+", part.lower()):
+            if (len(w) >= 3 or w.isdigit()) and w not in MODAL_VERBS and w not in WEAK_MODAL_VERBS:
+                words.add(w)
+    return words
+
+
+def drop_same_spot(ai_issues: List[AiQualityIssue], rule_issues: List[AiQualityIssue]) -> List[AiQualityIssue]:
+    """V17: Entfernt KI-Befunde zu einer Textstelle, die eine Regel schon gemeldet hat (gleiches zitiertes
+    Wort). Die Modalverb-Regel zählt nicht mit, sonst fiele jeder Befund weg, der einen Satz mit „soll“ zitiert."""
+    spots = set()
+    for i in rule_issues:
+        if (i.category or "") != "ModalVerb":
+            spots |= _quoted_words(i.description[len(RULE_PREFIX):])
+    if not spots:
+        return ai_issues
+    return [i for i in ai_issues if not (_quoted_words(i.description) & spots)]
 
 
 # ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
@@ -1220,8 +1243,9 @@ class QualityAnalyzer:
         rule_issues = check_rules(item, profile, build_item_context(project_id, item, profile))
         # V14: Modalverb prüft nur die Regel; KI-Befunde dazu entfallen
         ai_issues = [i for i in result.issues if (i.category or "").strip().lower() != "modalverb"]
-        result.issues = rule_issues + drop_rule_duplicates(ai_issues, rule_issues)
-        # V19: Gesamtnote aus Teilnoten, Profilgewichten und Befunden
+        # V17: KI-Befunde zu einer Stelle, die eine Regel schon meldet, entfallen
+        result.issues = rule_issues + drop_same_spot(drop_rule_duplicates(ai_issues, rule_issues), rule_issues)
+        # V19: Gesamtnote aus Teilnoten, Profilgewichten und den endgültigen Befunden
         result.score = compute_score(result.score, result.issues, profile)
 
         protocol = None

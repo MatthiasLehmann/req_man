@@ -1117,3 +1117,19 @@ class TestProtocolV21:
         aqs.save_quality_result("p1", "SRS001", result)
         assert (tmp_path / "SRS" / "SRS001.ai-quality.yml").exists()
         assert not (tmp_path / "SRS" / "SRS001.ai-quality-log.yml").exists()
+class TestSameSpot:
+    """V17: KI-Befunde zur selben Textstelle wie ein Regelbefund entfallen."""
+
+    def _i(self, desc, cat="Clarity"):
+        return aqs.AiQualityIssue(category=cat, severity="medium", description=desc, suggestion="")
+
+    def test_drops_ai_finding_on_rule_spot(self):
+        rules = [self._i(aqs.RULE_PREFIX + "Unbestimmte Begriffe: 'ausreichend'")]
+        ai = [self._i("„ausreichend genau“ ist nicht messbar."), self._i("„Beiwerte“ sind nicht definiert.")]
+        kept = aqs.drop_same_spot(ai, rules)
+        assert [k.description for k in kept] == ["„Beiwerte“ sind nicht definiert."]
+
+    def test_modal_rule_does_not_filter(self):
+        rules = [self._i(aqs.RULE_PREFIX + "Normative Anforderung ohne verbindliches Modalverb: 'soll'", "ModalVerb")]
+        ai = [self._i("„Die Software soll regelmäßig laufen“: Häufigkeit fehlt.")]
+        assert aqs.drop_same_spot(ai, rules) == ai
