@@ -740,6 +740,37 @@ WEAK_MODAL_VERBS = ("soll", "sollen", "sollte", "sollten", "kann", "können", "k
                     "should", "may", "might", "could")
 STRONG_MODAL_VERBS = ("muss", "müssen", "darf", "dürfen", "shall", "must")
 
+# V22: Tippfehler beim Modalverb. Nur geprüft, wenn der Text gar kein Modalverb enthält; echte Wörter mit einem
+# Buchstaben Abstand („voll“, „Zoll“, „toll“, „Kuss“ …) sind ausgenommen.
+_MODAL_TARGETS = ("soll", "sollen", "sollte", "muss", "müssen", "darf", "dürfen", "kann", "können")
+_NOT_TYPOS = {"voll", "toll", "zoll", "moll", "roll", "kuss", "fuss", "nuss", "russ", "bus", "mus", "dorf", "darm",
+              "kamm", "kahn", "kann", "miss", "mist", "wann", "dann", "mann", "bann", "tann", "sole", "solo", "rollen", "wollen",
+              "sollen", "zollen", "mussten", "dürfte", "durfte", "muster", "musst", "hallo", "soll", "bald", "fall"}
+
+
+def _edit1(a: str, b: str) -> bool:
+    """True, wenn a und b genau eine Einfügung, Löschung, Ersetzung oder Vertauschung auseinanderliegen."""
+    if a == b or abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        diff = [i for i in range(len(a)) if a[i] != b[i]]
+        return len(diff) == 1 or (len(diff) == 2 and diff[1] == diff[0] + 1
+                                  and a[diff[0]] == b[diff[1]] and a[diff[1]] == b[diff[0]])
+    kurz, lang = (a, b) if len(a) < len(b) else (b, a)
+    return any(lang[:i] + lang[i + 1:] == kurz for i in range(len(lang)))
+
+
+def _modal_typo(text: str) -> Optional[tuple]:
+    """Erstes Wort, das ein vertipptes Modalverb sein dürfte: (Wort, gemeintes Modalverb) oder None."""
+    for w in re.findall(r"\w+", text):
+        lw = w.lower()
+        if len(lw) < 3 or lw in _NOT_TYPOS:
+            continue
+        for m in _MODAL_TARGETS:
+            if _edit1(lw, m):
+                return w, m
+    return None
+
 # Passiv ohne Handelnden (INCOSE R2: aktiv formulieren, Verantwortlichen nennen); das Partizip darf eine
 # trennbare Vorsilbe haben („freigegeben“, „eingesetzt“)
 _PASSIVE = re.compile(r"\b(wird|werden|wurde|wurden)\b(?:\s+\S+){0,6}?\s+(\w*ge\w+(?:t|en)|\w+iert)\b", re.IGNORECASE)
@@ -894,13 +925,24 @@ def check_rules(item: Dict[str, Any], profile: Dict[str, Any], context: Dict[str
     # Korpora mit durchgehend „soll“ keine Fehlalarme high/critical erzeugen. Erkennt nur die eindeutigen
     # Fälle (schwaches Modalverb ohne verbindliches im selben Text).
     weak = _find_words(text, WEAK_MODAL_VERBS)
-    if normative and weak and not _find_words(text, STRONG_MODAL_VERBS):
+    strong = _find_words(text, STRONG_MODAL_VERBS)
+    if normative and weak and not strong:
         issues.append(AiQualityIssue(
             category="ModalVerb",
             severity="low",
             description=RULE_PREFIX + "Normative Anforderung ohne verbindliches Modalverb: "
                         + ", ".join(f"'{w}'" for w in weak),
             suggestion="Verbindlich formulieren mit 'muss' bzw. 'darf nicht'.",
+        ))
+    elif normative and not weak and not strong and _modal_typo(text):
+        # V22: kein Modalverb, aber ein vertipptes („sol“, „müsen“). Fehlt das Modalverb ganz, meldet die Regel
+        # nichts: Im Korpus beträfe das 139 von 351 Texten (oft Bedingungssätze) – zu viel Rauschen.
+        typo = _modal_typo(text)
+        issues.append(AiQualityIssue(
+            category="ModalVerb",
+            severity="low",
+            description=RULE_PREFIX + f"Modalverb vermutlich vertippt: '{typo[0]}' (gemeint '{typo[1]}'?)",
+            suggestion=f"'{typo[0]}' korrigieren; verbindlich mit 'muss' bzw. 'darf nicht'.",
         ))
 
     missing = context.get("missing_attributes") or []

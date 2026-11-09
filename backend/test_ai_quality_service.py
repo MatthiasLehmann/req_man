@@ -881,6 +881,20 @@ class TestRules:
         assert _rules("Das System muss beim Start 2 s lang piepen.") == []
         assert _rules("Das System soll beim Start 2 s lang piepen.", normative=False) == []
 
+    def test_modal_typo(self):
+        # V22: „sol“ statt „soll“, „mus“ statt „muss“ ist ausgenommen (echtes Wort „Mus“), „müsen“ erkannt
+        found = _rules("Die Software sol beim Start piepen.")
+        assert any("vertippt: 'sol'" in d and "'soll'" in d for d in found)
+        assert any("vertippt: 'müsen'" in d for d in _rules("Die Pumpe müsen beim Start laufen."))
+
+    def test_missing_modal_not_reported(self):
+        # Ganz fehlendes Modalverb meldet V22 bewusst nicht (zu viel Rauschen im Korpus)
+        assert _rules("Die Software piept beim Start.") == []
+
+    def test_no_typo_for_real_words(self):
+        for text in ("Der Tank ist voll beim Start.", "Der Zoll prüft die Ware.", "Das Gerät piept dann laut.", "Miss Distance unter 5 m."):
+            assert not any("vertippt" in d for d in _rules(text)), text
+
     def test_prompt_does_not_mention_modal_verbs(self):
         prompt = aqs.PromptBuilder().build_system_prompt({})
         assert "Modalverb" not in prompt and "ModalVerb" not in prompt
