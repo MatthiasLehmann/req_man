@@ -509,6 +509,221 @@ class TestProviders:
         assert calls[0]["seed"] == 42
 
 
+# ─── Betriebsparameter und Fehlerbehandlung (V20, L12) ────────────────────────
+
+
+def _fake_openai_provider(provider_name="ollama", outcomes=None):
+    """OpenAiCompatibleProvider mit Mock-Client.
+
+    ``outcomes``: Liste; Exceptions werden geworfen, sonst Antwort "{}".
+    """
+    calls = []
+    outcomes = list(outcomes or [])
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            calls.append(kwargs)
+            if outcomes:
+                o = outcomes.pop(0)
+                if isinstance(o, Exception):
+                    raise o
+            msg = MagicMock()
+            msg.choices = [MagicMock()]
+            msg.choices[0].message.content = "{}"
+            return msg
+
+    provider = object.__new__(aqs.OpenAiCompatibleProvider)
+    provider.model = "llama3.2"
+    provider._provider_name = provider_name
+    provider._client = MagicMock()
+    provider._client.chat.completions = FakeCompletions()
+    return provider, calls
+
+
+def _httpx():
+    # openai >= 3 nutzt httpx2, ältere Versionen httpx
+    try:
+        import httpx2 as httpx
+    except ImportError:
+        import httpx
+    return httpx
+
+
+def _http_request():
+    return _httpx().Request("POST", "http://localhost:11434/v1/chat/completions")
+
+
+def _bad_request(message, status=400):
+    import openai
+    response = _httpx().Response(status, request=_http_request())
+    cls = openai.BadRequestError if status == 400 else openai.UnprocessableEntityError
+    return cls(message, response=response, body={"error": {"message": message}})
+
+
+@pytest.fixture
+def clean_env(monkeypatch):
+    for name in ("AI_TIMEOUT", "AI_MAX_TOKENS", "AI_NUM_CTX", "AI_MAX_RETRIES",
+                 "AI_TEMPERATURE", "AI_SEED"):
+        monkeypatch.delenv(name, raising=False)
+    return monkeypatch
+
+
+class TestBetriebsparameter:
+    def test_defaults_unchanged(self, clean_env):
+        assert aqs.get_request_timeout() == 60.0
+        assert aqs.get_max_tokens() == 2048
+        assert aqs.get_num_ctx() is None
+        assert aqs.get_max_retries() is None
+
+    def test_env_override(self, clean_env):
+        clean_env.setenv("AI_TIMEOUT", "120")
+        clean_env.setenv("AI_MAX_TOKENS", "4096")
+        clean_env.setenv("AI_NUM_CTX", "8192")
+        clean_env.setenv("AI_MAX_RETRIES", "0")
+        assert aqs.get_request_timeout() == 120.0
+        assert aqs.get_max_tokens() == 4096
+        assert aqs.get_num_ctx() == 8192
+        assert aqs.get_max_retries() == 0
+
+    @pytest.mark.parametrize("value", ["abc", "0", "-5", " "])
+    def test_invalid_values_fall_back(self, clean_env, value):
+        clean_env.setenv("AI_TIMEOUT", value)
+        clean_env.setenv("AI_MAX_TOKENS", value)
+        clean_env.setenv("AI_NUM_CTX", value)
+        assert aqs.get_request_timeout() == 60.0
+        assert aqs.get_max_tokens() == 2048
+        assert aqs.get_num_ctx() is None
+
+    def test_module_constant_still_respected(self, clean_env):
+        # Das Messframework setzt svc.REQUEST_TIMEOUT direkt
+        clean_env.setattr(aqs, "REQUEST_TIMEOUT", 300.0)
+        assert aqs.get_request_timeout() == 300.0
+
+    def test_default_request_unchanged(self, clean_env):
+        provider, calls = _fake_openai_provider()
+        provider.complete("sys", "user")
+        assert len(calls) == 1
+        args = calls[0]
+        assert args["max_tokens"] == 2048
+        assert args["timeout"] == 60.0
+        assert args["response_format"] == {"type": "json_object"}
+        assert args["temperature"] == 0.0 and args["seed"] == 42
+        assert "extra_body" not in args
+        assert args["messages"] == [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "user"},
+        ]
+
+    def test_configured_request(self, clean_env):
+        clean_env.setenv("AI_TIMEOUT", "90")
+        clean_env.setenv("AI_MAX_TOKENS", "3000")
+        clean_env.setenv("AI_NUM_CTX", "8192")
+        provider, calls = _fake_openai_provider("ollama")
+        provider.complete("sys", "user")
+        assert calls[0]["timeout"] == 90.0
+        assert calls[0]["max_tokens"] == 3000
+        assert calls[0]["extra_body"] == {"options": {"num_ctx": 8192}}
+
+    def test_num_ctx_only_for_ollama(self, clean_env):
+        clean_env.setenv("AI_NUM_CTX", "8192")
+        provider, calls = _fake_openai_provider("openai")
+        provider.complete("sys", "user")
+        assert "extra_body" not in calls[0]
+
+    def test_client_gets_timeout_and_retries(self, clean_env):
+        clean_env.setenv("AI_PROVIDER", "ollama")
+        clean_env.setenv("AI_TIMEOUT", "45")
+        with patch("openai.OpenAI") as client:
+            aqs.OpenAiCompatibleProvider(model="llama3.2")
+        assert client.call_args.kwargs["timeout"] == 45.0
+        assert "max_retries" not in client.call_args.kwargs  # SDK-Standard bleibt
+        clean_env.setenv("AI_MAX_RETRIES", "0")
+        with patch("openai.OpenAI") as client:
+            aqs.OpenAiCompatibleProvider(model="llama3.2")
+        assert client.call_args.kwargs["max_retries"] == 0
+
+    def test_anthropic_uses_config(self, clean_env):
+        clean_env.setenv("ANTHROPIC_API_KEY", "test-key")
+        clean_env.setenv("AI_TIMEOUT", "30")
+        clean_env.setenv("AI_MAX_TOKENS", "1000")
+        with patch("anthropic.Anthropic") as client:
+            provider = aqs.AnthropicProvider(model="claude-sonnet-4-6")
+            provider.complete("sys", "user")
+        kwargs = client.return_value.messages.create.call_args.kwargs
+        assert kwargs["timeout"] == 30.0
+        assert kwargs["max_tokens"] == 1000
+
+
+class TestFehlerbehandlung:
+    def test_timeout_no_second_call(self, clean_env):
+        import openai
+        provider, calls = _fake_openai_provider(
+            outcomes=[openai.APITimeoutError(request=_http_request())]
+        )
+        with pytest.raises(aqs.AiProviderError, match="Zeitüberschreitung.*60 s"):
+            provider.complete("sys", "user")
+        assert len(calls) == 1
+
+    def test_connection_error_no_second_call(self, clean_env):
+        import openai
+        provider, calls = _fake_openai_provider(
+            outcomes=[openai.APIConnectionError(request=_http_request())]
+        )
+        with pytest.raises(aqs.AiProviderError, match="Keine Verbindung"):
+            provider.complete("sys", "user")
+        assert len(calls) == 1
+
+    def test_provider_error_is_not_value_error(self):
+        # ValueError würde im Router als 422 (Eingabefehler) gemeldet
+        assert not issubclass(aqs.AiProviderError, ValueError)
+
+    def test_other_error_no_fallback(self, clean_env):
+        import openai
+        provider, calls = _fake_openai_provider(
+            outcomes=[_bad_request("model 'xyz' not found")]
+        )
+        with pytest.raises(openai.BadRequestError):
+            provider.complete("sys", "user")
+        assert len(calls) == 1
+
+    def test_generic_runtime_error_no_fallback(self, clean_env):
+        provider, calls = _fake_openai_provider(outcomes=[RuntimeError("boom")])
+        with pytest.raises(RuntimeError, match="boom"):
+            provider.complete("sys", "user")
+        assert len(calls) == 1
+
+    def test_fallback_only_drops_response_format(self, clean_env):
+        provider, calls = _fake_openai_provider(
+            outcomes=[_bad_request("response_format is not supported by this model")]
+        )
+        assert provider.complete("sys", "user") == "{}"
+        assert len(calls) == 2
+        assert "response_format" in calls[0]
+        retry = calls[1]
+        assert "response_format" not in retry
+        assert retry["seed"] == 42 and retry["temperature"] == 0.0
+        assert retry["max_tokens"] == 2048 and retry["timeout"] == 60.0
+
+    def test_fallback_only_drops_seed(self, clean_env):
+        provider, calls = _fake_openai_provider(
+            outcomes=[_bad_request("Unrecognized request argument supplied: seed", status=422)]
+        )
+        provider.complete("sys", "user")
+        assert len(calls) == 2
+        assert "seed" not in calls[1]
+        assert calls[1]["response_format"] == {"type": "json_object"}
+
+    def test_fallback_timeout_on_retry_is_reported(self, clean_env):
+        import openai
+        provider, calls = _fake_openai_provider(outcomes=[
+            _bad_request("unsupported parameter: response_format"),
+            openai.APITimeoutError(request=_http_request()),
+        ])
+        with pytest.raises(aqs.AiProviderError, match="Zeitüberschreitung"):
+            provider.complete("sys", "user")
+        assert len(calls) == 2
+
+
 # ─── QualityAnalyzer Tests (mit MockProvider) ─────────────────────────────────
 
 class TestQualityAnalyzer:

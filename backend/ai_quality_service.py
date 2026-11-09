@@ -7,6 +7,13 @@ Unterstützte Anbieter (via Umgebungsvariablen):
   AI_PROVIDER=ollama      → Lokale KI via OpenAI-kompatiblem Endpunkt (kein Key nötig)
   AI_PROVIDER=openai_compatible → Beliebige OpenAI-kompatible API (AI_BASE_URL + OPENAI_API_KEY)
 
+Betriebsparameter (optional, ohne Angabe gelten die Standardwerte):
+  AI_TIMEOUT=60        Zeitlimit je Aufruf in Sekunden
+  AI_MAX_TOKENS=2048   maximale Antwortlänge in Token
+  AI_NUM_CTX=<n>       Kontextlänge, nur bei AI_PROVIDER=ollama (Standard: Ollama-Standard)
+  AI_MAX_RETRIES=<n>   automatische SDK-Wiederholungen (Standard: SDK-Standard 2)
+  AI_TEMPERATURE=0, AI_SEED=42 (AI_SEED=none schaltet den Seed ab)
+
 Kernklassen:
   - LlmProvider           – Protokoll: alle Provider implementieren complete()
   - AnthropicProvider     – Anthropic Claude API
@@ -60,6 +67,7 @@ DEFAULT_MODELS: Dict[str, str] = {
 }
 
 DEFAULT_PROFILE = "standard"
+# Standard-Zeitlimit je Aufruf in Sekunden; per AI_TIMEOUT überschreibbar (G1 in #31, L12 in #33)
 REQUEST_TIMEOUT = 60.0
 
 # Sampling: temperature 0 und fester Seed, damit gleiche Eingaben möglichst
@@ -100,6 +108,86 @@ def get_seed() -> Optional[int]:
         return int(raw)
     except ValueError:
         return DEFAULT_SEED
+
+
+# ─── Betriebsparameter (L12 in #33) ───────────────────────────────────────────
+# Ohne gesetzte Variable gelten die bisherigen Werte. Ungültige oder nicht
+# positive Werte fallen auf den Standard zurück. Die Standards werden erst beim
+# Aufruf gelesen, damit Tests und das Messframework REQUEST_TIMEOUT / MAX_TOKENS
+# zur Laufzeit setzen können.
+
+
+def _positive_env(name: str, cast: Any) -> Optional[Any]:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        value = cast(raw)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def get_request_timeout() -> float:
+    """Zeitlimit je KI-Aufruf in Sekunden aus AI_TIMEOUT, Standard REQUEST_TIMEOUT (60)."""
+    value = _positive_env("AI_TIMEOUT", float)
+    return value if value is not None else REQUEST_TIMEOUT
+
+
+def get_max_tokens() -> int:
+    """Maximale Antwortlänge in Token aus AI_MAX_TOKENS, Standard MAX_TOKENS (2048)."""
+    value = _positive_env("AI_MAX_TOKENS", int)
+    return value if value is not None else MAX_TOKENS
+
+
+def get_num_ctx() -> Optional[int]:
+    """Kontextlänge für Ollama (num_ctx) aus AI_NUM_CTX.
+
+    Standard: nicht gesetzt → es wird nichts mitgeschickt, Ollama nutzt seinen
+    eigenen Standard (wie bisher). Andere Provider kennen den Parameter nicht.
+    """
+    return _positive_env("AI_NUM_CTX", int)
+
+
+def get_max_retries() -> Optional[int]:
+    """Automatische Wiederholungen des SDK (gleiche Parameter) aus AI_MAX_RETRIES.
+
+    Standard: nicht gesetzt → SDK-Standard (2), Verhalten wie bisher. 0 schaltet sie ab.
+    """
+    raw = os.environ.get("AI_MAX_RETRIES", "").strip()
+    try:
+        value = int(raw) if raw else None
+    except ValueError:
+        return None
+    return value if value is not None and value >= 0 else None
+
+
+class AiProviderError(RuntimeError):
+    """Klarer Fehler des KI-Anbieters (Zeitüberschreitung, keine Verbindung).
+
+    Bewusst kein ValueError: der Router meldet ihn als 502 mit dieser Meldung.
+    """
+
+
+# Kennzeichen einer Fehlermeldung, die auf einen nicht unterstützten Parameter hinweist
+_UNSUPPORTED_MARKERS = (
+    "unsupported", "not supported", "unknown", "unrecognized", "unexpected",
+    "invalid", "not allowed", "nicht unterstützt", "extra inputs", "extra_forbidden",
+)
+# Parameter, auf die der gezielte Rückfall verzichten darf
+_OPTIONAL_PARAMS = ("response_format", "seed")
+
+
+def _unsupported_params(error: Exception) -> List[str]:
+    """Welche optionalen Parameter laut Fehlermeldung nicht unterstützt werden."""
+    text = str(error)
+    body = getattr(error, "body", None)
+    if body is not None:
+        text += " " + str(body)
+    text = text.lower()
+    if not any(marker in text for marker in _UNSUPPORTED_MARKERS):
+        return []
+    return [p for p in _OPTIONAL_PARAMS if p in text]
 
 
 # ─── Pydantic-Modelle ─────────────────────────────────────────────────────────
@@ -168,18 +256,32 @@ class AnthropicProvider:
                 "Bitte in .env-Datei oder als Umgebungsvariable konfigurieren."
             )
         self.model = model
-        self._client = _anthropic.Anthropic(api_key=api_key)
+        client_args: Dict[str, Any] = {"api_key": api_key}
+        retries = get_max_retries()
+        if retries is not None:
+            client_args["max_retries"] = retries
+        self._client = _anthropic.Anthropic(**client_args)
 
     def complete(self, system_prompt: str, user_prompt: str, model: Optional[str] = None) -> str:
-        message = self._client.messages.create(
-            model=model or self.model,
-            max_tokens=MAX_TOKENS,
-            # Anthropic kennt keinen Seed, nur die Temperatur
-            temperature=get_temperature(),
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
-            timeout=REQUEST_TIMEOUT,
-        )
+        import anthropic as _anthropic
+
+        timeout = get_request_timeout()
+        try:
+            message = self._client.messages.create(
+                model=model or self.model,
+                max_tokens=get_max_tokens(),
+                # Anthropic kennt keinen Seed und kein num_ctx, nur die Temperatur
+                temperature=get_temperature(),
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+                timeout=timeout,
+            )
+        except _anthropic.APITimeoutError as e:
+            raise AiProviderError(
+                f"Zeitüberschreitung: keine Antwort des KI-Modells nach {timeout:g} s (AI_TIMEOUT)"
+            ) from e
+        except _anthropic.APIConnectionError as e:
+            raise AiProviderError(f"Keine Verbindung zum KI-Anbieter: {e}") from e
         return message.content[0].text if message.content else "{}"
 
 
@@ -217,42 +319,71 @@ class OpenAiCompatibleProvider:
             resolved_base_url = "http://localhost:11434/v1"
 
         self.model = model
-        self._client = _openai.OpenAI(
-            api_key=api_key,
-            base_url=resolved_base_url,
-            timeout=REQUEST_TIMEOUT,
-        )
+        self._provider_name = provider
+        client_args: Dict[str, Any] = {
+            "api_key": api_key,
+            "base_url": resolved_base_url,
+            "timeout": get_request_timeout(),
+        }
+        retries = get_max_retries()
+        if retries is not None:
+            client_args["max_retries"] = retries
+        self._client = _openai.OpenAI(**client_args)
 
-    def complete(self, system_prompt: str, user_prompt: str, model: Optional[str] = None) -> str:
-        used_model = model or self.model
-        sampling: Dict[str, Any] = {"temperature": get_temperature()}
+    def _request_args(self, system_prompt: str, user_prompt: str, used_model: str) -> Dict[str, Any]:
+        args: Dict[str, Any] = {
+            "model": used_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "max_tokens": get_max_tokens(),
+            # response_format erzwingt valides JSON (Ollama + OpenAI unterstützen das)
+            "response_format": {"type": "json_object"},
+            "temperature": get_temperature(),
+            "timeout": get_request_timeout(),
+        }
         seed = get_seed()
         if seed is not None:
-            sampling["seed"] = seed
+            args["seed"] = seed
+        num_ctx = get_num_ctx()
+        # num_ctx versteht nur Ollama (Feld "options"); anderen Anbietern nichts Unbekanntes schicken
+        if num_ctx is not None and getattr(self, "_provider_name", "") == "ollama":
+            args["extra_body"] = {"options": {"num_ctx": num_ctx}}
+        return args
+
+    def complete(self, system_prompt: str, user_prompt: str, model: Optional[str] = None) -> str:
+        import openai as _openai
+
+        args = self._request_args(system_prompt, user_prompt, model or self.model)
         try:
-            # response_format erzwingt valides JSON (Ollama + OpenAI unterstützen das)
-            response = self._client.chat.completions.create(
-                model=used_model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                max_tokens=MAX_TOKENS,
-                response_format={"type": "json_object"},
-                **sampling,
-            )
-        except Exception:
-            # Fallback für Provider die response_format oder seed nicht unterstützen
-            response = self._client.chat.completions.create(
-                model=used_model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                max_tokens=MAX_TOKENS,
-                temperature=sampling["temperature"],
-            )
+            response = self._create(args)
+        except (_openai.BadRequestError, _openai.UnprocessableEntityError) as e:
+            # Gezielter Rückfall (L12): nur wenn der Anbieter response_format oder seed
+            # ausdrücklich ablehnt. Nur diesen Parameter weglassen, Temperatur,
+            # Seed (falls nicht betroffen) und alle übrigen Einstellungen bleiben.
+            dropped = [p for p in _unsupported_params(e) if p in args]
+            if not dropped:
+                raise
+            for param in dropped:
+                args.pop(param)
+            response = self._create(args)
         return response.choices[0].message.content or "{}"
+
+    def _create(self, args: Dict[str, Any]) -> Any:
+        """Ein Aufruf; Zeitüberschreitung und Verbindungsfehler werden NICHT erneut
+        mit anderen Parametern versucht, sondern als klarer Fehler gemeldet."""
+        import openai as _openai
+
+        try:
+            return self._client.chat.completions.create(**args)
+        except _openai.APITimeoutError as e:
+            raise AiProviderError(
+                f"Zeitüberschreitung: keine Antwort des KI-Modells nach "
+                f"{args['timeout']:g} s (AI_TIMEOUT)"
+            ) from e
+        except _openai.APIConnectionError as e:
+            raise AiProviderError(f"Keine Verbindung zum KI-Anbieter: {e}") from e
 
 
 # ─── Provider-Factory ─────────────────────────────────────────────────────────
