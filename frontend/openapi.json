@@ -381,6 +381,20 @@
         "title": "Body_login_api_auth_token_post",
         "type": "object"
       },
+      "Body_parse_file_api_projects__project_id__documents__prefix__import_parse_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_parse_file_api_projects__project_id__documents__prefix__import_parse_post",
+        "type": "object"
+      },
       "Body_upload_image_api_uploads_post": {
         "properties": {
           "file": {
@@ -1005,6 +1019,67 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "ImportCheck": {
+        "properties": {
+          "invalid": {
+            "title": "Invalid",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/RowCheck"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "valid",
+          "invalid"
+        ],
+        "title": "ImportCheck",
+        "type": "object"
+      },
+      "ImportResult": {
+        "properties": {
+          "created": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Created",
+            "type": "array"
+          }
+        },
+        "required": [
+          "created"
+        ],
+        "title": "ImportResult",
+        "type": "object"
+      },
+      "ImportRows": {
+        "properties": {
+          "rows": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "title": "ImportRows",
+        "type": "object"
+      },
       "ItemCreate": {
         "properties": {
           "active": {
@@ -1299,6 +1374,25 @@
           "target_uid"
         ],
         "title": "LinkCreate",
+        "type": "object"
+      },
+      "ParsedTable": {
+        "properties": {
+          "rows": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "title": "ParsedTable",
         "type": "object"
       },
       "ProjectCreate": {
@@ -1667,6 +1761,43 @@
           "svg"
         ],
         "title": "RenderResponse",
+        "type": "object"
+      },
+      "RowCheck": {
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "errors",
+          "notes",
+          "item"
+        ],
+        "title": "RowCheck",
         "type": "object"
       },
       "SimulinkCoverage": {
@@ -3484,6 +3615,207 @@
         "summary": "Export Document",
         "tags": [
           "export"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/documents/{prefix}/import": {
+      "post": {
+        "description": "Legt alle Zeilen an – nur wenn jede Zeile gültig ist (alles oder nichts).",
+        "operationId": "run_import_api_projects__project_id__documents__prefix__import_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "prefix",
+            "required": true,
+            "schema": {
+              "title": "Prefix",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRows"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Run Import",
+        "tags": [
+          "import"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/documents/{prefix}/import/parse": {
+      "post": {
+        "description": "Liest eine .xlsx-, .csv- oder .tsv-Datei und gibt die Zellen als Text zurück.",
+        "operationId": "parse_file_api_projects__project_id__documents__prefix__import_parse_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "prefix",
+            "required": true,
+            "schema": {
+              "title": "Prefix",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_parse_file_api_projects__project_id__documents__prefix__import_parse_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParsedTable"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Parse File",
+        "tags": [
+          "import"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/documents/{prefix}/import/validate": {
+      "post": {
+        "description": "Prüft die zugeordneten Zeilen, ohne etwas anzulegen.",
+        "operationId": "validate_import_api_projects__project_id__documents__prefix__import_validate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "prefix",
+            "required": true,
+            "schema": {
+              "title": "Prefix",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRows"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Validate Import",
+        "tags": [
+          "import"
         ]
       }
     },

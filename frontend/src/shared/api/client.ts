@@ -112,6 +112,22 @@ export const createItem = (
     `/projects/${projectId}/documents/${prefix}/items`,
     data,
   );
+
+// Tabellen-Import (Excel/CSV/Zwischenablage)
+type ImportBase = `/api/projects/{project_id}/documents/{prefix}/import`;
+const importUrl = (projectId: string, prefix: string) =>
+  `/projects/${projectId}/documents/${encodeURIComponent(prefix)}/import`;
+export type ImportCheck = ApiResponse<`${ImportBase}/validate`, 'post'>;
+export const parseImportFile = (projectId: string, prefix: string, file: File) => {
+  const form = new FormData();
+  form.append('file', file);
+  return api.post<ApiResponse<`${ImportBase}/parse`, 'post'>>(`${importUrl(projectId, prefix)}/parse`, form);
+};
+export const validateImport = (projectId: string, prefix: string, rows: Record<string, string>[]) =>
+  api.post<ImportCheck>(`${importUrl(projectId, prefix)}/validate`, { rows });
+export const runImport = (projectId: string, prefix: string, rows: Record<string, string>[]) =>
+  api.post<ApiResponse<ImportBase, 'post'>>(importUrl(projectId, prefix), { rows });
+
 export const getItem = (projectId: string, uid: string) =>
   api.get<Item>(`/projects/${projectId}/items/${uid}`);
 export const updateItem = (projectId: string, uid: string, data: ApiBody<'/api/projects/{project_id}/items/{uid}', 'put'>) =>

@@ -375,6 +375,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/documents/{prefix}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Import
+         * @description Legt alle Zeilen an – nur wenn jede Zeile gültig ist (alles oder nichts).
+         */
+        post: operations["run_import_api_projects__project_id__documents__prefix__import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/documents/{prefix}/import/parse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Parse File
+         * @description Liest eine .xlsx-, .csv- oder .tsv-Datei und gibt die Zellen als Text zurück.
+         */
+        post: operations["parse_file_api_projects__project_id__documents__prefix__import_parse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/documents/{prefix}/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate Import
+         * @description Prüft die zugeordneten Zeilen, ohne etwas anzulegen.
+         */
+        post: operations["validate_import_api_projects__project_id__documents__prefix__import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/documents/{prefix}/items": {
         parameters: {
             query?: never;
@@ -1082,6 +1142,11 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** Body_parse_file_api_projects__project_id__documents__prefix__import_parse_post */
+        Body_parse_file_api_projects__project_id__documents__prefix__import_parse_post: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_image_api_uploads_post */
         Body_upload_image_api_uploads_post: {
             /** File */
@@ -1303,6 +1368,27 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** ImportCheck */
+        ImportCheck: {
+            /** Invalid */
+            invalid: number;
+            /** Rows */
+            rows: components["schemas"]["RowCheck"][];
+            /** Valid */
+            valid: number;
+        };
+        /** ImportResult */
+        ImportResult: {
+            /** Created */
+            created: string[];
+        };
+        /** ImportRows */
+        ImportRows: {
+            /** Rows */
+            rows: {
+                [key: string]: string;
+            }[];
+        };
         /** ItemCreate */
         ItemCreate: {
             /**
@@ -1402,6 +1488,11 @@ export interface components {
         LinkCreate: {
             /** Target Uid */
             target_uid: string;
+        };
+        /** ParsedTable */
+        ParsedTable: {
+            /** Rows */
+            rows: string[][];
         };
         /** ProjectCreate */
         ProjectCreate: {
@@ -1530,6 +1621,17 @@ export interface components {
         RenderResponse: {
             /** Svg */
             svg: string;
+        };
+        /** RowCheck */
+        RowCheck: {
+            /** Errors */
+            errors: string[];
+            /** Item */
+            item: {
+                [key: string]: unknown;
+            } | null;
+            /** Notes */
+            notes: string[];
         };
         /**
          * SimulinkCoverage
@@ -2514,6 +2616,114 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_import_api_projects__project_id__documents__prefix__import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportRows"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parse_file_api_projects__project_id__documents__prefix__import_parse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_parse_file_api_projects__project_id__documents__prefix__import_parse_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParsedTable"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validate_import_api_projects__project_id__documents__prefix__import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportRows"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCheck"];
                 };
             };
             /** @description Validation Error */

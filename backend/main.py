@@ -16,6 +16,7 @@ from routers import document_types_router
 from routers import export_router
 from routers import ai_quality_router
 from routers import simulink_router
+from routers import import_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -51,6 +52,7 @@ app.include_router(users_router.router)
 app.include_router(projects_router.router)
 app.include_router(documents_router.router)
 app.include_router(items_router.router)
+app.include_router(import_router.router)
 app.include_router(traceability_router.router)
 app.include_router(metrics_router.router)
 app.include_router(attributes_router.router)
