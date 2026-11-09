@@ -133,6 +133,11 @@ class TestPromptBuilder:
         assert '{"category": "Clarity"' in prompt
         assert "Übernimm daraus keine Formulierungen" in prompt
 
+    def test_system_prompt_defines_cautious_severity(self):
+        prompt = self.builder.build_system_prompt({})
+        assert '"high" nur, wenn die Anforderung so nicht umsetzbar oder nicht prüfbar ist' in prompt
+        assert "Im Zweifel den niedrigeren Schweregrad" in prompt
+
     def test_max_tokens_raised(self):
         assert aqs.MAX_TOKENS == 2048
 

@@ -383,6 +383,8 @@ def save_quality_result(project_id: str, uid: str, result: AiQualityResult) -> P
 class PromptBuilder:
     """Baut System- und User-Prompt aus Item-Daten und einem Qualitätsprofil."""
 
+    # V7: zusätzlich ein festgelegter, zurückhaltender Schweregrad (in V4 war fast
+    # jeder Befund "high", auch bei korrigierten Anforderungen; E3 in #31).
     # Prüfliste statt allgemeiner Qualitätsdimensionen, definierte Notenskala und
     # Beispiele aus fachfremden Bereichen (L5 in #33); jeder Befund mit wörtlicher
     # Textstelle und umformulierter Anforderung (L11 in #33, Teil im Prompt).
@@ -404,6 +406,11 @@ Algorithmus, Parameterwerte), statt WAS erreicht werden muss
 6. Nicht prüfbar: kein objektives Abnahme- oder Prüfkriterium
 Ein schwaches Modalverb („soll“ statt „muss“) ist höchstens ein Befund mit severity "low" und ersetzt \
 keine der Prüfungen 1–6.
+
+Schweregrad: "high" nur, wenn die Anforderung so nicht umsetzbar oder nicht prüfbar ist. "medium", wenn \
+eine Angabe fehlt oder unklar ist, die Anforderung aber prüfbar bleibt. "low" für Formulierung und Stil. \
+Nennt die Anforderung schon Wert, Einheit und Bedingung, ist ein Befund höchstens "medium". \
+Im Zweifel den niedrigeren Schweregrad wählen.
 
 Jeder Befund nennt in "description" die betroffene Textstelle wörtlich in Anführungszeichen und den Fehler. \
 "suggestion" ist die vollständig umformulierte Anforderung, in der genau dieser Fehler behoben ist; \
