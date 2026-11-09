@@ -127,6 +127,14 @@ class TestPromptBuilder:
         assert "90–100 keine Mängel" in prompt
         assert "0–39" in prompt
 
+    def test_system_prompt_short_findings_optional_suggestion(self):
+        # V13: Hinweis zuerst, Vorschlag nur wenn sicher; Beispiele erfinden keine Werte
+        prompt = self.builder.build_system_prompt({})
+        assert "EINEM kurzen Satz" in prompt
+        assert 'lass "suggestion" leer' in prompt
+        assert "0,5 K" not in prompt
+        assert "vollständig umformulierte Anforderung" not in prompt
+
     def test_system_prompt_examples_render(self):
         # Die Beispiele enthalten JSON; die geschweiften Klammern müssen das format() überstehen
         prompt = self.builder.build_system_prompt({"name": "X"})

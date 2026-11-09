@@ -412,10 +412,13 @@ eine Angabe fehlt oder unklar ist, die Anforderung aber prüfbar bleibt. "low" f
 Nennt die Anforderung schon Wert, Einheit und Bedingung, ist ein Befund höchstens "medium". \
 Im Zweifel den niedrigeren Schweregrad wählen.
 
-Jeder Befund nennt in "description" die betroffene Textstelle wörtlich in Anführungszeichen und den Fehler. \
-"suggestion" ist die vollständig umformulierte Anforderung, in der genau dieser Fehler behoben ist; \
-bei einer Lösungsvorgabe nennt sie das Ziel und lässt Werkzeug, Verfahren und Parameter weg. \
-Fehlende Werte setzt du als Platzhalter in spitze Klammern, z. B. <Wert> <Einheit>. \
+Ziel ist, den Autor auf den Fehler hinzuweisen, nicht die Anforderung neu zu schreiben. \
+Jeder Befund nennt in "description" in EINEM kurzen Satz die betroffene Textstelle wörtlich in \
+Anführungszeichen und was daran fehlt oder falsch ist. \
+"suggestion" ist optional: Schreibe dort nur dann einen kurzen Vorschlag, wenn er sicher richtig ist und \
+nichts erfindet. Werte, die nicht im Text stehen, nie erfinden, sondern als Platzhalter in spitze Klammern \
+setzen, z. B. <Wert> <Einheit>. Bist du nicht sicher, lass "suggestion" leer (""). \
+Melde keine Befunde, die du nicht begründen kannst. \
 Hat die Anforderung keinen Fehler, bleibt "issues" leer.
 
 Noten je Dimension: 90–100 keine Mängel, 70–89 kleine Mängel, 40–69 mindestens ein wesentlicher Mangel, \
@@ -426,16 +429,15 @@ Die Beispiele zeigen nur das Format. Übernimm daraus keine Formulierungen, Wert
 Beispiel 1 – Anforderung: 'Die Bahnsteigtür soll sich zügig über den Spindelantrieb SP-4 öffnen.'
 Befunde: [{{"category": "Clarity", "severity": "high", \
 "description": "„zügig“ ist ohne Maßstab nicht prüfbar.", \
-"suggestion": "Die Bahnsteigtür muss sich innerhalb von <Wert> s vollständig öffnen."}}, \
+"suggestion": "Öffnungszeit angeben: innerhalb von <Wert> s."}}, \
 {{"category": "Completeness", "severity": "medium", \
 "description": "„über den Spindelantrieb SP-4“ legt die Umsetzung fest.", \
-"suggestion": "Die Bahnsteigtür muss sich auf Anforderung des Zugpersonals vollständig öffnen."}}]
+"suggestion": ""}}]
 
 Beispiel 2 – Anforderung: 'Das Heizungssteuergerät soll die Raumtemperatur mit einem PID-Regler mit Kp=3 regeln.'
 Befund: {{"category": "Completeness", "severity": "high", \
 "description": "„mit einem PID-Regler mit Kp=3“ gibt die Lösung vor, das geforderte Verhalten fehlt.", \
-"suggestion": "Das Heizungssteuergerät muss die Raumtemperatur im eingeschwungenen Zustand mit höchstens \
-0,5 K Abweichung vom Sollwert halten."}}
+"suggestion": ""}}
 
 Beispiel 3 – Anforderung: 'Die Pumpe muss bei 20 °C ± 2 K mindestens 12 l/min fördern.' → "issues": []
 
@@ -452,8 +454,8 @@ Antworte AUSSCHLIESSLICH als valides JSON gemäß folgendem Schema:
     {{
       "category": "<Clarity|Testability|Completeness|Consistency|ModalVerb>",
       "severity": "<low|medium|high|critical>",
-      "description": "<„Textstelle“: Problembeschreibung>",
-      "suggestion": "<vollständig umformulierte Anforderung>"
+      "description": "<„Textstelle“: was fehlt oder falsch ist, ein Satz>",
+      "suggestion": "<kurzer Vorschlag nur wenn sicher, sonst leer>"
     }}
   ],
   "summary": "<1 Satz Gesamtbewertung>"
