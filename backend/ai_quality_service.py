@@ -26,6 +26,7 @@ Kernklassen:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import time
@@ -40,6 +41,8 @@ from typing_extensions import Protocol
 import doorstop_service as ds
 from doorstop.core.types import UID
 from doorstop import DoorstopError
+
+logger = logging.getLogger(__name__)
 
 
 def _uid_to_prefix(uid: str) -> Optional[str]:
@@ -1080,6 +1083,39 @@ def _quoted_words(text: str) -> set:
     return words
 
 
+VERIFY_SYSTEM = """\
+Du prüfst die Befunde einer Qualitätsprüfung zu GENAU EINER Anforderung. Entscheide für jeden Befund einzeln:
+true  – der Befund trifft auf diese Anforderung zu UND ein eventueller Vorschlag ist richtig und passt zum Befund.
+false – der Befund passt nicht zu dieser Anforderung, ist allgemein oder sinnlos, oder der Vorschlag ist falsch.
+Nur true oder false in die Liste schreiben, keinen Text.
+Antworte AUSSCHLIESSLICH als JSON: {"gueltig": [true|false, ...]} – ein Eintrag je Befund, in derselben Reihenfolge."""
+
+
+def verify_issues(provider: "LlmProvider", text: str, issues: List[AiQualityIssue],
+                  model: Optional[str] = None) -> List[AiQualityIssue]:
+    """V18/V23: Ein zusätzlicher Aufruf für alle KI-Befunde zusammen. Was das Modell ausdrücklich als false
+    markiert, wird abgestuft (Schwere low, ohne Vorschlag); bei unlesbarer Antwort bleibt alles (sicherer Rückfall)."""
+    if not issues:
+        return issues
+    lines = [f"Anforderung: '{text}'", "", "Befunde:"]
+    for n, i in enumerate(issues, 1):
+        lines.append(f"{n}. {i.description}" + (f" Vorschlag: {i.suggestion}" if i.suggestion else ""))
+    try:
+        raw = provider.complete(VERIFY_SYSTEM, "\n".join(lines), model=model)
+        data = json.loads(QualityResultParser._extract_json(raw))
+        flags = data.get("gueltig") if isinstance(data, dict) else None
+    except Exception as e:  # noqa: BLE001 – Selbstprüfung darf die Analyse nie verhindern
+        logger.warning("Selbstprüfung fehlgeschlagen, alle Befunde bleiben: %s", e)
+        return issues
+    # Das Modell hängt oft Text an die Liste an („[false, "Einheit ergänzen"]“): nur Wahrheitswerte zählen
+    flags = [f for f in flags if isinstance(f, bool)] if isinstance(flags, list) else []
+    if len(flags) != len(issues):
+        return issues
+    # V23: Abgelehnte Befunde nicht löschen (kostete in V18 offline 6 von 96 Hinweisen), sondern abstufen:
+    # Schwere „low“, Vorschlag entfernt – der Hinweis bleibt, der womöglich falsche Vorschlag verschwindet.
+    return [i if ok else i.model_copy(update={"severity": "low", "suggestion": ""}) for i, ok in zip(issues, flags)]
+
+
 def drop_same_spot(ai_issues: List[AiQualityIssue], rule_issues: List[AiQualityIssue]) -> List[AiQualityIssue]:
     """V17: Entfernt KI-Befunde zu einer Textstelle, die eine Regel schon gemeldet hat (gleiches zitiertes
     Wort). Die Modalverb-Regel zählt nicht mit, sonst fiele jeder Befund weg, der einen Satz mit „soll“ zitiert."""
@@ -1244,7 +1280,10 @@ class QualityAnalyzer:
         # V14: Modalverb prüft nur die Regel; KI-Befunde dazu entfallen
         ai_issues = [i for i in result.issues if (i.category or "").strip().lower() != "modalverb"]
         # V17: KI-Befunde zu einer Stelle, die eine Regel schon meldet, entfallen
-        result.issues = rule_issues + drop_same_spot(drop_rule_duplicates(ai_issues, rule_issues), rule_issues)
+        ai_issues = drop_same_spot(drop_rule_duplicates(ai_issues, rule_issues), rule_issues)
+        # V18/V23: Selbstprüfung – ein zweiter, kurzer Aufruf; abgelehnte KI-Befunde werden abgestuft
+        ai_issues = verify_issues(self._provider, text, ai_issues, used_model)
+        result.issues = rule_issues + ai_issues
         # V19: Gesamtnote aus Teilnoten, Profilgewichten und den endgültigen Befunden
         result.score = compute_score(result.score, result.issues, profile)
 

@@ -757,7 +757,7 @@ class TestQualityAnalyzer:
         assert result.score.passed is False
         assert result.requirement_uid == "SRS001"
         mock_save.assert_called_once()
-        assert len(mock_provider.calls) == 1  # Provider wurde genau einmal aufgerufen
+        assert len(mock_provider.calls) == 2  # V18: Hauptaufruf + Selbstprüfung der KI-Befunde
 
     @patch("doorstop_service.get_item")
     def test_analyze_header_item_raises(self, mock_get_item):
@@ -810,7 +810,7 @@ class TestQualityAnalyzer:
         analyzer = aqs.QualityAnalyzer(provider=mock_provider)
         result = asyncio.run(analyzer.analyze("proj1", "SRS001", profile_name="standard"))
 
-        assert mock_provider.models == ["llama3.2"]
+        assert mock_provider.models == ["llama3.2", "llama3.2"]  # V18: Selbstprüfung mit demselben Modell
         assert result.model_used == "llama3.2"
 
 
@@ -1133,3 +1133,41 @@ class TestSameSpot:
         rules = [self._i(aqs.RULE_PREFIX + "Normative Anforderung ohne verbindliches Modalverb: 'soll'", "ModalVerb")]
         ai = [self._i("„Die Software soll regelmäßig laufen“: Häufigkeit fehlt.")]
         assert aqs.drop_same_spot(ai, rules) == ai
+
+
+class TestVerify:
+    """V18: Selbstprüfung der KI-Befunde mit einem zweiten Aufruf."""
+
+    class _P:
+        def __init__(self, antwort):
+            self.antwort, self.aufrufe = antwort, 0
+
+        def complete(self, system_prompt, user_prompt, model=None):
+            self.aufrufe += 1
+            return self.antwort
+
+    def _i(self, d):
+        return aqs.AiQualityIssue(category="Clarity", severity="medium", description=d, suggestion="")
+
+    def test_downgrades_false(self):
+        # V23: abgelehnte Befunde bleiben als Hinweis, aber Schwere low und ohne Vorschlag
+        p = self._P('{"gueltig": [true, false]}')
+        a, b = self._i("a"), self._i("b")
+        b.suggestion = "falscher Vorschlag"
+        kept = aqs.verify_issues(p, "Text", [a, b])
+        assert [k.description for k in kept] == ["a", "b"] and p.aufrufe == 1
+        assert kept[1].severity == "low" and kept[1].suggestion == "" and kept[0].severity == "medium"
+
+    def test_text_in_list_is_ignored(self):
+        p = self._P('{"gueltig": [false, "Einheit ergänzen"]}')
+        kept = aqs.verify_issues(p, "Text", [self._i("a")])
+        assert kept[0].severity == "low"
+
+    def test_no_call_without_issues(self):
+        p = self._P('{"gueltig": []}')
+        assert aqs.verify_issues(p, "Text", []) == [] and p.aufrufe == 0
+
+    def test_keeps_all_on_bad_answer(self):
+        issues = [self._i("a"), self._i("b")]
+        assert aqs.verify_issues(self._P("kein json"), "Text", issues) == issues
+        assert aqs.verify_issues(self._P('{"gueltig": [false]}'), "Text", issues) == issues
