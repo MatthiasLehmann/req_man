@@ -156,3 +156,27 @@ class TestDeleteProject:
         assert (path / "REQ" / "skizze.png").exists()
         assert not (path / "REQ" / ".doorstop.yml").exists()
         assert list((path / "REQ").glob("*.yml")) == []
+
+
+# ─── V21: Protokolldatei <UID>.ai-quality-log.yml ist ebenfalls Sidecar ──────
+
+
+class TestProtocolSidecar:
+    def test_protocol_suffix_is_sidecar(self):
+        assert ds._is_sidecar("NEED001.ai-quality-log") is True
+        assert ds._is_sidecar("NEED001.AI-QUALITY-LOG") is True
+
+    def test_real_items_hides_protocol_file(self, tmp_path):
+        import ai_quality_service as aqs
+        tree = doorstop.build(root=str(tmp_path))
+        doc = tree.create_document(str(tmp_path / "NEED"), "NEED")
+        uid = str(doc.add_item().uid)
+        aqs.save_quality_protocol(tmp_path / "NEED" / f"{uid}.ai-quality-log.yml", {
+            "requirement_uid": uid,
+            "system_prompt": "Zeile 1\nZeile 2\n",
+            "raw_response": '{"issues": []}',
+            "rule_issues": [],
+        })
+        doc = doorstop.build(root=str(tmp_path)).find_document("NEED")
+        assert f"{uid}.ai-quality-log" in [str(i.uid) for i in doc.items]
+        assert [str(i.uid) for i in ds._real_items(doc)] == [uid]

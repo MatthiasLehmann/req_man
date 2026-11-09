@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -81,6 +82,12 @@ MAX_TOKENS = 2048
 
 PROFILES_DIR = Path(__file__).parent.parent / "data" / "ai_quality_profiles"
 
+# Protokoll je Analyse (L15 in #33, H2 in #31): System-Prompt, User-Prompt, Rohantwort,
+# Modell, Dauer und Regelbefunde in <UID>.ai-quality-log.yml neben dem Sidecar.
+# Standard an; AI_QUALITY_PROTOCOL=0/false/off/no/nein schaltet es ab.
+PROTOCOL_ENV = "AI_QUALITY_PROTOCOL"
+PROTOCOL_SUFFIX = ".ai-quality-log.yml"
+
 
 def get_default_model() -> str:
     """Gibt das Standard-Modell für den konfigurierten Provider zurück."""
@@ -97,6 +104,11 @@ def get_temperature() -> float:
         return float(os.environ.get("AI_TEMPERATURE", DEFAULT_TEMPERATURE))
     except ValueError:
         return DEFAULT_TEMPERATURE
+
+
+def protocol_enabled() -> bool:
+    """True, solange AI_QUALITY_PROTOCOL nicht auf 0/false/off/no/nein steht."""
+    return os.environ.get(PROTOCOL_ENV, "1").strip().lower() not in ("0", "false", "off", "no", "nein")
 
 
 def get_seed() -> Optional[int]:
@@ -500,15 +512,66 @@ def load_quality_result(project_id: str, uid: str) -> Optional[AiQualityResult]:
         return None
 
 
-def save_quality_result(project_id: str, uid: str, result: AiQualityResult) -> Path:
-    """Speichert das KI-Qualitätsergebnis als Sidecar-YAML."""
+def save_quality_result(
+    project_id: str,
+    uid: str,
+    result: AiQualityResult,
+    protocol: Optional[Dict[str, Any]] = None,
+) -> Path:
+    """Speichert das KI-Qualitätsergebnis als Sidecar-YAML.
+
+    Mit ``protocol`` (und eingeschaltetem Protokoll) zusätzlich das Protokoll
+    der Analyse als ``<UID>.ai-quality-log.yml`` daneben. Das Sidecar selbst
+    bleibt unverändert.
+    """
     path = get_quality_yaml_path(project_id, uid)
     if not path:
         raise ValueError(f"Konnte Speicherpfad für {uid} nicht bestimmen")
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         yaml.dump(result.model_dump(), f, allow_unicode=True, default_flow_style=False)
+    if protocol is not None and protocol_enabled():
+        save_quality_protocol(path.with_name(f"{uid}{PROTOCOL_SUFFIX}"), protocol)
     return path
+
+
+class _ProtocolDumper(yaml.SafeDumper):
+    """Mehrzeilige Texte (Prompts, Rohantwort) als lesbare Blöcke (|)."""
+
+
+def _str_representer(dumper: yaml.SafeDumper, data: str) -> yaml.ScalarNode:
+    style = "|" if "\n" in data else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
+
+
+_ProtocolDumper.add_representer(str, _str_representer)
+
+
+def save_quality_protocol(path: Path, protocol: Dict[str, Any]) -> Optional[Path]:
+    """Schreibt das Protokoll einer Analyse. Fehler beim Schreiben brechen die
+    Analyse nie ab (das Ergebnis ist dann schon gespeichert)."""
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            yaml.dump(protocol, f, Dumper=_ProtocolDumper, allow_unicode=True,
+                      default_flow_style=False, sort_keys=False, width=1_000_000)
+        return path
+    except Exception:
+        return None
+
+
+def get_quality_protocol_path(project_id: str, uid: str) -> Optional[Path]:
+    """Pfad der Protokolldatei <UID>.ai-quality-log.yml (neben dem Sidecar)."""
+    path = get_quality_yaml_path(project_id, uid)
+    return path.with_name(f"{uid}{PROTOCOL_SUFFIX}") if path else None
+
+
+def load_quality_protocol(project_id: str, uid: str) -> Optional[Dict[str, Any]]:
+    """Lädt das Protokoll der letzten Analyse, falls vorhanden."""
+    path = get_quality_protocol_path(project_id, uid)
+    if not path or not path.exists():
+        return None
+    with open(path, encoding="utf-8") as f:
+        return yaml.safe_load(f) or None
 
 
 # ─── Prompt-Bau ───────────────────────────────────────────────────────────────
@@ -1105,8 +1168,11 @@ class QualityAnalyzer:
         # LLM aufrufen (synchron – im FastAPI-Kontext per run_in_executor).
         # Das Modell wird explizit übergeben, damit model_used im Ergebnis
         # immer dem tatsächlich angefragten Modell entspricht.
+        started = time.perf_counter()
         raw = self._provider.complete(system_prompt, user_prompt, model=used_model)
+        llm_seconds = time.perf_counter() - started
         result = self._parser.parse(raw, uid, used_model, profile_name)
+        ai_issues_parsed = list(result.issues)
         # Regelbefunde zuerst; KI-Befunde, die nur eine Regel wiederholen, entfallen
         rule_issues = check_rules(item, profile, build_item_context(project_id, item, profile))
         # V14: Modalverb prüft nur die Regel; KI-Befunde dazu entfallen
@@ -1115,8 +1181,50 @@ class QualityAnalyzer:
         # V19: Gesamtnote aus Teilnoten, Profilgewichten und Befunden
         result.score = compute_score(result.score, result.issues, profile)
 
-        save_quality_result(project_id, uid, result)
+        protocol = None
+        if protocol_enabled():
+            # L15: nachvollziehbar, wie das Ergebnis zustande kam (nur lesend, ändert nichts am Ergebnis)
+            protocol = build_protocol(
+                result, item, used_model, system_prompt, user_prompt, raw,
+                llm_seconds, time.perf_counter() - started, rule_issues, ai_issues_parsed,
+            )
+        save_quality_result(project_id, uid, result, protocol=protocol)
         return result
+
+
+def build_protocol(
+    result: AiQualityResult,
+    item: Dict[str, Any],
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    raw_response: str,
+    llm_seconds: float,
+    total_seconds: float,
+    rule_issues: List[AiQualityIssue],
+    ai_issues_parsed: List[AiQualityIssue],
+) -> Dict[str, Any]:
+    """Protokoll einer Analyse (L15 in #33). Feldnamen vermeiden doorstop-Schlüssel
+    wie ``text`` oder ``links``, weil doorstop die Datei als Item mitliest."""
+    return {
+        "requirement_uid": result.requirement_uid,
+        "timestamp": result.timestamp,  # gleich wie im Sidecar, damit zuordenbar
+        "provider": os.environ.get("AI_PROVIDER", DEFAULT_PROVIDER).lower(),
+        "model": model,
+        "profile": result.profile_used,
+        "temperature": get_temperature(),
+        "seed": get_seed(),
+        "max_tokens": MAX_TOKENS,
+        "llm_duration_s": round(llm_seconds, 3),
+        "total_duration_s": round(total_seconds, 3),
+        "requirement_text": item.get("text") or "",
+        "system_prompt": system_prompt,
+        "user_prompt": user_prompt,
+        "raw_response": raw_response,
+        "rule_issues": [i.model_dump() for i in rule_issues],
+        "ai_issues_parsed": [i.model_dump() for i in ai_issues_parsed],
+        "final_issue_count": len(result.issues),
+    }
 
 
 def resolve_model(requested: Optional[str], profile: Dict[str, Any]) -> str:

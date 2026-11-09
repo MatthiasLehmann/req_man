@@ -998,3 +998,102 @@ class TestComputeScore:
     def test_old_result_without_new_fields_loads(self):
         old = {"overall": 70, "clarity": 70}
         assert aqs.AiQualityScore(**old).passed is None
+# ─── V21: Protokoll je Analyse (L15 in #33) ──────────────────────────────────
+
+class TestProtocolV21:
+    """Prompt, Rohantwort, Modell, Dauer und Regelbefunde landen in
+    <UID>.ai-quality-log.yml neben dem Sidecar; das Ergebnis bleibt gleich."""
+
+    def _run(self, tmp_path, monkeypatch, item=SAMPLE_ITEM_VAGUE, response=SAMPLE_JSON_LOW_SCORE):
+        import asyncio
+        (tmp_path / "SRS").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr("doorstop_service.get_item", lambda pid, uid: item)
+        monkeypatch.setattr("doorstop_service.get_project", lambda pid: {"id": pid, "path": str(tmp_path)})
+        monkeypatch.setattr("doorstop_service.list_documents", lambda pid: [])
+        monkeypatch.setattr("doorstop_service.load_attribute_config", lambda: [])
+        provider = MockProvider(response)
+        result = asyncio.run(aqs.QualityAnalyzer(provider=provider).analyze("p1", item["uid"]))
+        return result, provider, tmp_path / "SRS"
+
+    def test_protocol_written_next_to_sidecar(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("AI_QUALITY_PROTOCOL", raising=False)
+        monkeypatch.setenv("AI_PROVIDER", "ollama")
+        monkeypatch.setenv("AI_MODEL", "qwen2.5:7b")
+        result, provider, doc_dir = self._run(tmp_path, monkeypatch)
+
+        log_path = doc_dir / "SRS002.ai-quality-log.yml"
+        assert (doc_dir / "SRS002.ai-quality.yml").exists()
+        assert log_path.exists()
+        log = yaml.safe_load(log_path.read_text(encoding="utf-8"))
+
+        system_prompt, user_prompt = provider.calls[0]
+        assert log["system_prompt"] == system_prompt
+        assert log["user_prompt"] == user_prompt
+        assert log["raw_response"] == SAMPLE_JSON_LOW_SCORE
+        assert log["model"] == "qwen2.5:7b"
+        assert log["provider"] == "ollama"
+        assert log["timestamp"] == result.timestamp
+        assert log["llm_duration_s"] >= 0 and log["total_duration_s"] >= log["llm_duration_s"]
+        assert log["requirement_text"] == SAMPLE_ITEM_VAGUE["text"]
+        # Regelbefunde getrennt von den geparsten KI-Befunden
+        assert log["rule_issues"] and all(i["description"].startswith(aqs.RULE_PREFIX) for i in log["rule_issues"])
+        assert [i["description"] for i in log["ai_issues_parsed"]] == [
+            "Kein messbarer Zeitwert.", "Vagheit: 'möglichst schnell'."]
+        assert log["final_issue_count"] == len(result.issues)
+        assert aqs.load_quality_protocol("p1", "SRS002") == log
+        # Prompts als lesbare Blöcke, nicht als eine escapte Zeile
+        assert "system_prompt: |" in log_path.read_text(encoding="utf-8")
+
+    def test_sidecar_format_unchanged(self, tmp_path, monkeypatch):
+        self._run(tmp_path, monkeypatch)
+        data = yaml.safe_load((tmp_path / "SRS" / "SRS002.ai-quality.yml").read_text(encoding="utf-8"))
+        assert set(data) == set(aqs.AiQualityResult.model_fields)
+        assert aqs.load_quality_result("p1", "SRS002") is not None
+
+    def test_protocol_can_be_switched_off(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AI_QUALITY_PROTOCOL", "off")
+        _, _, doc_dir = self._run(tmp_path, monkeypatch)
+        assert (doc_dir / "SRS002.ai-quality.yml").exists()
+        assert not (doc_dir / "SRS002.ai-quality-log.yml").exists()
+        assert aqs.load_quality_protocol("p1", "SRS002") is None
+
+    @pytest.mark.parametrize("value,enabled", [
+        (None, True), ("1", True), ("on", True), ("0", False), ("false", False),
+        ("OFF", False), ("no", False), ("nein", False)])
+    def test_protocol_enabled_values(self, monkeypatch, value, enabled):
+        if value is None:
+            monkeypatch.delenv("AI_QUALITY_PROTOCOL", raising=False)
+        else:
+            monkeypatch.setenv("AI_QUALITY_PROTOCOL", value)
+        assert aqs.protocol_enabled() is enabled
+
+    def test_result_identical_with_and_without_protocol(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AI_QUALITY_PROTOCOL", "1")
+        with_log, _, _ = self._run(tmp_path / "a", monkeypatch)
+        monkeypatch.setenv("AI_QUALITY_PROTOCOL", "0")
+        without_log, _, _ = self._run(tmp_path / "b", monkeypatch)
+        a, b = with_log.model_dump(), without_log.model_dump()
+        a.pop("timestamp"), b.pop("timestamp")
+        assert a == b
+        side_a = yaml.safe_load((tmp_path / "a" / "SRS" / "SRS002.ai-quality.yml").read_text(encoding="utf-8"))
+        side_b = yaml.safe_load((tmp_path / "b" / "SRS" / "SRS002.ai-quality.yml").read_text(encoding="utf-8"))
+        side_a.pop("timestamp"), side_b.pop("timestamp")
+        assert side_a == side_b
+
+    def test_protocol_write_error_does_not_break_analysis(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("AI_QUALITY_PROTOCOL", raising=False)
+        # Ordner statt Datei → Schreiben schlägt fehl
+        (tmp_path / "SRS" / "SRS002.ai-quality-log.yml").mkdir(parents=True)
+        result, _, doc_dir = self._run(tmp_path, monkeypatch)
+        assert 0 <= result.score.overall <= 100  # Kombination mit V19: Note im Code berechnet
+        assert (doc_dir / "SRS002.ai-quality.yml").exists()
+
+    def test_save_without_protocol_argument_still_works(self, tmp_path, monkeypatch):
+        """Alte Aufrufer (save_quality_result ohne protocol) schreiben nur das Sidecar."""
+        monkeypatch.delenv("AI_QUALITY_PROTOCOL", raising=False)
+        (tmp_path / "SRS").mkdir()
+        monkeypatch.setattr("doorstop_service.get_project", lambda pid: {"id": pid, "path": str(tmp_path)})
+        result = aqs.QualityResultParser().parse(SAMPLE_JSON_RESPONSE, "SRS001", "m", "standard")
+        aqs.save_quality_result("p1", "SRS001", result)
+        assert (tmp_path / "SRS" / "SRS001.ai-quality.yml").exists()
+        assert not (tmp_path / "SRS" / "SRS001.ai-quality-log.yml").exists()
