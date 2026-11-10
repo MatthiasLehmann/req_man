@@ -176,7 +176,9 @@ def validate_rows(project_id: str, prefix: str, rows: List[Dict[str, str]]) -> D
 
         item: Dict[str, Any] = {"text": text, "custom_attributes": {}}
         if header:
-            item["header"] = header
+            # Wie im Editor: Abschnitt = Header-Flag, der Titel steht im Text (ReqMan zeigt ihn dort an)
+            item["header"] = True
+            item["text"] = f"{header}\n\n{text}" if text else header
 
         level = get("level")
         if level:
@@ -227,11 +229,40 @@ def validate_rows(project_id: str, prefix: str, rows: List[Dict[str, str]]) -> D
 
         results.append({"errors": errors, "notes": notes, "item": None if errors else item})
 
+    _nest_sections(rows, results, doc_levels)
+
     return {
         "rows": results,
         "valid": sum(1 for r in results if not r["errors"]),
         "invalid": sum(1 for r in results if r["errors"]),
     }
+
+
+def _nest_sections(rows: List[Dict[str, str]], results: List[Dict], doc_levels: Dict[str, str]) -> None:
+    """
+    Ohne Level-Spalte, aber mit Abschnittszeilen: Level aus der Reihenfolge ableiten, damit die
+    Gliederung der Tabelle erhalten bleibt (Abschnitt 2.0, darunter 2.1, 2.2 …). Neue Abschnitte
+    werden hinter die vorhandenen des Dokuments gehängt, es kann also keine Level-Kollision geben.
+    Zeilen vor dem ersten Abschnitt kommen in einen eigenen Block ohne Überschrift.
+    """
+    if any((r.get("level") or "").strip() for r in rows):
+        return
+    if not any((r.get("header") or "").strip() for r in rows):
+        return
+    top = max((int(l.split(".")[0]) for l in doc_levels if l.split(".")[0].isdigit()), default=0)
+    section, count = top, 0
+    for row, res in zip(rows, results):
+        if (row.get("header") or "").strip():
+            section, count = section + 1, 0
+            level = f"{section}.0"
+        else:
+            if section == top:  # Anforderungen vor dem ersten Abschnitt
+                section += 1
+            count += 1
+            level = f"{section}.{count}"
+        if res["item"] is not None:
+            res["item"]["level"] = level
+        res["notes"].append(f"Level {level}")
 
 
 # ─── Anlegen ──────────────────────────────────────────────────────────────────
