@@ -104,7 +104,7 @@ export default function ExcelFileImport({ projectId, selectedPrefix, onSelectDoc
       <button
         onClick={() => fileRef.current?.click()}
         disabled={busy}
-        className={clsx('inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg',
+        className={clsx('inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg',
           'bg-green-600 hover:bg-green-700 text-white transition-colors disabled:opacity-60')}
         title={selectedPrefix ? `Excel-Datei in ${selectedPrefix} laden` : 'Excel-Datei laden'}
       >
@@ -115,7 +115,7 @@ export default function ExcelFileImport({ projectId, selectedPrefix, onSelectDoc
         <button
           onClick={download}
           disabled={exporting}
-          className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-green-600 text-green-700 bg-white hover:bg-green-50 transition-colors disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg border border-green-600 text-green-700 bg-white hover:bg-green-50 transition-colors disabled:opacity-60"
           title={`${selectedPrefix} als Excel-Datei zum Bearbeiten und Kommentieren herunterladen – danach über „Excel-Datei laden“ zurückholen`}
         >
           {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
