@@ -833,6 +833,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/roundtrip/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply
+         * @description Übernimmt die ausgewählten Änderungen – alle oder keine.
+         */
+        post: operations["apply_api_projects__project_id__roundtrip_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/roundtrip/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compare
+         * @description Zeigt, was sich in der Excel-Datei gegenüber ReqMan geändert hat – ändert nichts.
+         */
+        post: operations["compare_api_projects__project_id__roundtrip_compare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/roundtrip/detect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Detect
+         * @description Ist die Datei ein ReqMan-Export (Rückweg)? Dann das Dokument dazu, sonst None.
+         */
+        post: operations["detect_api_projects__project_id__roundtrip_detect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/roundtrip/export/{prefix}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export For Excel
+         * @description Dokument als Excel-Datei zum Bearbeiten und Kommentieren (mit Abgleichsdaten für den Rückweg).
+         */
+        get: operations["export_for_excel_api_projects__project_id__roundtrip_export__prefix__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/simulink/coverage": {
         parameters: {
             query?: never;
@@ -1110,6 +1190,26 @@ export interface components {
              */
             required: boolean;
         };
+        /** Body_apply_api_projects__project_id__roundtrip_apply_post */
+        Body_apply_api_projects__project_id__roundtrip_apply_post: {
+            /** File */
+            file: string;
+            /**
+             * Selection
+             * @description JSON: {"uids": [...], "new_rows": [...]}
+             */
+            selection: string;
+        };
+        /** Body_compare_api_projects__project_id__roundtrip_compare_post */
+        Body_compare_api_projects__project_id__roundtrip_compare_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_detect_api_projects__project_id__roundtrip_detect_post */
+        Body_detect_api_projects__project_id__roundtrip_detect_post: {
+            /** File */
+            file: string;
+        };
         /** Body_import_simulink_api_projects__project_id__simulink_import_post */
         Body_import_simulink_api_projects__project_id__simulink_import_post: {
             /**
@@ -1363,6 +1463,19 @@ export interface components {
             /** Sep */
             sep: string;
         };
+        /** FieldChange */
+        FieldChange: {
+            /** Conflict */
+            conflict: boolean;
+            /** Field */
+            field: string;
+            /** Label */
+            label: string;
+            /** New */
+            new: string;
+            /** Old */
+            old: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1388,6 +1501,27 @@ export interface components {
             rows: {
                 [key: string]: string;
             }[];
+        };
+        /** ItemChange */
+        ItemChange: {
+            /** Comment */
+            comment: string;
+            /** Conflicts */
+            conflicts: string[];
+            /** Errors */
+            errors: string[];
+            /** Fields */
+            fields: components["schemas"]["FieldChange"][];
+            /** Label */
+            label: string | null;
+            /** Patch */
+            patch: {
+                [key: string]: unknown;
+            } | null;
+            /** Row */
+            row: number;
+            /** Uid */
+            uid: string;
         };
         /** ItemCreate */
         ItemCreate: {
@@ -1488,6 +1622,29 @@ export interface components {
         LinkCreate: {
             /** Target Uid */
             target_uid: string;
+        };
+        /** NewRow */
+        NewRow: {
+            /** Comment */
+            comment: string;
+            /**
+             * Errors
+             * @default []
+             */
+            errors: string[];
+            /** Item */
+            item: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Notes
+             * @default []
+             */
+            notes: string[];
+            /** Row */
+            row: number;
+            /** Text */
+            text: string;
         };
         /** ParsedTable */
         ParsedTable: {
@@ -1621,6 +1778,35 @@ export interface components {
         RenderResponse: {
             /** Svg */
             svg: string;
+        };
+        /** RoundtripCompare */
+        RoundtripCompare: {
+            /** Changes */
+            changes: components["schemas"]["ItemChange"][];
+            /** Exported */
+            exported: string;
+            /** Ignored Columns */
+            ignored_columns: string[];
+            /** New */
+            new: components["schemas"]["NewRow"][];
+            /** Not In File */
+            not_in_file: string[];
+            /** Prefix */
+            prefix: string;
+            /** Unchanged */
+            unchanged: number;
+        };
+        /** RoundtripDetect */
+        RoundtripDetect: {
+            /** Prefix */
+            prefix: string | null;
+        };
+        /** RoundtripResult */
+        RoundtripResult: {
+            /** Created */
+            created: string[];
+            /** Updated */
+            updated: string[];
         };
         /** RowCheck */
         RowCheck: {
@@ -3560,6 +3746,143 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectMetrics"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_api_projects__project_id__roundtrip_apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_apply_api_projects__project_id__roundtrip_apply_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundtripResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compare_api_projects__project_id__roundtrip_compare_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_compare_api_projects__project_id__roundtrip_compare_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundtripCompare"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detect_api_projects__project_id__roundtrip_detect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_detect_api_projects__project_id__roundtrip_detect_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundtripDetect"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_for_excel_api_projects__project_id__roundtrip_export__prefix__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

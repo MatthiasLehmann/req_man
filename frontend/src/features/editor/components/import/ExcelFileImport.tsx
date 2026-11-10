@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileSpreadsheet, Loader2, X } from 'lucide-react';
+import { Download, FileSpreadsheet, Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
-import { listDocuments, createDocument, parseImportFile } from '../../../../shared/api/client';
+import { listDocuments, createDocument, parseImportFile, detectRoundtrip, exportForExcel } from '../../../../shared/api/client';
 import type { Document } from '../../../../shared/types';
 import ImportDialog from './ImportDialog';
+import RoundtripDialog from './RoundtripDialog';
 
 interface Props {
   projectId: string;
@@ -34,6 +35,8 @@ export default function ExcelFileImport({ projectId, selectedPrefix, onSelectDoc
   const [askTarget, setAskTarget] = useState(false);
   const [target, setTarget] = useState<{ prefix: string; table: string[][] } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [roundtrip, setRoundtrip] = useState<File | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const { data: docsRes } = useQuery({
     queryKey: ['documents', projectId],
@@ -57,24 +60,68 @@ export default function ExcelFileImport({ projectId, selectedPrefix, onSelectDoc
     }
   };
 
-  const onFile = (f: File) => {
+  const onFile = async (f: File) => {
     setFile(f);
+    // Aus ReqMan exportierte Datei (Rückweg)? Dann Änderungen zeigen statt neu importieren.
+    setBusy(true);
+    try {
+      const res = await detectRoundtrip(projectId, f);
+      if (res.data.prefix) {
+        onSelectDocument(res.data.prefix);
+        setRoundtrip(f);
+        return;
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.detail || 'Datei konnte nicht gelesen werden');
+      return;
+    } finally {
+      setBusy(false);
+    }
     if (selectedPrefix) openFor(selectedPrefix, f);
     else setAskTarget(true);
   };
 
+  const download = async () => {
+    if (!selectedPrefix) return;
+    setExporting(true);
+    try {
+      const res = await exportForExcel(projectId, selectedPrefix);
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedPrefix}_zum_Bearbeiten.xlsx`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      toast.error('Export fehlgeschlagen');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
-    <>
+    <div className={clsx('flex items-center gap-2', className)}>
       <button
         onClick={() => fileRef.current?.click()}
         disabled={busy}
         className={clsx('inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg',
-          'bg-green-600 hover:bg-green-700 text-white transition-colors disabled:opacity-60', className)}
+          'bg-green-600 hover:bg-green-700 text-white transition-colors disabled:opacity-60')}
         title={selectedPrefix ? `Excel-Datei in ${selectedPrefix} laden` : 'Excel-Datei laden'}
       >
         {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
         Excel-Datei laden
       </button>
+      {selectedPrefix && (
+        <button
+          onClick={download}
+          disabled={exporting}
+          className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-green-600 text-green-700 bg-white hover:bg-green-50 transition-colors disabled:opacity-60"
+          title={`${selectedPrefix} als Excel-Datei zum Bearbeiten und Kommentieren herunterladen – danach über „Excel-Datei laden“ zurückholen`}
+        >
+          {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+          Für Excel exportieren
+        </button>
+      )}
       <input
         ref={fileRef} type="file" accept=".xlsx,.xlsm,.csv,.tsv,.txt" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }}
@@ -115,7 +162,16 @@ export default function ExcelFileImport({ projectId, selectedPrefix, onSelectDoc
           onImported={() => { setTarget(null); onSelectDocument(target.prefix); }}
         />
       )}
-    </>
+
+      {roundtrip && (
+        <RoundtripDialog
+          projectId={projectId}
+          file={roundtrip}
+          onClose={() => setRoundtrip(null)}
+          onApplied={(prefix) => { setRoundtrip(null); onSelectDocument(prefix); }}
+        />
+      )}
+    </div>
   );
 }
 

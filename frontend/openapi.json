@@ -307,6 +307,54 @@
         "title": "AttributeDefinition",
         "type": "object"
       },
+      "Body_apply_api_projects__project_id__roundtrip_apply_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "selection": {
+            "description": "JSON: {\"uids\": [...], \"new_rows\": [...]}",
+            "title": "Selection",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "selection"
+        ],
+        "title": "Body_apply_api_projects__project_id__roundtrip_apply_post",
+        "type": "object"
+      },
+      "Body_compare_api_projects__project_id__roundtrip_compare_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_compare_api_projects__project_id__roundtrip_compare_post",
+        "type": "object"
+      },
+      "Body_detect_api_projects__project_id__roundtrip_detect_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_detect_api_projects__project_id__roundtrip_detect_post",
+        "type": "object"
+      },
       "Body_import_simulink_api_projects__project_id__simulink_import_post": {
         "properties": {
           "file": {
@@ -1006,6 +1054,39 @@
         "title": "DocumentWithType",
         "type": "object"
       },
+      "FieldChange": {
+        "properties": {
+          "conflict": {
+            "title": "Conflict",
+            "type": "boolean"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "new": {
+            "title": "New",
+            "type": "string"
+          },
+          "old": {
+            "title": "Old",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "label",
+          "old",
+          "new",
+          "conflict"
+        ],
+        "title": "FieldChange",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1078,6 +1159,78 @@
           "rows"
         ],
         "title": "ImportRows",
+        "type": "object"
+      },
+      "ItemChange": {
+        "properties": {
+          "comment": {
+            "title": "Comment",
+            "type": "string"
+          },
+          "conflicts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/FieldChange"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "patch": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patch"
+          },
+          "row": {
+            "title": "Row",
+            "type": "integer"
+          },
+          "uid": {
+            "title": "Uid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row",
+          "uid",
+          "label",
+          "comment",
+          "fields",
+          "errors",
+          "conflicts",
+          "patch"
+        ],
+        "title": "ItemChange",
         "type": "object"
       },
       "ItemCreate": {
@@ -1374,6 +1527,60 @@
           "target_uid"
         ],
         "title": "LinkCreate",
+        "type": "object"
+      },
+      "NewRow": {
+        "properties": {
+          "comment": {
+            "title": "Comment",
+            "type": "string"
+          },
+          "errors": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item"
+          },
+          "notes": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "row": {
+            "title": "Row",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row",
+          "text",
+          "comment",
+          "errors",
+          "notes",
+          "item"
+        ],
+        "title": "NewRow",
         "type": "object"
       },
       "ParsedTable": {
@@ -1761,6 +1968,105 @@
           "svg"
         ],
         "title": "RenderResponse",
+        "type": "object"
+      },
+      "RoundtripCompare": {
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ItemChange"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "exported": {
+            "title": "Exported",
+            "type": "string"
+          },
+          "ignored_columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ignored Columns",
+            "type": "array"
+          },
+          "new": {
+            "items": {
+              "$ref": "#/components/schemas/NewRow"
+            },
+            "title": "New",
+            "type": "array"
+          },
+          "not_in_file": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Not In File",
+            "type": "array"
+          },
+          "prefix": {
+            "title": "Prefix",
+            "type": "string"
+          },
+          "unchanged": {
+            "title": "Unchanged",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prefix",
+          "exported",
+          "changes",
+          "new",
+          "unchanged",
+          "not_in_file",
+          "ignored_columns"
+        ],
+        "title": "RoundtripCompare",
+        "type": "object"
+      },
+      "RoundtripDetect": {
+        "properties": {
+          "prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prefix"
+          }
+        },
+        "required": [
+          "prefix"
+        ],
+        "title": "RoundtripDetect",
+        "type": "object"
+      },
+      "RoundtripResult": {
+        "properties": {
+          "created": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Created",
+            "type": "array"
+          },
+          "updated": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Updated",
+            "type": "array"
+          }
+        },
+        "required": [
+          "updated",
+          "created"
+        ],
+        "title": "RoundtripResult",
         "type": "object"
       },
       "RowCheck": {
@@ -5336,6 +5642,235 @@
         "summary": "Get Metrics",
         "tags": [
           "metrics"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/roundtrip/apply": {
+      "post": {
+        "description": "Übernimmt die ausgewählten Änderungen – alle oder keine.",
+        "operationId": "apply_api_projects__project_id__roundtrip_apply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_apply_api_projects__project_id__roundtrip_apply_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoundtripResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Apply",
+        "tags": [
+          "roundtrip"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/roundtrip/compare": {
+      "post": {
+        "description": "Zeigt, was sich in der Excel-Datei gegenüber ReqMan geändert hat – ändert nichts.",
+        "operationId": "compare_api_projects__project_id__roundtrip_compare_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_compare_api_projects__project_id__roundtrip_compare_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoundtripCompare"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Compare",
+        "tags": [
+          "roundtrip"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/roundtrip/detect": {
+      "post": {
+        "description": "Ist die Datei ein ReqMan-Export (Rückweg)? Dann das Dokument dazu, sonst None.",
+        "operationId": "detect_api_projects__project_id__roundtrip_detect_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_detect_api_projects__project_id__roundtrip_detect_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoundtripDetect"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Detect",
+        "tags": [
+          "roundtrip"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/roundtrip/export/{prefix}": {
+      "get": {
+        "description": "Dokument als Excel-Datei zum Bearbeiten und Kommentieren (mit Abgleichsdaten für den Rückweg).",
+        "operationId": "export_for_excel_api_projects__project_id__roundtrip_export__prefix__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "prefix",
+            "required": true,
+            "schema": {
+              "title": "Prefix",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Export For Excel",
+        "tags": [
+          "roundtrip"
         ]
       }
     },
