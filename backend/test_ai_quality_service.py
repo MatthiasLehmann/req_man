@@ -117,6 +117,44 @@ class TestPromptBuilder:
         assert "overall_score" in prompt
         assert "issues" in prompt
 
+    def test_system_prompt_has_checklist(self):
+        prompt = self.builder.build_system_prompt({})
+        for punkt in ("ohne Einheit", "Lösungsvorgabe", "verantwortlich", "Nicht prüfbar", "bzw."):
+            assert punkt in prompt
+
+    def test_system_prompt_defines_score_scale(self):
+        prompt = self.builder.build_system_prompt({})
+        assert "90–100 keine Mängel" in prompt
+        assert "0–39" in prompt
+
+    def test_system_prompt_short_findings_optional_suggestion(self):
+        # V13: Hinweis zuerst, Vorschlag nur wenn sicher; Beispiele erfinden keine Werte
+        prompt = self.builder.build_system_prompt({})
+        assert "EINEM kurzen Satz" in prompt
+        assert 'lass "suggestion" leer' in prompt
+        assert "0,5 K" not in prompt
+        assert "vollständig umformulierte Anforderung" not in prompt
+
+    def test_system_prompt_examples_render(self):
+        # Die Beispiele enthalten JSON; die geschweiften Klammern müssen das format() überstehen
+        prompt = self.builder.build_system_prompt({"name": "X"})
+        assert '{"category": "Clarity"' in prompt
+        assert "Übernimm daraus keine Formulierungen" in prompt
+
+    def test_suggestion_only_affected_words(self):
+        # V16: kein Umformulieren der ganzen Anforderung, keine erfundenen Werte/Einheiten/Namen
+        prompt = self.builder.build_system_prompt({})
+        assert "Formuliere nie die ganze Anforderung um" in prompt
+        assert "ein bis zwei" in prompt
+
+    def test_system_prompt_defines_cautious_severity(self):
+        prompt = self.builder.build_system_prompt({})
+        assert '"high" nur, wenn die Anforderung so nicht umsetzbar oder nicht prüfbar ist' in prompt
+        assert "Im Zweifel den niedrigeren Schweregrad" in prompt
+
+    def test_max_tokens_raised(self):
+        assert aqs.MAX_TOKENS == 2048
+
     def test_build_user_prompt_with_context(self):
         profile = {"name": "INCOSE Standard"}
         prompt = self.builder.build_user_prompt(SAMPLE_ITEM, profile)
@@ -442,6 +480,255 @@ class TestProviders:
         monkeypatch.delenv("AI_MODEL", raising=False)
         assert aqs.resolve_model(None, {"model": "claude-sonnet-4-6"}) == "llama3.2"
 
+    def test_sampling_defaults_are_deterministic(self, monkeypatch):
+        monkeypatch.delenv("AI_TEMPERATURE", raising=False)
+        monkeypatch.delenv("AI_SEED", raising=False)
+        assert aqs.get_temperature() == 0.0
+        assert aqs.get_seed() == 42
+
+    def test_sampling_env_override(self, monkeypatch):
+        monkeypatch.setenv("AI_TEMPERATURE", "0.7")
+        monkeypatch.setenv("AI_SEED", "none")
+        assert aqs.get_temperature() == 0.7
+        assert aqs.get_seed() is None
+
+    def test_openai_provider_sends_temperature_and_seed(self, monkeypatch):
+        monkeypatch.delenv("AI_TEMPERATURE", raising=False)
+        monkeypatch.delenv("AI_SEED", raising=False)
+        calls = []
+
+        class FakeCompletions:
+            def create(self, **kwargs):
+                calls.append(kwargs)
+                msg = MagicMock()
+                msg.choices = [MagicMock()]
+                msg.choices[0].message.content = "{}"
+                return msg
+
+        provider = object.__new__(aqs.OpenAiCompatibleProvider)
+        provider.model = "llama3.2"
+        provider._client = MagicMock()
+        provider._client.chat.completions = FakeCompletions()
+        provider.complete("sys", "user")
+
+        assert calls[0]["temperature"] == 0.0
+        assert calls[0]["seed"] == 42
+
+
+# ─── Betriebsparameter und Fehlerbehandlung (V20, L12) ────────────────────────
+
+
+def _fake_openai_provider(provider_name="ollama", outcomes=None):
+    """OpenAiCompatibleProvider mit Mock-Client.
+
+    ``outcomes``: Liste; Exceptions werden geworfen, sonst Antwort "{}".
+    """
+    calls = []
+    outcomes = list(outcomes or [])
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            calls.append(kwargs)
+            if outcomes:
+                o = outcomes.pop(0)
+                if isinstance(o, Exception):
+                    raise o
+            msg = MagicMock()
+            msg.choices = [MagicMock()]
+            msg.choices[0].message.content = "{}"
+            return msg
+
+    provider = object.__new__(aqs.OpenAiCompatibleProvider)
+    provider.model = "llama3.2"
+    provider._provider_name = provider_name
+    provider._client = MagicMock()
+    provider._client.chat.completions = FakeCompletions()
+    return provider, calls
+
+
+def _httpx():
+    # openai >= 3 nutzt httpx2, ältere Versionen httpx
+    try:
+        import httpx2 as httpx
+    except ImportError:
+        import httpx
+    return httpx
+
+
+def _http_request():
+    return _httpx().Request("POST", "http://localhost:11434/v1/chat/completions")
+
+
+def _bad_request(message, status=400):
+    import openai
+    response = _httpx().Response(status, request=_http_request())
+    cls = openai.BadRequestError if status == 400 else openai.UnprocessableEntityError
+    return cls(message, response=response, body={"error": {"message": message}})
+
+
+@pytest.fixture
+def clean_env(monkeypatch):
+    for name in ("AI_TIMEOUT", "AI_MAX_TOKENS", "AI_NUM_CTX", "AI_MAX_RETRIES",
+                 "AI_TEMPERATURE", "AI_SEED"):
+        monkeypatch.delenv(name, raising=False)
+    return monkeypatch
+
+
+class TestBetriebsparameter:
+    def test_defaults_unchanged(self, clean_env):
+        assert aqs.get_request_timeout() == 60.0
+        assert aqs.get_max_tokens() == 2048
+        assert aqs.get_num_ctx() is None
+        assert aqs.get_max_retries() is None
+
+    def test_env_override(self, clean_env):
+        clean_env.setenv("AI_TIMEOUT", "120")
+        clean_env.setenv("AI_MAX_TOKENS", "4096")
+        clean_env.setenv("AI_NUM_CTX", "8192")
+        clean_env.setenv("AI_MAX_RETRIES", "0")
+        assert aqs.get_request_timeout() == 120.0
+        assert aqs.get_max_tokens() == 4096
+        assert aqs.get_num_ctx() == 8192
+        assert aqs.get_max_retries() == 0
+
+    @pytest.mark.parametrize("value", ["abc", "0", "-5", " "])
+    def test_invalid_values_fall_back(self, clean_env, value):
+        clean_env.setenv("AI_TIMEOUT", value)
+        clean_env.setenv("AI_MAX_TOKENS", value)
+        clean_env.setenv("AI_NUM_CTX", value)
+        assert aqs.get_request_timeout() == 60.0
+        assert aqs.get_max_tokens() == 2048
+        assert aqs.get_num_ctx() is None
+
+    def test_module_constant_still_respected(self, clean_env):
+        # Das Messframework setzt svc.REQUEST_TIMEOUT direkt
+        clean_env.setattr(aqs, "REQUEST_TIMEOUT", 300.0)
+        assert aqs.get_request_timeout() == 300.0
+
+    def test_default_request_unchanged(self, clean_env):
+        provider, calls = _fake_openai_provider()
+        provider.complete("sys", "user")
+        assert len(calls) == 1
+        args = calls[0]
+        assert args["max_tokens"] == 2048
+        assert args["timeout"] == 60.0
+        assert args["response_format"] == {"type": "json_object"}
+        assert args["temperature"] == 0.0 and args["seed"] == 42
+        assert "extra_body" not in args
+        assert args["messages"] == [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "user"},
+        ]
+
+    def test_configured_request(self, clean_env):
+        clean_env.setenv("AI_TIMEOUT", "90")
+        clean_env.setenv("AI_MAX_TOKENS", "3000")
+        clean_env.setenv("AI_NUM_CTX", "8192")
+        provider, calls = _fake_openai_provider("ollama")
+        provider.complete("sys", "user")
+        assert calls[0]["timeout"] == 90.0
+        assert calls[0]["max_tokens"] == 3000
+        assert calls[0]["extra_body"] == {"options": {"num_ctx": 8192}}
+
+    def test_num_ctx_only_for_ollama(self, clean_env):
+        clean_env.setenv("AI_NUM_CTX", "8192")
+        provider, calls = _fake_openai_provider("openai")
+        provider.complete("sys", "user")
+        assert "extra_body" not in calls[0]
+
+    def test_client_gets_timeout_and_retries(self, clean_env):
+        clean_env.setenv("AI_PROVIDER", "ollama")
+        clean_env.setenv("AI_TIMEOUT", "45")
+        with patch("openai.OpenAI") as client:
+            aqs.OpenAiCompatibleProvider(model="llama3.2")
+        assert client.call_args.kwargs["timeout"] == 45.0
+        assert "max_retries" not in client.call_args.kwargs  # SDK-Standard bleibt
+        clean_env.setenv("AI_MAX_RETRIES", "0")
+        with patch("openai.OpenAI") as client:
+            aqs.OpenAiCompatibleProvider(model="llama3.2")
+        assert client.call_args.kwargs["max_retries"] == 0
+
+    def test_anthropic_uses_config(self, clean_env):
+        clean_env.setenv("ANTHROPIC_API_KEY", "test-key")
+        clean_env.setenv("AI_TIMEOUT", "30")
+        clean_env.setenv("AI_MAX_TOKENS", "1000")
+        with patch("anthropic.Anthropic") as client:
+            provider = aqs.AnthropicProvider(model="claude-sonnet-4-6")
+            provider.complete("sys", "user")
+        kwargs = client.return_value.messages.create.call_args.kwargs
+        assert kwargs["timeout"] == 30.0
+        assert kwargs["max_tokens"] == 1000
+
+
+class TestFehlerbehandlung:
+    def test_timeout_no_second_call(self, clean_env):
+        import openai
+        provider, calls = _fake_openai_provider(
+            outcomes=[openai.APITimeoutError(request=_http_request())]
+        )
+        with pytest.raises(aqs.AiProviderError, match="Zeitüberschreitung.*60 s"):
+            provider.complete("sys", "user")
+        assert len(calls) == 1
+
+    def test_connection_error_no_second_call(self, clean_env):
+        import openai
+        provider, calls = _fake_openai_provider(
+            outcomes=[openai.APIConnectionError(request=_http_request())]
+        )
+        with pytest.raises(aqs.AiProviderError, match="Keine Verbindung"):
+            provider.complete("sys", "user")
+        assert len(calls) == 1
+
+    def test_provider_error_is_not_value_error(self):
+        # ValueError würde im Router als 422 (Eingabefehler) gemeldet
+        assert not issubclass(aqs.AiProviderError, ValueError)
+
+    def test_other_error_no_fallback(self, clean_env):
+        import openai
+        provider, calls = _fake_openai_provider(
+            outcomes=[_bad_request("model 'xyz' not found")]
+        )
+        with pytest.raises(openai.BadRequestError):
+            provider.complete("sys", "user")
+        assert len(calls) == 1
+
+    def test_generic_runtime_error_no_fallback(self, clean_env):
+        provider, calls = _fake_openai_provider(outcomes=[RuntimeError("boom")])
+        with pytest.raises(RuntimeError, match="boom"):
+            provider.complete("sys", "user")
+        assert len(calls) == 1
+
+    def test_fallback_only_drops_response_format(self, clean_env):
+        provider, calls = _fake_openai_provider(
+            outcomes=[_bad_request("response_format is not supported by this model")]
+        )
+        assert provider.complete("sys", "user") == "{}"
+        assert len(calls) == 2
+        assert "response_format" in calls[0]
+        retry = calls[1]
+        assert "response_format" not in retry
+        assert retry["seed"] == 42 and retry["temperature"] == 0.0
+        assert retry["max_tokens"] == 2048 and retry["timeout"] == 60.0
+
+    def test_fallback_only_drops_seed(self, clean_env):
+        provider, calls = _fake_openai_provider(
+            outcomes=[_bad_request("Unrecognized request argument supplied: seed", status=422)]
+        )
+        provider.complete("sys", "user")
+        assert len(calls) == 2
+        assert "seed" not in calls[1]
+        assert calls[1]["response_format"] == {"type": "json_object"}
+
+    def test_fallback_timeout_on_retry_is_reported(self, clean_env):
+        import openai
+        provider, calls = _fake_openai_provider(outcomes=[
+            _bad_request("unsupported parameter: response_format"),
+            openai.APITimeoutError(request=_http_request()),
+        ])
+        with pytest.raises(aqs.AiProviderError, match="Zeitüberschreitung"):
+            provider.complete("sys", "user")
+        assert len(calls) == 2
+
 
 # ─── QualityAnalyzer Tests (mit MockProvider) ─────────────────────────────────
 
@@ -464,10 +751,13 @@ class TestQualityAnalyzer:
         analyzer = aqs.QualityAnalyzer(provider=mock_provider)
         result = asyncio.run(analyzer.analyze("proj1", "SRS001"))
 
-        assert result.score.overall == 72
+        # V19: 72,5 (Teilnoten, Gewichte 1,0) − 5 (Consistency medium) = 67,5 → 68
+        assert result.score.overall == 68
+        assert result.score.min_score == 70
+        assert result.score.passed is False
         assert result.requirement_uid == "SRS001"
         mock_save.assert_called_once()
-        assert len(mock_provider.calls) == 1  # Provider wurde genau einmal aufgerufen
+        assert len(mock_provider.calls) == 2  # V18: Hauptaufruf + Selbstprüfung der KI-Befunde
 
     @patch("doorstop_service.get_item")
     def test_analyze_header_item_raises(self, mock_get_item):
@@ -497,8 +787,11 @@ class TestQualityAnalyzer:
         analyzer = aqs.QualityAnalyzer(provider=mock_provider)
         result = asyncio.run(analyzer.analyze("proj1", "SRS002"))
 
-        assert result.score.overall == 26  # (20+5+30+50)/4 = 26.25 → 26
+        # V19: 26,25 − 5 (Regel: 'möglichst', 'schnell', ersetzt den KI-Clarity-Befund)
+        # − 20 (Testability critical) = 1,25 → 1
+        assert result.score.overall == 1
         assert len(result.issues) == 2
+        assert result.issues[0].description.startswith(aqs.RULE_PREFIX)
 
     @patch("doorstop_service.get_item")
     @patch("doorstop_service.get_project")
@@ -517,7 +810,7 @@ class TestQualityAnalyzer:
         analyzer = aqs.QualityAnalyzer(provider=mock_provider)
         result = asyncio.run(analyzer.analyze("proj1", "SRS001", profile_name="standard"))
 
-        assert mock_provider.models == ["llama3.2"]
+        assert mock_provider.models == ["llama3.2", "llama3.2"]  # V18: Selbstprüfung mit demselben Modell
         assert result.model_used == "llama3.2"
 
 
@@ -551,3 +844,330 @@ class TestPydanticModels:
         d = result.model_dump()
         assert d["requirement_uid"] == "TST001"
         assert d["score"]["overall"] == 90
+
+
+# ─── Feste Regeln (V5) ────────────────────────────────────────────────────────
+
+def _rules(text, profile=None, context=None, **item):
+    item = {"text": text, "normative": True, **item}
+    return [i.description for i in aqs.check_rules(item, profile or {}, context or {})]
+
+
+class TestRules:
+    def test_vague_term(self):
+        found = _rules("Die Pumpe muss ausreichend fördern.")
+        assert any("Unbestimmte Begriffe" in d and "ausreichend" in d for d in found)
+
+    def test_profile_forbidden_keyword(self):
+        found = _rules("Der Wert muss sofort vorliegen.", profile={"forbidden_keywords": ["sofort"]})
+        assert any("sofort" in d for d in found)
+
+    def test_ambiguous_conjunction(self):
+        found = _rules("Das Signal x_soll bzw. x_ref muss begrenzt sein.")
+        assert any("Mehrdeutige Verknüpfung" in d for d in found)
+
+    def test_number_without_unit(self):
+        assert any("Zahl ohne Einheit: '1'" in d for d in _rules("Die Simulation muss mit einem Zeitschritt von 1 rechnen."))
+
+    def test_numbers_with_unit_count_or_designator_are_fine(self):
+        for text in (
+            "Das Ladegerät muss den Akku bei 25 °C in 90 min von 10 % auf 80 % laden.",
+            "Der Zähler muss 3 Versuche zulassen.",
+            "Der Regler muss mit Kp=2,0 arbeiten.",
+            "Zeitstempel müssen ISO 8601 und Version 2.1 entsprechen.",
+            "Der Motor M-77 muss abschalten.",
+        ):
+            assert not any("Zahl ohne Einheit" in d for d in _rules(text)), text
+
+    def test_modal_verb_rule_low(self):
+        # V14: Modalverb nur per Regel, Schwere low (kein Fehlalarm high/critical)
+        issues = aqs.check_rules({"text": "Das System soll beim Start 2 s lang piepen.", "normative": True}, {}, {})
+        assert [i.category for i in issues] == ["ModalVerb"]
+        assert issues[0].severity == "low"
+        assert _rules("Das System muss beim Start 2 s lang piepen.") == []
+        assert _rules("Das System soll beim Start 2 s lang piepen.", normative=False) == []
+
+    def test_modal_typo(self):
+        # V22: „sol“ statt „soll“, „mus“ statt „muss“ ist ausgenommen (echtes Wort „Mus“), „müsen“ erkannt
+        found = _rules("Die Software sol beim Start piepen.")
+        assert any("vertippt: 'sol'" in d and "'soll'" in d for d in found)
+        assert any("vertippt: 'müsen'" in d for d in _rules("Die Pumpe müsen beim Start laufen."))
+
+    def test_missing_modal_not_reported(self):
+        # Ganz fehlendes Modalverb meldet V22 bewusst nicht (zu viel Rauschen im Korpus)
+        assert _rules("Die Software piept beim Start.") == []
+
+    def test_no_typo_for_real_words(self):
+        for text in ("Der Tank ist voll beim Start.", "Der Zoll prüft die Ware.", "Das Gerät piept dann laut.", "Miss Distance unter 5 m."):
+            assert not any("vertippt" in d for d in _rules(text)), text
+
+    def test_prompt_does_not_mention_modal_verbs(self):
+        prompt = aqs.PromptBuilder().build_system_prompt({})
+        assert "Modalverb" not in prompt and "ModalVerb" not in prompt
+
+    def test_missing_link_only_with_parent(self):
+        assert any("Kein Link" in d for d in _rules("Das System muss starten.", context={"parent_document": "SYS"}))
+        assert _rules("Das System muss starten.", context={"parent_document": None}) == []
+        assert _rules("Das System muss starten.", context={"parent_document": "SYS"}, links=["SYS001"]) == []
+
+    def test_missing_attributes(self):
+        found = _rules("Das System muss starten.", context={"missing_attributes": ["Verifikationsmethode"]})
+        assert any("Pflichtattribute fehlen: Verifikationsmethode" in d for d in found)
+
+    def test_rule_findings_have_prefix(self):
+        issues = aqs.check_rules({"text": "Die Pumpe muss ausreichend fördern.", "normative": True}, {}, {})
+        assert issues and all(i.description.startswith(aqs.RULE_PREFIX) for i in issues)
+
+    def test_drop_rule_duplicates(self):
+        rule = aqs.AiQualityIssue(category="Clarity", severity="medium",
+                                  description=aqs.RULE_PREFIX + "Unbestimmte Begriffe: 'ausreichend'",
+                                  suggestion="x")
+        dup = aqs.AiQualityIssue(category="Clarity", severity="low",
+                                 description="Unbestimmte Begriffe wie 'ausreichend'", suggestion="y")
+        own = aqs.AiQualityIssue(category="Completeness", severity="high",
+                                 description="Es fehlt das Verhalten bei Sensorausfall", suggestion="z")
+        assert aqs.drop_rule_duplicates([dup, own], [rule]) == [own]
+
+
+class TestRulesV8:
+    def test_solution_prescribed(self):
+        found = _rules("Das Heizgerät muss einen PID-Regler mit Kp=3 einsetzen.")
+        assert any("Lösungsvorgabe: „einen PID-Regler mit Kp=3 einsetzen“" in d for d in found)
+
+    def test_no_solution_rule_without_means(self):
+        assert not any("Lösungsvorgabe" in d for d in _rules("Die Pumpe muss 12 l/min fördern."))
+
+    def test_passive_without_agent(self):
+        found = _rules("Die Kennfelder werden vor Verwendung freigegeben.")
+        assert any("Passiv ohne Verantwortlichen: „werden vor Verwendung freigegeben“" in d for d in found)
+
+    def test_passive_with_agent_is_fine(self):
+        assert not any("Passiv" in d for d in _rules("Die Daten werden täglich vom Administrator gesichert."))
+
+    def test_ambiguous_conjunction_names_alternatives(self):
+        found = _rules("Das Signal x_soll bzw. x_ref muss begrenzt sein.")
+        assert any("'x_soll' bzw. 'x_ref'" in d for d in found)
+
+    def test_informative_text_not_checked(self):
+        assert _rules("Die Kennfelder werden vor Verwendung freigegeben.", normative=False) == []
+
+
+
+# ─── Gesamtnote im Code (V19, L9 in #33) ──────────────────────────────────────
+
+
+def _issue(category="Clarity", severity="medium"):
+    return aqs.AiQualityIssue(category=category, severity=severity, description="d", suggestion="s")
+
+
+def _score(c=80, t=80, k=80, s=80):
+    return aqs.AiQualityScore(overall=0, clarity=c, testability=t, completeness=k, consistency=s)
+
+
+class TestComputeScore:
+    def test_no_issues_equal_weights_is_mean(self):
+        result = aqs.compute_score(_score(80, 60, 70, 90), [], {})
+        assert result.overall == 75
+        assert result.min_score is None and result.passed is None
+
+    def test_profile_weights_shift_base(self):
+        profile = {"categories": {"clarity": {"weight": 3.0}, "testability": {"weight": 1.0},
+                                  "completeness": {"weight": 0.0}, "consistency": {"weight": 0.0}}}
+        assert aqs.compute_score(_score(100, 60, 0, 0), [], profile).overall == 90
+
+    def test_disabled_category_ignored(self):
+        profile = {"categories": {"testability": {"weight": 2.0, "enabled": False}}}
+        assert aqs.compute_score(_score(80, 0, 80, 80), [], profile).overall == 80
+
+    def test_penalty_by_severity(self):
+        issues = [_issue(severity=s) for s in ("low", "medium", "high", "critical")]
+        assert aqs.compute_score(_score(), issues, {}).overall == 80 - 2 - 5 - 10 - 20
+
+    def test_unknown_severity_counts_as_medium(self):
+        assert aqs.compute_score(_score(), [_issue(severity="???")], {}).overall == 75
+
+    def test_penalty_weighted_by_category(self):
+        profile = {"categories": {"testability": {"weight": 1.5}, "modal_verb": {"weight": 0.8}}}
+        issues = [_issue("Testability", "high"), _issue("ModalVerb", "low")]
+        # Grundnote 80 (alle Teilnoten gleich) − 15 − 1,6 = 63,4 → 63
+        assert aqs.compute_score(_score(), issues, profile).overall == 63
+
+    def test_rule_issues_count(self):
+        rule = aqs.AiQualityIssue(category="Traceability", severity="high",
+                                  description=aqs.RULE_PREFIX + "x", suggestion="")
+        assert aqs.compute_score(_score(), [rule], {}).overall == 70
+
+    def test_clamped_at_zero(self):
+        assert aqs.compute_score(_score(10, 10, 10, 10), [_issue(severity="critical")], {}).overall == 0
+
+    def test_passed_against_min_score(self):
+        profile = {"min_score": 75}
+        assert aqs.compute_score(_score(), [_issue(severity="medium")], profile).passed is True
+        assert aqs.compute_score(_score(), [_issue(severity="high")], profile).passed is False
+
+    def test_no_subscores_uses_llm_overall(self):
+        score = aqs.AiQualityScore(overall=90)
+        assert aqs.compute_score(score, [_issue(severity="low")], {}).overall == 88
+
+    def test_real_profiles_load(self):
+        for name in ("standard", "iso26262", "aspice", "do178c"):
+            profile = aqs.load_profile(name)
+            result = aqs.compute_score(_score(), [], profile)
+            assert result.overall == 80 and result.passed == (80 >= profile["min_score"])
+
+    def test_old_result_without_new_fields_loads(self):
+        old = {"overall": 70, "clarity": 70}
+        assert aqs.AiQualityScore(**old).passed is None
+# ─── V21: Protokoll je Analyse (L15 in #33) ──────────────────────────────────
+
+class TestProtocolV21:
+    """Prompt, Rohantwort, Modell, Dauer und Regelbefunde landen in
+    <UID>.ai-quality-log.yml neben dem Sidecar; das Ergebnis bleibt gleich."""
+
+    def _run(self, tmp_path, monkeypatch, item=SAMPLE_ITEM_VAGUE, response=SAMPLE_JSON_LOW_SCORE):
+        import asyncio
+        (tmp_path / "SRS").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr("doorstop_service.get_item", lambda pid, uid: item)
+        monkeypatch.setattr("doorstop_service.get_project", lambda pid: {"id": pid, "path": str(tmp_path)})
+        monkeypatch.setattr("doorstop_service.list_documents", lambda pid: [])
+        monkeypatch.setattr("doorstop_service.load_attribute_config", lambda: [])
+        provider = MockProvider(response)
+        result = asyncio.run(aqs.QualityAnalyzer(provider=provider).analyze("p1", item["uid"]))
+        return result, provider, tmp_path / "SRS"
+
+    def test_protocol_written_next_to_sidecar(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("AI_QUALITY_PROTOCOL", raising=False)
+        monkeypatch.setenv("AI_PROVIDER", "ollama")
+        monkeypatch.setenv("AI_MODEL", "qwen2.5:7b")
+        result, provider, doc_dir = self._run(tmp_path, monkeypatch)
+
+        log_path = doc_dir / "SRS002.ai-quality-log.yml"
+        assert (doc_dir / "SRS002.ai-quality.yml").exists()
+        assert log_path.exists()
+        log = yaml.safe_load(log_path.read_text(encoding="utf-8"))
+
+        system_prompt, user_prompt = provider.calls[0]
+        assert log["system_prompt"] == system_prompt
+        assert log["user_prompt"] == user_prompt
+        assert log["raw_response"] == SAMPLE_JSON_LOW_SCORE
+        assert log["model"] == "qwen2.5:7b"
+        assert log["provider"] == "ollama"
+        assert log["timestamp"] == result.timestamp
+        assert log["llm_duration_s"] >= 0 and log["total_duration_s"] >= log["llm_duration_s"]
+        assert log["requirement_text"] == SAMPLE_ITEM_VAGUE["text"]
+        # Regelbefunde getrennt von den geparsten KI-Befunden
+        assert log["rule_issues"] and all(i["description"].startswith(aqs.RULE_PREFIX) for i in log["rule_issues"])
+        assert [i["description"] for i in log["ai_issues_parsed"]] == [
+            "Kein messbarer Zeitwert.", "Vagheit: 'möglichst schnell'."]
+        assert log["final_issue_count"] == len(result.issues)
+        assert aqs.load_quality_protocol("p1", "SRS002") == log
+        # Prompts als lesbare Blöcke, nicht als eine escapte Zeile
+        assert "system_prompt: |" in log_path.read_text(encoding="utf-8")
+
+    def test_sidecar_format_unchanged(self, tmp_path, monkeypatch):
+        self._run(tmp_path, monkeypatch)
+        data = yaml.safe_load((tmp_path / "SRS" / "SRS002.ai-quality.yml").read_text(encoding="utf-8"))
+        assert set(data) == set(aqs.AiQualityResult.model_fields)
+        assert aqs.load_quality_result("p1", "SRS002") is not None
+
+    def test_protocol_can_be_switched_off(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AI_QUALITY_PROTOCOL", "off")
+        _, _, doc_dir = self._run(tmp_path, monkeypatch)
+        assert (doc_dir / "SRS002.ai-quality.yml").exists()
+        assert not (doc_dir / "SRS002.ai-quality-log.yml").exists()
+        assert aqs.load_quality_protocol("p1", "SRS002") is None
+
+    @pytest.mark.parametrize("value,enabled", [
+        (None, True), ("1", True), ("on", True), ("0", False), ("false", False),
+        ("OFF", False), ("no", False), ("nein", False)])
+    def test_protocol_enabled_values(self, monkeypatch, value, enabled):
+        if value is None:
+            monkeypatch.delenv("AI_QUALITY_PROTOCOL", raising=False)
+        else:
+            monkeypatch.setenv("AI_QUALITY_PROTOCOL", value)
+        assert aqs.protocol_enabled() is enabled
+
+    def test_result_identical_with_and_without_protocol(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AI_QUALITY_PROTOCOL", "1")
+        with_log, _, _ = self._run(tmp_path / "a", monkeypatch)
+        monkeypatch.setenv("AI_QUALITY_PROTOCOL", "0")
+        without_log, _, _ = self._run(tmp_path / "b", monkeypatch)
+        a, b = with_log.model_dump(), without_log.model_dump()
+        a.pop("timestamp"), b.pop("timestamp")
+        assert a == b
+        side_a = yaml.safe_load((tmp_path / "a" / "SRS" / "SRS002.ai-quality.yml").read_text(encoding="utf-8"))
+        side_b = yaml.safe_load((tmp_path / "b" / "SRS" / "SRS002.ai-quality.yml").read_text(encoding="utf-8"))
+        side_a.pop("timestamp"), side_b.pop("timestamp")
+        assert side_a == side_b
+
+    def test_protocol_write_error_does_not_break_analysis(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("AI_QUALITY_PROTOCOL", raising=False)
+        # Ordner statt Datei → Schreiben schlägt fehl
+        (tmp_path / "SRS" / "SRS002.ai-quality-log.yml").mkdir(parents=True)
+        result, _, doc_dir = self._run(tmp_path, monkeypatch)
+        assert 0 <= result.score.overall <= 100  # Kombination mit V19: Note im Code berechnet
+        assert (doc_dir / "SRS002.ai-quality.yml").exists()
+
+    def test_save_without_protocol_argument_still_works(self, tmp_path, monkeypatch):
+        """Alte Aufrufer (save_quality_result ohne protocol) schreiben nur das Sidecar."""
+        monkeypatch.delenv("AI_QUALITY_PROTOCOL", raising=False)
+        (tmp_path / "SRS").mkdir()
+        monkeypatch.setattr("doorstop_service.get_project", lambda pid: {"id": pid, "path": str(tmp_path)})
+        result = aqs.QualityResultParser().parse(SAMPLE_JSON_RESPONSE, "SRS001", "m", "standard")
+        aqs.save_quality_result("p1", "SRS001", result)
+        assert (tmp_path / "SRS" / "SRS001.ai-quality.yml").exists()
+        assert not (tmp_path / "SRS" / "SRS001.ai-quality-log.yml").exists()
+class TestSameSpot:
+    """V17: KI-Befunde zur selben Textstelle wie ein Regelbefund entfallen."""
+
+    def _i(self, desc, cat="Clarity"):
+        return aqs.AiQualityIssue(category=cat, severity="medium", description=desc, suggestion="")
+
+    def test_drops_ai_finding_on_rule_spot(self):
+        rules = [self._i(aqs.RULE_PREFIX + "Unbestimmte Begriffe: 'ausreichend'")]
+        ai = [self._i("„ausreichend genau“ ist nicht messbar."), self._i("„Beiwerte“ sind nicht definiert.")]
+        kept = aqs.drop_same_spot(ai, rules)
+        assert [k.description for k in kept] == ["„Beiwerte“ sind nicht definiert."]
+
+    def test_modal_rule_does_not_filter(self):
+        rules = [self._i(aqs.RULE_PREFIX + "Normative Anforderung ohne verbindliches Modalverb: 'soll'", "ModalVerb")]
+        ai = [self._i("„Die Software soll regelmäßig laufen“: Häufigkeit fehlt.")]
+        assert aqs.drop_same_spot(ai, rules) == ai
+
+
+class TestVerify:
+    """V18: Selbstprüfung der KI-Befunde mit einem zweiten Aufruf."""
+
+    class _P:
+        def __init__(self, antwort):
+            self.antwort, self.aufrufe = antwort, 0
+
+        def complete(self, system_prompt, user_prompt, model=None):
+            self.aufrufe += 1
+            return self.antwort
+
+    def _i(self, d):
+        return aqs.AiQualityIssue(category="Clarity", severity="medium", description=d, suggestion="")
+
+    def test_downgrades_false(self):
+        # V23: abgelehnte Befunde bleiben als Hinweis, aber Schwere low und ohne Vorschlag
+        p = self._P('{"gueltig": [true, false]}')
+        a, b = self._i("a"), self._i("b")
+        b.suggestion = "falscher Vorschlag"
+        kept = aqs.verify_issues(p, "Text", [a, b])
+        assert [k.description for k in kept] == ["a", "b"] and p.aufrufe == 1
+        assert kept[1].severity == "low" and kept[1].suggestion == "" and kept[0].severity == "medium"
+
+    def test_text_in_list_is_ignored(self):
+        p = self._P('{"gueltig": [false, "Einheit ergänzen"]}')
+        kept = aqs.verify_issues(p, "Text", [self._i("a")])
+        assert kept[0].severity == "low"
+
+    def test_no_call_without_issues(self):
+        p = self._P('{"gueltig": []}')
+        assert aqs.verify_issues(p, "Text", []) == [] and p.aufrufe == 0
+
+    def test_keeps_all_on_bad_answer(self):
+        issues = [self._i("a"), self._i("b")]
+        assert aqs.verify_issues(self._P("kein json"), "Text", issues) == issues
+        assert aqs.verify_issues(self._P('{"gueltig": [false]}'), "Text", issues) == issues

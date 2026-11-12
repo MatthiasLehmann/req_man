@@ -447,7 +447,8 @@ def delete_document(project_id: str, prefix: str) -> bool:
 # auftauchen: nicht in der Liste, im Baum, in Zählungen oder Coverage/Metriken.
 # Erkennung erfolgt zentral am UID-Suffix; der Punkt vor dem Suffix ist literal,
 # unabhängig vom UID-Trennzeichen des Dokuments. Siehe Issue #17.
-SIDECAR_SUFFIXES = (".ai-quality", ".simulink")
+# ".ai-quality-log" = Protokoll der KI-Analyse (L15 in #33)
+SIDECAR_SUFFIXES = (".ai-quality", ".ai-quality-log", ".simulink")
 
 
 def _is_sidecar(uid) -> bool:
