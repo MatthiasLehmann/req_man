@@ -131,9 +131,31 @@
             ],
             "title": "Consistency"
           },
+          "min_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Score"
+          },
           "overall": {
             "title": "Overall",
             "type": "integer"
+          },
+          "passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passed"
           },
           "testability": {
             "anyOf": [
@@ -152,7 +174,9 @@
           "clarity",
           "testability",
           "completeness",
-          "consistency"
+          "consistency",
+          "min_score",
+          "passed"
         ],
         "title": "AiQualityScore",
         "type": "object"

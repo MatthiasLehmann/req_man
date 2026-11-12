@@ -32,7 +32,7 @@ def main() -> None:
     # und würde das Schema sonst vom Build-Zustand abhängig machen.
     schema["paths"] = {p: v for p, v in schema["paths"].items() if p.startswith("/api/")}
 
-    with open(sys.argv[1], "w", encoding="utf-8") as f:
+    with open(sys.argv[1], "w", encoding="utf-8", newline="\n") as f:  # LF auch unter Windows (check:api vergleicht exakt)
         json.dump(schema, f, indent=2, ensure_ascii=False, sort_keys=True)
         f.write("\n")
 
