@@ -112,6 +112,38 @@ export const createItem = (
     `/projects/${projectId}/documents/${prefix}/items`,
     data,
   );
+
+// Tabellen-Import (Excel/CSV/Zwischenablage)
+type ImportBase = `/api/projects/{project_id}/documents/{prefix}/import`;
+const importUrl = (projectId: string, prefix: string) =>
+  `/projects/${projectId}/documents/${encodeURIComponent(prefix)}/import`;
+export type ImportCheck = ApiResponse<`${ImportBase}/validate`, 'post'>;
+export const parseImportFile = (projectId: string, prefix: string, file: File) => {
+  const form = new FormData();
+  form.append('file', file);
+  return api.post<ApiResponse<`${ImportBase}/parse`, 'post'>>(`${importUrl(projectId, prefix)}/parse`, form);
+};
+export const validateImport = (projectId: string, prefix: string, rows: Record<string, string>[]) =>
+  api.post<ImportCheck>(`${importUrl(projectId, prefix)}/validate`, { rows });
+export const runImport = (projectId: string, prefix: string, rows: Record<string, string>[]) =>
+  api.post<ApiResponse<ImportBase, 'post'>>(importUrl(projectId, prefix), { rows });
+
+// Excel-Rückweg (U4): exportieren, in Excel bearbeiten, Änderungen geprüft zurückholen
+type RoundtripBase = `/api/projects/{project_id}/roundtrip`;
+export type RoundtripCompare = ApiResponse<`${RoundtripBase}/compare`, 'post'>;
+const fileForm = (file: File) => { const f = new FormData(); f.append('file', file); return f; };
+export const exportForExcel = (projectId: string, prefix: string) =>
+  api.get<Blob>(`/projects/${projectId}/roundtrip/export/${encodeURIComponent(prefix)}`, { responseType: 'blob' });
+export const detectRoundtrip = (projectId: string, file: File) =>
+  api.post<ApiResponse<`${RoundtripBase}/detect`, 'post'>>(`/projects/${projectId}/roundtrip/detect`, fileForm(file));
+export const compareRoundtrip = (projectId: string, file: File) =>
+  api.post<RoundtripCompare>(`/projects/${projectId}/roundtrip/compare`, fileForm(file));
+export const applyRoundtrip = (projectId: string, file: File, uids: string[], newRows: number[]) => {
+  const form = fileForm(file);
+  form.append('selection', JSON.stringify({ uids, new_rows: newRows }));
+  return api.post<ApiResponse<`${RoundtripBase}/apply`, 'post'>>(`/projects/${projectId}/roundtrip/apply`, form);
+};
+
 export const getItem = (projectId: string, uid: string) =>
   api.get<Item>(`/projects/${projectId}/items/${uid}`);
 export const updateItem = (projectId: string, uid: string, data: ApiBody<'/api/projects/{project_id}/items/{uid}', 'put'>) =>

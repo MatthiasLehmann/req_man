@@ -1,14 +1,16 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, Loader2, CheckCircle, Circle, AlertCircle,
-  Tag, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, Download,
+  Tag, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, Download, FileSpreadsheet,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 import { listItems, createItem, deleteItem, exportDocument, ExportFormat } from '../../../shared/api/client';
 import { Item } from '../../../shared/types';
 import { useAuthStore } from '../../../shared/auth/authStore';
+import ImportDialog from './import/ImportDialog';
+import { parseClipboardTable } from './import/tableParsing';
 
 // ─── Level-Hilfsfunktionen ────────────────────────────────────────────────────
 
@@ -106,6 +108,28 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
   const { user } = useAuthStore();
   const canEdit = user?.role !== 'viewer';
   const qc = useQueryClient();
+
+  // Tabellen-Import: Dialog offen? (null = zu, [] = leer geöffnet, Zeilen = per Strg+V eingefügt)
+  const [importTable, setImportTable] = useState<string[][] | null>(null);
+
+  // Strg+V mit einer Tabelle (Excel) in der Anforderungsliste öffnet direkt den Import
+  useEffect(() => {
+    if (!canEdit) return;
+    const onPaste = (e: ClipboardEvent) => {
+      if (importTable) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return;
+      const text = e.clipboardData?.getData('text/plain') ?? '';
+      // Nur echte Tabellen abfangen (Excel liefert Tabs zwischen den Spalten)
+      if (!text.includes('\t')) return;
+      const rows = parseClipboardTable(text);
+      if (!rows.length) return;
+      e.preventDefault();
+      setImportTable(rows);
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [canEdit, importTable]);
 
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -234,6 +258,16 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
           </button>
         )}
 
+        {canEdit && (
+          <button
+            onClick={() => setImportTable([])}
+            className="p-1 text-gray-400 hover:text-green-700 transition-colors"
+            title="Aus Excel einfügen (oder Tabelle kopieren und hier Strg+V drücken)"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+          </button>
+        )}
+
         {/* Export-Dropdown */}
         <div className="relative" ref={exportRef}>
           <button
@@ -283,6 +317,14 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
         ) : displayNodes.length === 0 ? (
           <div className="text-center py-8 text-gray-400 text-sm">
             {filter ? 'Keine Treffer' : 'Keine Anforderungen'}
+            {!filter && canEdit && (
+              <div className="mt-3 px-4 space-y-2">
+                <button onClick={() => setImportTable([])} className="btn-secondary text-xs py-1.5 mx-auto">
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-green-600" /> Aus Excel übernehmen
+                </button>
+                <p className="text-xs text-gray-400">oder Tabelle in Excel kopieren und hier Strg+V drücken</p>
+              </div>
+            )}
           </div>
         ) : (
           displayNodes.map(({ item, depth, hasChildren }) => (
@@ -304,6 +346,19 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
           ))
         )}
       </div>
+
+      {importTable && (
+        <ImportDialog
+          projectId={projectId}
+          prefix={prefix}
+          initialTable={importTable.length ? importTable : null}
+          onClose={() => setImportTable(null)}
+          onImported={(uids) => {
+            setImportTable(null);
+            if (uids.length) onSelectItem(uids[0]);
+          }}
+        />
+      )}
     </div>
   );
 }
