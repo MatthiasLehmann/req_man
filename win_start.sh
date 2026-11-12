@@ -54,7 +54,10 @@ echo "  Endpunkt    : $AI_BASE_URL"
 fi
 echo ""
 
-command -v python3 >/dev/null 2>&1 || { echo "❌ Python 3 not found. Please install Python 3.10+"; exit 1; }
+# "python3" ist unter Windows meist nur der Microsoft-Store-Platzhalter –
+# daher den py-Launcher bevorzugen (wird vom python.org-Installer mitgeliefert).
+if command -v py >/dev/null 2>&1; then PY="py -3"; else PY="python"; fi
+$PY --version >/dev/null 2>&1 || { echo "❌ Python 3 not found. Please install Python 3.12+"; exit 1; }
 command -v node    >/dev/null 2>&1 || { echo "❌ Node.js not found. Please install Node.js 18+"; exit 1; }
 
 # Ollama-Erreichbarkeit prüfen
@@ -86,7 +89,7 @@ cd "$BACKEND_DIR"
 
 if [ ! -d ".venv" ]; then
   echo "  Creating Python virtual environment..."
-  python3 -m venv .venv
+  $PY -m venv .venv
 fi
 
 .venv/Scripts/pip install -q -r requirements.txt

@@ -12,9 +12,13 @@ echo ""
 # Backend
 echo "📦 Installing backend dependencies..."
 cd "$SCRIPT_DIR/backend"
-python3 -m venv .venv
-.venv/Scripts/activate.bat
-pip install -q -r requirements.txt
+# "python3" ist unter Windows meist nur der Microsoft-Store-Platzhalter –
+# daher den py-Launcher bevorzugen (wird vom python.org-Installer mitgeliefert).
+if command -v py >/dev/null 2>&1; then PY="py -3"; else PY="python"; fi
+$PY -m venv .venv
+# activate.bat wirkt in Git Bash nicht – pip direkt aus der venv aufrufen,
+# sonst landen die Pakete im System-Python.
+.venv/Scripts/python.exe -m pip install -q -r requirements.txt
 echo "  ✓ Backend ready"
 
 # Frontend

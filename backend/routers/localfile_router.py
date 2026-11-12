@@ -36,9 +36,32 @@ def _is_allowed(path: str) -> bool:
         return False
 
 
-# ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
-
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
+
+
+def _is_allowed_image(path: str) -> bool:
+    """Nur Bilddateien unter der Basis – sonst wären z. B. ~/.ssh/id_rsa lesbar.
+
+    Geprüft wird die Endung des aufgelösten Pfads, damit ein Symlink
+    "bild.png" → "~/.ssh/id_rsa" nicht durchrutscht.
+    """
+    if not _is_allowed(path):
+        return False
+    try:
+        real = os.path.realpath(path)
+    except (ValueError, OSError):
+        return False
+    return os.path.splitext(real)[1].lower() in _IMAGE_EXTS
+
+
+# Verhindert Skriptausführung, falls ein SVG direkt im Browser geöffnet wird.
+_SAFE_HEADERS = {
+    "Content-Security-Policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:",
+    "X-Content-Type-Options": "nosniff",
+}
+
+
+# ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
 
 
 def _sha256(path: str) -> str:
@@ -137,7 +160,7 @@ async def serve_local_file(
       X-File-Status: ok | changed | missing | forbidden
       X-File-Hash:   aktueller SHA256
     """
-    if not _is_allowed(path):
+    if not _is_allowed_image(path):
         raise HTTPException(403, "Pfad nicht erlaubt")
     if not os.path.isfile(path):
         # Gib ein 1×1 transparentes PNG zurück, damit img.src nicht bricht
@@ -159,7 +182,7 @@ async def serve_local_file(
     return FileResponse(
         path,
         media_type=_mimetype(path),
-        headers={"X-File-Status": status, "X-File-Hash": current_hash},
+        headers={"X-File-Status": status, "X-File-Hash": current_hash, **_SAFE_HEADERS},
     )
 
 
@@ -179,7 +202,7 @@ async def check_local_files(
     """
     results = []
     for item in items:
-        if not _is_allowed(item.path):
+        if not _is_allowed_image(item.path):
             results.append({"path": item.path, "status": "forbidden"})
         elif not os.path.isfile(item.path):
             results.append({"path": item.path, "status": "missing"})
