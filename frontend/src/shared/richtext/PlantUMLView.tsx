@@ -11,7 +11,13 @@
 import { NodeViewWrapper } from '@tiptap/react';
 import { Check, Loader2, Pencil, X, AlertTriangle, Network } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import DOMPurify from 'dompurify';
 import api from '../api/client';
+
+// Der PlantUML-Quelltext stammt von Nutzern; Links wie [[javascript:…]] oder
+// eingeschleustes Markup dürfen beim Einfügen ins DOM nicht ausgeführt werden.
+const sanitizeSvg = (svg: string) =>
+  DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } });
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -51,7 +57,7 @@ export default function PlantUMLView({ node, updateAttributes, selected }: Plant
     api
       .post<{ svg: string }>('/plantuml/render', { source })
       .then((res) => {
-        if (!cancelled) setSvg(res.data.svg);
+        if (!cancelled) setSvg(sanitizeSvg(res.data.svg));
       })
       .catch((err) => {
         if (!cancelled) {
@@ -208,7 +214,7 @@ export default function PlantUMLView({ node, updateAttributes, selected }: Plant
           {!loading && !renderError && svg && (
             <div
               className="plantuml-svg w-full overflow-x-auto"
-              // SVG vom lokalen Backend ist sicher (kein User-Input als HTML)
+              // svg ist mit DOMPurify bereinigt (siehe sanitizeSvg)
               // eslint-disable-next-line react/no-danger
               dangerouslySetInnerHTML={{ __html: svg }}
             />

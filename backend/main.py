@@ -70,6 +70,19 @@ app.include_router(ai_quality_router.router)
 app.include_router(ai_quality_router.settings_router)
 app.include_router(simulink_router.router)
 
+# Hochgeladene Dateien (v. a. SVG) dürfen beim direkten Öffnen kein Skript auf
+# der App-Origin ausführen – sonst könnte ein Upload das Login-Token auslesen.
+@app.middleware("http")
+async def sandbox_uploads(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/uploads/"):
+        response.headers["Content-Security-Policy"] = (
+            "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:"
+        )
+        response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 # Serve uploaded images as static files
 UPLOADS_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOADS_DIR, exist_ok=True)

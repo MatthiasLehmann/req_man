@@ -111,7 +111,13 @@ async def render_plantuml(
         proc = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: subprocess.run(
-                [java_bin, "-jar", str(_JAR_PATH), "-tsvg", "-pipe", "-charset", "UTF-8"],
+                [
+                    java_bin,
+                    # SANDBOX: kein !include von Serverdateien oder URLs
+                    # (sonst Datei-Lesezugriff bzw. Anfragen ins interne Netz).
+                    "-DPLANTUML_SECURITY_PROFILE=SANDBOX",
+                    "-jar", str(_JAR_PATH), "-tsvg", "-pipe", "-charset", "UTF-8",
+                ],
                 input=body.source.encode("utf-8"),
                 capture_output=True,
                 timeout=30,

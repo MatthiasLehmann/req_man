@@ -59,9 +59,11 @@ bestehende Logins werden dann ungültig.
 ## Betrieb mit Docker
 
 ```bash
-cp .env.example .env   # SECRET_KEY, CORS_ORIGINS und KI-Provider anpassen
+cp .env.example .env   # SECRET_KEY (Pflicht), CORS_ORIGINS und KI-Provider anpassen
 docker compose up -d --build
 ```
+
+Ohne gesetztes `SECRET_KEY` bricht `docker compose` mit einer Fehlermeldung ab.
 
 Die App ist dann über nginx unter <http://localhost> erreichbar. Standardmäßig wird ein
 Ollama-Container als lokaler KI-Server mitgestartet. Persistente Daten liegen in `data/`

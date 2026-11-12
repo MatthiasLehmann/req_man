@@ -19,7 +19,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      - SECRET_KEY=${SECRET_KEY:-reqman-secret-key-change-in-production}
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY muss in .env gesetzt sein}
       - AI_PROVIDER=${AI_PROVIDER:-ollama}
       - AI_BASE_URL=${AI_BASE_URL:-http://ollama:11434/v1}
       - AI_MODEL=${AI_MODEL:-llama3.2}
