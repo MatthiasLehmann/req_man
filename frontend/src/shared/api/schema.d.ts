@@ -1130,8 +1130,12 @@ export interface components {
             completeness: number | null;
             /** Consistency */
             consistency: number | null;
+            /** Min Score */
+            min_score: number | null;
             /** Overall */
             overall: number;
+            /** Passed */
+            passed: boolean | null;
             /** Testability */
             testability: number | null;
         };
