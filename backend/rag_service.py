@@ -27,10 +27,10 @@ logger = logging.getLogger(__name__)
 
 RAG_ROOT = Path(__file__).parent.parent / "data" / "rag"
 MIN_CHARS = 10
-# Konstanten werden in A2 festgelegt (results/RAG_suche.md im Benchmark-Repo)
-SIMILAR_MIN = 0.60
-DUPLICATE_MIN = 0.85
-# Abschnittstitel beim Einbetten voranstellen (A2, Variante (c))
+# Konstanten aus A2 (reqman-benchmark: results/RAG_suche.md)
+SIMILAR_MIN = 0.62      # Median der Kosinus-Werte verlinkter Paare
+DUPLICATE_MIN = 0.90    # 95 %-Wert zwischen verschiedenen echten Anforderungen
+# Abschnittstitel beim Einbetten voranstellen: in A2 nicht bewertbar (Korpus ohne Überschriften)
 USE_SECTION_TITLE = False
 
 _locks: Dict[str, threading.Lock] = {}
