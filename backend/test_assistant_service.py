@@ -167,3 +167,19 @@ def test_router_help_search_and_next_steps(project, fake, client):  # noqa: F811
     r = client.get(f"/api/projects/{project['pid']}/next-steps")
     assert r.status_code == 200 and any(s["key"] == "unlinked" for s in r.json())
     assert client.get("/api/projects/nix/next-steps").status_code == 404
+
+
+def test_refs_only_in_quellen_field_are_used(project, fake):  # noqa: F811
+    p = project
+    answer = json.dumps({"antwort": "Unter 4 Sekunden.", "quellen": [p["srs1"], "SRS999"]})
+    out = assistant.ask(p["pid"], "Beschleunigung auf 100 km/h", {}, [], provider=FixedProvider(answer))
+    assert out["answer"] == f"Unter 4 Sekunden. [{p['srs1']}]"
+    assert [s["ref"] for s in out["sources"]] == [p["srs1"]]
+    assert out["removed_refs"] == ["SRS999"]
+
+
+def test_uncited_fallback_prefers_best_match(project, fake):  # noqa: F811
+    p = project
+    out = assistant.ask(p["pid"], "Bremsweg aus 100 km/h höchstens 40 Metern",
+                        {}, [], provider=FixedProvider(json.dumps({"antwort": "40 m", "quellen": []})))
+    assert out["sources"][0]["kind"] == "item"
