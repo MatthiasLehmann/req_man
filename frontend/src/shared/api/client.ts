@@ -166,6 +166,23 @@ export const removeLink = (projectId: string, sourceUid: string, targetUid: stri
     `/projects/${projectId}/items/${sourceUid}/links/${targetUid}`,
   );
 
+// Bedeutungssuche (RAG, A1) – Ähnliche, Link-Vorschläge, Auswirkungen, Suche
+export type RagHit = Schemas['RagHit'];
+export type LinkSuggestionsResult = Schemas['LinkSuggestions'];
+export type ImpactResult = Schemas['ImpactResult'];
+export const ragSearch = (projectId: string, q: string, k = 8, prefixes?: string[]) =>
+  api.get<ApiResponse<'/api/projects/{project_id}/rag/search', 'get'>>(`/projects/${projectId}/rag/search`, {
+    params: { q, k, prefix: prefixes },
+    paramsSerializer: { indexes: null },
+  });
+export const ragSimilarText = (projectId: string, body: ApiBody<'/api/projects/{project_id}/rag/similar-text', 'post'>) =>
+  api.post<ApiResponse<'/api/projects/{project_id}/rag/similar-text', 'post'>>(
+    `/projects/${projectId}/rag/similar-text`, body);
+export const getLinkSuggestions = (projectId: string, uid: string, k = 8) =>
+  api.get<LinkSuggestionsResult>(`/projects/${projectId}/items/${uid}/link-suggestions`, { params: { k } });
+export const getImpact = (projectId: string, uid: string) =>
+  api.get<ImpactResult>(`/projects/${projectId}/items/${uid}/impact`);
+
 // Review (doorstop stamp)
 export const reviewItem = (projectId: string, uid: string) =>
   api.post<Item>(

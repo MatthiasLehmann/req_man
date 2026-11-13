@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { LogOut, User, Bell } from 'lucide-react';
 import { useAuthStore } from '../auth/authStore';
 import { useProjectStore } from '../store/projectStore';
+import { ProjectSearch } from '../search';
 
 export default function Header() {
   const { user, logout } = useAuthStore();
@@ -19,6 +20,7 @@ export default function Header() {
         {currentProject && (
           <h1 className="text-base font-semibold text-gray-800">{currentProject.name}</h1>
         )}
+        {currentProject && <ProjectSearch projectId={currentProject.id} />}
       </div>
 
       <div className="flex items-center gap-3">

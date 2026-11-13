@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, X, Link2, Tag, ChevronDown, ChevronUp, Loader2, GitCommit, History, Stamp, Paperclip, AlertTriangle, Sparkles, Boxes } from 'lucide-react';
+import { Save, X, Link2, Tag, ChevronDown, ChevronUp, Loader2, GitCommit, History, Stamp, Paperclip, AlertTriangle, Sparkles, Boxes, Network } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 import { getItem, updateItem, getAttributes, getLatestValidation, reviewItem } from '../../../shared/api/client';
@@ -12,6 +12,8 @@ import { DOORSTOP_HELP } from '../../../shared/ui/doorstopHelp';
 import { ValidationBadge, ValidationDialog, ValidationHistory } from '../../review';
 import ReferencesTab from './ReferencesTab';
 import { AiQualityTab, useAiQuality } from '../../ai';
+import { LinkSuggestions, DuplicateHint, ImpactTab } from '../../assist';
+import { useOpenRequirement } from '../../../shared/search';
 import SimulinkTab from './SimulinkTab';
 import GitHistoryTab from './GitHistoryTab';
 import { useSimulinkLinks } from '../hooks/useSimulinkLinks';
@@ -27,6 +29,7 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
   const { user } = useAuthStore();
   const canEdit = user?.role !== 'viewer';
   const qc = useQueryClient();
+  const openRequirement = useOpenRequirement();
 
   const { data: itemRes, isLoading } = useQuery({
     queryKey: ['item', projectId, uid],
@@ -54,7 +57,7 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
   const [newLink, setNewLink] = useState('');
   const [showCustom, setShowCustom] = useState(false);
   const [showValidationDialog, setShowValidationDialog] = useState(false);
-  const [activeTab, setActiveTab] = useState<'details' | 'references' | 'validation' | 'ai-quality' | 'simulink' | 'git'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'references' | 'validation' | 'ai-quality' | 'simulink' | 'git' | 'impact'>('details');
 
   // KI-Qualitäts-Badge
   const { data: aiQualityResult } = useAiQuality(projectId, uid);
@@ -129,14 +132,18 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
     setDirty(true);
   };
 
-  const addLink = () => {
-    const trimmed = newLink.trim();
+  const addLinkUid = (target: string) => {
+    const trimmed = target.trim();
     if (!trimmed) return;
     const links = [...(form.links || [])];
     if (!links.includes(trimmed)) {
       links.push(trimmed);
       setField('links', links);
     }
+  };
+
+  const addLink = () => {
+    addLinkUid(newLink);
     setNewLink('');
   };
 
@@ -264,6 +271,18 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
           Reviews
         </button>
         <button
+          onClick={() => setActiveTab('impact')}
+          className={clsx(
+            'flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors',
+            activeTab === 'impact'
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700',
+          )}
+        >
+          <Network className="w-3 h-3" />
+          Auswirkungen
+        </button>
+        <button
           onClick={() => setActiveTab('git')}
           className={clsx(
             'flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors',
@@ -325,7 +344,11 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
       </div>
 
       {/* ── Body ── */}
-      {activeTab === 'git' ? (
+      {activeTab === 'impact' ? (
+        <div className="flex-1 overflow-y-auto p-4">
+          <ImpactTab projectId={projectId} uid={uid} onOpen={(u, prefix) => openRequirement(projectId, prefix, u)} />
+        </div>
+      ) : activeTab === 'git' ? (
         <div className="flex-1 overflow-y-auto p-4">
           <GitHistoryTab projectId={projectId} uid={uid} />
         </div>
@@ -462,6 +485,15 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
           >
             Anforderungstext
           </FieldLabel>
+          {!item.header && (
+            <DuplicateHint
+              projectId={projectId}
+              uid={uid}
+              text={form.text || ''}
+              excludeUids={form.links || []}
+              onOpen={(u, prefix) => openRequirement(projectId, prefix, u)}
+            />
+          )}
           <MarkdownEditor
             value={form.text || ''}
             onChange={(val) => setField('text', val)}
@@ -517,6 +549,14 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
                 + Hinzufügen
               </button>
             </div>
+          )}
+          {canEdit && !item.header && (
+            <LinkSuggestions
+              projectId={projectId}
+              uid={uid}
+              currentLinks={form.links || []}
+              onAdd={addLinkUid}
+            />
           )}
         </div>
 

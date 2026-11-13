@@ -238,6 +238,19 @@ export default function RequirementsPage() {
     setPendingAction(() => action);
   }, [editorDirty]);
 
+  // Von außen gesetzte Auswahl übernehmen (Suche, „Öffnen“ in Hinweisen): der Store ist maßgeblich,
+  // die lokalen Wrapper halten ihn ohnehin synchron.
+  const storedPrefix = pid ? storedPrefixes[pid] || null : null;
+  const storedUid = pid ? storedUids[pid] || null : null;
+  useEffect(() => {
+    if (storedPrefix === selectedPrefix && storedUid === selectedUid) return;
+    guardedAction(() => {
+      setSelectedPrefixState(storedPrefix);
+      setSelectedUidState(storedUid);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storedPrefix, storedUid]);
+
   const handleModalConfirm = () => {
     if (pendingAction) {
       setEditorDirty(false);
