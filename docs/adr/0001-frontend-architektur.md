@@ -117,8 +117,9 @@ Headless-CMS (Strapi, Contentful), Backstage und Grafana (Shell + Plugins).
 3. ✅ Seiten mit `React.lazy` laden (#25). Ergebnis: beim Start 272 kB JS statt 1.858 kB;
    ProseMirror als eigener Chunk, keine Chunk-Größenwarnung mehr.
 4. ✅ Abhängigkeitsregeln per Skript absichern (#25).
-5. MCP-Server-Prototyp mit lesenden Werkzeugen (Projekte, Dokumente, Items, Traces), danach
-   vorschlagende Werkzeuge (Review-Kommentare, Qualitätsbewertung).
+5. ✅ MCP-Server-Prototyp mit lesenden Werkzeugen (`mcp_server/`: Projekte, Dokumente, Anforderungen,
+   Suche nach Bedeutung, Auswirkungen, Qualitätsprüfung), als Client der REST-API. Offen: vorschlagende
+   Werkzeuge (Review-Kommentare, Qualitätsbewertung).
 
 ## Auslöser für eine Neubewertung
 

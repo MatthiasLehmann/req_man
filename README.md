@@ -75,6 +75,12 @@ Ollama-Container als lokaler KI-Server mitgestartet. Persistente Daten liegen in
 Ohne das Modell bleibt ReqMan benutzbar, die Suchfunktionen antworten dann mit 503. Der Index liegt unter
 `data/rag/` und gleicht sich selbst ab.
 
+## MCP-Server
+
+`mcp_server/` macht ReqMan für KI-Agenten (Claude Desktop, Claude Code, VS Code) nutzbar: lesen, suchen,
+Auswirkungen und Qualitätsprüfung. Er ist ein Client der REST-API (Rollen und Rechte des ReqMan-Benutzers
+gelten). Einrichtung und Konfigurationsbeispiele: [mcp_server/README.md](mcp_server/README.md).
+
 ## Projektstruktur
 
 ```
@@ -86,6 +92,7 @@ docs/        Konzepte und Workflows (Review/Validierung, Simulink, Sidecar-Metad
 data/        Laufzeitdaten: SQLite-Datenbank, projects.json, attributes.yml
 projects/    doorstop-Projekte
 nginx/       Reverse-Proxy-Konfiguration für Docker
+mcp_server/  MCP-Server (ReqMan als Werkzeugsatz für KI-Agenten)
 ```
 
 ## Tests
@@ -95,6 +102,7 @@ cd backend && .venv/bin/python -m pytest -q
 cd frontend && npx tsc --noEmit
 cd frontend && npm run check:boundaries   # Modulgrenzen zwischen features/ und shared/
 cd frontend && npm run check:api          # API-Typen passen zum Backend
+cd mcp_server && .venv/bin/python -m pytest -q   # MCP-Server (eigene venv)
 ```
 
 ## API-Typen
