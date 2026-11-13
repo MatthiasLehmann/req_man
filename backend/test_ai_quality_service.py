@@ -1171,3 +1171,96 @@ class TestVerify:
         issues = [self._i("a"), self._i("b")]
         assert aqs.verify_issues(self._P("kein json"), "Text", issues) == issues
         assert aqs.verify_issues(self._P('{"gueltig": [false]}'), "Text", issues) == issues
+
+
+# ─── V28: projektweite Widerspruchsprüfung (A7) ──────────────────────────────
+
+class SequenceProvider:
+    """Gibt je Aufruf die nächste Antwort zurück und merkt sich das Token-Limit beim Aufruf."""
+    def __init__(self, *responses: str):
+        self.responses = list(responses)
+        self.calls: list = []
+        self.max_tokens: list = []
+
+    def complete(self, system_prompt: str, user_prompt: str, model: str | None = None) -> str:
+        self.calls.append((system_prompt, user_prompt))
+        self.max_tokens.append(aqs.get_max_tokens())
+        return self.responses.pop(0) if self.responses else '{"gueltig": []}'
+
+
+NEIGHBOURS = [
+    {"uid": "SRD008", "prefix": "SRD", "level": "8", "text": "a_max = 300 m/s².", "score": 0.81, "linked": False},
+    {"uid": "SRD010", "prefix": "SRD", "level": "10", "text": "Begrenzung zyklisch.", "score": 0.7, "linked": False},
+]
+
+
+class TestProjectCheckV28:
+    ITEM = {"uid": "SRD022", "text": "Die Software soll a_cmd auf 250 m/s² begrenzen.", "header": False,
+            "normative": True, "active": True, "derived": False, "links": [], "level": "22",
+            "custom_attributes": {}, "references": [], "reviewed": None, "reviewed_current": None}
+    CLEAN = json.dumps({"scores": {"clarity": 90, "testability": 90, "completeness": 90, "consistency": 90},
+                        "issues": [], "summary": "ok"})
+
+    def _run(self, tmp_path, monkeypatch, provider, neighbours=NEIGHBOURS):
+        import asyncio
+        (tmp_path / "SRD").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr("doorstop_service.get_item", lambda pid, uid: self.ITEM)
+        monkeypatch.setattr("doorstop_service.get_project", lambda pid: {"id": pid, "path": str(tmp_path)})
+        monkeypatch.setattr("doorstop_service.list_documents", lambda pid: [])
+        monkeypatch.setattr("doorstop_service.load_attribute_config", lambda: [])
+        monkeypatch.setattr(aqs, "find_neighbours", lambda pid, uid: neighbours)
+        return asyncio.run(aqs.QualityAnalyzer(provider=provider).analyze("p1", "SRD022"))
+
+    def test_default_off_like_v23(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("AI_PROJECT_CHECK", raising=False)
+        provider = SequenceProvider(self.CLEAN)
+        result = self._run(tmp_path, monkeypatch, provider)
+        assert len(provider.calls) == 1
+        assert not [i for i in result.issues if i.description.startswith("Widerspruch")]
+
+    def test_contradiction_found_and_invented_uid_dropped(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AI_PROJECT_CHECK", "1")
+        answer = json.dumps({"widersprueche": [
+            {"uid": "SRD008", "stelle": "250 m/s²", "begruendung": "SRD008 legt a_max = 300 m/s² fest."},
+            {"uid": "SRD999", "stelle": "x", "begruendung": "erfunden"},
+            {"uid": "SRD008", "stelle": "doppelt", "begruendung": "doppelt"},
+        ]})
+        provider = SequenceProvider(self.CLEAN, answer)
+        result = self._run(tmp_path, monkeypatch, provider)
+        assert len(provider.calls) == 2
+        system, user = provider.calls[1]
+        assert system == aqs.CONTRADICTION_SYSTEM
+        assert "A [SRD022]" in user and "B [SRD008]: a_max = 300 m/s²." in user
+        assert provider.max_tokens == [aqs.get_max_tokens(), aqs.CONTRADICTION_MAX_TOKENS]
+        found = [i for i in result.issues if i.description.startswith("Widerspruch")]
+        assert len(found) == 1
+        assert found[0].category == "Consistency" and found[0].severity == "high"
+        assert "Widerspruch zu SRD008" in found[0].description and "300" in found[0].description
+        assert found[0].suggestion == "Mit SRD008 abgleichen"
+        log = yaml.safe_load((tmp_path / "SRD" / "SRD022.ai-quality-log.yml").read_text(encoding="utf-8"))
+        assert log["project_check"]["neighbours"][0]["uid"] == "SRD008"
+        assert log["project_check"]["dropped"] == 2
+
+    def test_no_neighbours_no_extra_call(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AI_PROJECT_CHECK", "1")
+        provider = SequenceProvider(self.CLEAN)
+        self._run(tmp_path, monkeypatch, provider, neighbours=[])
+        assert len(provider.calls) == 1
+
+    def test_broken_answer_gives_no_issue(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AI_PROJECT_CHECK", "1")
+        provider = SequenceProvider(self.CLEAN, "kein json")
+        result = self._run(tmp_path, monkeypatch, provider)
+        assert not [i for i in result.issues if i.description.startswith("Widerspruch")]
+        assert aqs.get_max_tokens() != aqs.CONTRADICTION_MAX_TOKENS  # Limit zurückgesetzt
+
+    def test_find_neighbours_filters_and_swallows_errors(self, monkeypatch):
+        import rag_service
+        monkeypatch.setattr(rag_service, "similar", lambda pid, uid, k: NEIGHBOURS + [
+            {"uid": "X1", "prefix": "X", "level": "1", "text": "t", "score": 0.3, "linked": False}])
+        assert [h["uid"] for h in aqs.find_neighbours("p", "SRD022")] == ["SRD008", "SRD010"]
+
+        def boom(*a, **k):
+            raise RuntimeError("Ollama fehlt")
+        monkeypatch.setattr(rag_service, "similar", boom)
+        assert aqs.find_neighbours("p", "SRD022") == []

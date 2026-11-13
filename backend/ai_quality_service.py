@@ -29,10 +29,11 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 from pydantic import BaseModel
@@ -149,8 +150,15 @@ def get_request_timeout() -> float:
     return value if value is not None else REQUEST_TIMEOUT
 
 
+_call_limits = threading.local()
+
+
 def get_max_tokens() -> int:
-    """Maximale Antwortlänge in Token aus AI_MAX_TOKENS, Standard MAX_TOKENS (2048)."""
+    """Maximale Antwortlänge in Token aus AI_MAX_TOKENS, Standard MAX_TOKENS (2048).
+    V28: Ein kurzer Zusatzaufruf kann für seinen Thread ein kleineres Limit setzen."""
+    override = getattr(_call_limits, "max_tokens", None)
+    if override:
+        return override
     value = _positive_env("AI_MAX_TOKENS", int)
     return value if value is not None else MAX_TOKENS
 
@@ -1128,6 +1136,91 @@ def drop_same_spot(ai_issues: List[AiQualityIssue], rule_issues: List[AiQualityI
     return [i for i in ai_issues if not (_quoted_words(i.description) & spots)]
 
 
+# ─── V28: projektweite Widerspruchsprüfung (Plan A7) ──────────────────────────
+#
+# Fehler wie SRD022 (250 statt 300 m/s² aus SRD008) sieht man nur im Vergleich mit anderen Anforderungen,
+# die nicht unbedingt verlinkt sind. Der Haupt-Prompt bleibt unverändert (Lehre aus V9/V10); stattdessen
+# holt der Wissensindex (A1) bis zu drei ähnliche Anforderungen, und ein kurzer zweiter Aufruf fragt nur
+# nach Widersprüchen. Schaltbar über AI_PROJECT_CHECK (Standard aus = Verhalten wie V23).
+
+PROJECT_CHECK_ENV = "AI_PROJECT_CHECK"
+CONTRADICTION_K = 3
+CONTRADICTION_MAX_TOKENS = 300
+
+CONTRADICTION_SYSTEM = """\
+Du vergleichst eine Anforderung A mit anderen Anforderungen desselben Projekts.
+Widerspricht A einer der anderen bei einem Zahlenwert, einer Grenze, einer Einheit oder einem Namen für dieselbe Sache?
+Nur echte Widersprüche zur selben Sache melden, keine bloßen Unterschiede im Thema. Im Zweifel leere Liste.
+Antworte nur mit {"widersprueche": [{"uid": "...", "stelle": "...", "begruendung": "..."}]}"""
+
+
+def project_check_enabled() -> bool:
+    return os.environ.get(PROJECT_CHECK_ENV, "").strip().lower() in ("1", "true", "on", "yes", "ja")
+
+
+def find_neighbours(project_id: str, uid: str) -> List[Dict[str, Any]]:
+    """Ähnliche Anforderungen aus dem Wissensindex (A1) ab SIMILAR_MIN. Jeder Fehler (Ollama fehlt,
+    Item nicht im Index …) führt zu einer leeren Liste – die Prüfung läuft dann wie V23."""
+    try:
+        import rag_service  # spät importieren: rag_service importiert dieses Modul
+        hits = rag_service.similar(project_id, uid, k=CONTRADICTION_K)
+        return [h for h in hits if h["score"] >= rag_service.SIMILAR_MIN]
+    except Exception as e:  # noqa: BLE001 – Zusatzprüfung darf die Analyse nie verhindern
+        logger.warning("Projektweite Prüfung übersprungen (%s): %s", uid, e)
+        return []
+
+
+def check_contradictions(provider: "LlmProvider", uid: str, text: str, neighbours: List[Dict[str, Any]],
+                         model: Optional[str] = None) -> Tuple[List[AiQualityIssue], Dict[str, Any]]:
+    """Ein kurzer Zusatzaufruf. Liefert (Befunde, Protokoll). UIDs, die nicht unter den Nachbarn waren,
+    werden verworfen; bei unlesbarer Antwort gibt es keine Befunde."""
+    lines = [f"A [{uid}]: {text}", "", "Andere Anforderungen:"]
+    lines += [f"B [{h['uid']}]: {h['text']}" for h in neighbours]
+    user_prompt = "\n".join(lines)
+    protocol: Dict[str, Any] = {
+        "neighbours": [{"uid": h["uid"], "score": h["score"]} for h in neighbours],
+        "system_prompt": CONTRADICTION_SYSTEM, "user_prompt": user_prompt, "raw_response": None,
+    }
+    allowed = {h["uid"].upper(): h["uid"] for h in neighbours}
+    _call_limits.max_tokens = CONTRADICTION_MAX_TOKENS
+    try:
+        raw = provider.complete(CONTRADICTION_SYSTEM, user_prompt, model=model)
+        protocol["raw_response"] = raw
+        json_str = QualityResultParser._extract_json(raw)
+        try:
+            data = json.loads(json_str)
+        except json.JSONDecodeError:
+            from json_repair import repair_json
+            data = json.loads(repair_json(json_str))
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Widerspruchsprüfung fehlgeschlagen (%s): %s", uid, e)
+        protocol["error"] = str(e)
+        return [], protocol
+    finally:
+        _call_limits.max_tokens = None
+
+    found = data.get("widersprueche") if isinstance(data, dict) else None
+    issues: List[AiQualityIssue] = []
+    seen = set()
+    for f in found if isinstance(found, list) else []:
+        if not isinstance(f, dict):
+            continue
+        other = allowed.get(str(f.get("uid") or "").strip().strip("[]").upper())
+        if not other or other in seen:
+            continue  # erfundene UID oder doppelt
+        seen.add(other)
+        stelle = str(f.get("stelle") or "").strip()
+        grund = str(f.get("begruendung") or "").strip()
+        detail = "; ".join(p for p in (f"Stelle: {stelle}" if stelle else "", grund) if p)
+        issues.append(AiQualityIssue(
+            category="Consistency", severity="high",
+            description=f"Widerspruch zu {other}: {detail}" if detail else f"Widerspruch zu {other}",
+            suggestion=f"Mit {other} abgleichen",
+        ))
+    protocol["dropped"] = len(found) - len(issues) if isinstance(found, list) else 0
+    return issues, protocol
+
+
 # ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
 
 
@@ -1283,6 +1376,14 @@ class QualityAnalyzer:
         ai_issues = drop_same_spot(drop_rule_duplicates(ai_issues, rule_issues), rule_issues)
         # V18/V23: Selbstprüfung – ein zweiter, kurzer Aufruf; abgelehnte KI-Befunde werden abgestuft
         ai_issues = verify_issues(self._provider, text, ai_issues, used_model)
+        # V28: projektweite Widerspruchsprüfung mit ähnlichen Anforderungen aus dem Wissensindex
+        project_protocol = None
+        if project_check_enabled():
+            neighbours = find_neighbours(project_id, uid)
+            if neighbours:
+                found, project_protocol = check_contradictions(
+                    self._provider, uid, text, neighbours, used_model)
+                ai_issues = ai_issues + found
         result.issues = rule_issues + ai_issues
         # V19: Gesamtnote aus Teilnoten, Profilgewichten und den endgültigen Befunden
         result.score = compute_score(result.score, result.issues, profile)
@@ -1294,6 +1395,8 @@ class QualityAnalyzer:
                 result, item, used_model, system_prompt, user_prompt, raw,
                 llm_seconds, time.perf_counter() - started, rule_issues, ai_issues_parsed,
             )
+            if project_protocol is not None:
+                protocol["project_check"] = project_protocol
         save_quality_result(project_id, uid, result, protocol=protocol)
         return result
 
