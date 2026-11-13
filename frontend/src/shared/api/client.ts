@@ -183,6 +183,17 @@ export const getLinkSuggestions = (projectId: string, uid: string, k = 8) =>
 export const getImpact = (projectId: string, uid: string) =>
   api.get<ImpactResult>(`/projects/${projectId}/items/${uid}/impact`);
 
+// Vorschläge (A6) – Agenten/Assistent schlagen vor, ein Mensch übernimmt oder lehnt ab
+export type Proposal = Schemas['ProposalResponse'];
+export const listProposals = (projectId: string, params?: { status?: string; uid?: string }) =>
+  api.get<Proposal[]>(`/projects/${projectId}/proposals`, { params });
+export const getProposalCount = (projectId: string) =>
+  api.get<Schemas['ProposalCount']>(`/projects/${projectId}/proposals/count`);
+export const acceptProposal = (projectId: string, id: number) =>
+  api.post<Proposal>(`/projects/${projectId}/proposals/${id}/accept`);
+export const rejectProposal = (projectId: string, id: number) =>
+  api.post<Proposal>(`/projects/${projectId}/proposals/${id}/reject`);
+
 // „Frag ReqMan“ (A4) – Assistent mit Quellen, Hilfe-Suche, offene Punkte
 export type AssistantAnswer = Schemas['AssistantAnswer'];
 export type AssistantSource = Schemas['AssistantSource'];

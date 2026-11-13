@@ -20,6 +20,7 @@ from routers import import_router
 from routers import roundtrip_router
 from routers import rag_router
 from routers import assistant_router
+from routers import proposals_router
 import threading
 import logging
 
@@ -88,6 +89,13 @@ app.include_router(ai_quality_router.settings_router)
 app.include_router(simulink_router.router)
 app.include_router(rag_router.router)
 app.include_router(assistant_router.router)
+app.include_router(proposals_router.router)
+
+# Offene Vorschläge stehen in „Was steht als Nächstes an?“ an erster Stelle (A4-Erweiterungspunkt).
+import next_steps_service
+import proposals_service
+if proposals_service.next_step_rule not in next_steps_service.EXTRA_RULES:
+    next_steps_service.EXTRA_RULES.append(proposals_service.next_step_rule)
 
 # Hochgeladene Dateien (v. a. SVG) dürfen beim direkten Öffnen kein Skript auf
 # der App-Origin ausführen – sonst könnte ein Upload das Login-Token auslesen.

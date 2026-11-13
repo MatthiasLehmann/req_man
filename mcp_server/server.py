@@ -270,6 +270,43 @@ def reqman_help(question: str) -> str:
     return "\n\n".join(f"### {h['title']}\n{h['text']}" + (f"\n(Seite {h['route']})" if h.get("route") else "") for h in hits[:4])
 
 
+PROPOSE = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
+PROPOSE_NOTE = "Legt einen Vorschlag an. Ändert nichts an den Anforderungen; ein Mensch entscheidet in ReqMan. "
+
+
+def _propose(project: str, body: Dict[str, Any]) -> str:
+    c = get_client()
+    if len((body.get("reason") or "").strip()) < 10:
+        raise ToolError("Die Begründung (reason) ist Pflicht und braucht mindestens 10 Zeichen.")
+    body["source"] = "mcp"
+    pid = _run(lambda: c.resolve_project(project))
+    p = _run(lambda: c.post(f"/api/projects/{pid}/proposals", json=body))
+    return (f"Vorschlag Nr. {p['id']} angelegt (Status: {p['status']}). Es wurde nichts geändert. "
+            f"Ein Mensch findet ihn in ReqMan unter „Vorschläge“ (/proposals/{pid}) und übernimmt oder lehnt ihn ab.")
+
+
+@mcp.tool(annotations=PROPOSE)
+def propose_text_change(project: str, uid: str, new_text: str, reason: str) -> str:
+    """Legt einen Vorschlag an. Ändert nichts an den Anforderungen; ein Mensch entscheidet in ReqMan.
+    Schlägt einen neuen Text für eine bestehende Anforderung vor (reason = Begründung, mind. 10 Zeichen).
+    Ist die Anforderung bis zur Entscheidung geändert worden, gilt der Vorschlag als veraltet."""
+    return _propose(project, {"kind": "change_text", "uid": uid, "new_text": new_text, "reason": reason})
+
+
+@mcp.tool(annotations=PROPOSE)
+def propose_new_requirement(project: str, document: str, text: str, reason: str, links: Optional[List[str]] = None) -> str:
+    """Legt einen Vorschlag an. Ändert nichts an den Anforderungen; ein Mensch entscheidet in ReqMan.
+    Schlägt eine neue Anforderung in einem Dokument (Präfix) vor, optional mit Links auf Eltern-UIDs."""
+    return _propose(project, {"kind": "new_item", "prefix": document, "text": text, "reason": reason, "links": links or []})
+
+
+@mcp.tool(annotations=PROPOSE)
+def propose_link(project: str, uid: str, target_uid: str, reason: str) -> str:
+    """Legt einen Vorschlag an. Ändert nichts an den Anforderungen; ein Mensch entscheidet in ReqMan.
+    Schlägt vor, dass uid auf target_uid (Eltern-Anforderung) verlinkt."""
+    return _propose(project, {"kind": "add_link", "uid": uid, "target_uid": target_uid, "reason": reason})
+
+
 @mcp.prompt()
 def einstieg(project: str) -> str:
     """Überblick über ein Projekt in fünf Sätzen."""
@@ -283,8 +320,9 @@ def review_dokument(project: str, document: str) -> str:
     """Anforderungen eines Dokuments durchgehen und Auffälligkeiten melden."""
     return (f"Gehe die Anforderungen des Dokuments {document} im ReqMan-Projekt „{project}“ durch "
             "(list_requirements, get_requirement). Suche je Anforderung ähnliche (find_similar_requirements), nenne "
-            "Widersprüche (Zahlenwerte, Einheiten, Namen) und fehlende Links (suggest_links). Ändere nichts; "
-            "fasse die Funde mit UID und Begründung zusammen.")
+            "Widersprüche (Zahlenwerte, Einheiten, Namen) und fehlende Links (suggest_links). Ändere nichts direkt; "
+            "lege für jeden Fund einen Vorschlag an (propose_text_change, propose_new_requirement, propose_link) "
+            "und fasse die Funde mit UID und Begründung zusammen.")
 
 
 if __name__ == "__main__":

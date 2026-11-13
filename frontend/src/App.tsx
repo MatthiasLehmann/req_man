@@ -8,6 +8,7 @@ import { RequirementsPage, LinkingPage, DocumentStructurePage } from './features
 import { TraceabilityPage, MetricsPage, MatrixPage } from './features/trace';
 import { AdminPage } from './features/admin';
 import { HelpPage } from './features/help';
+import { ProposalsPage } from './features/proposals';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuthStore();
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="matrix/:projectId?" element={<MatrixPage />} />
         <Route path="linking/:projectId?" element={<LinkingPage />} />
         <Route path="document-structure/:projectId?" element={<DocumentStructurePage />} />
+        <Route path="proposals/:projectId?" element={<ProposalsPage />} />
         <Route
           path="admin"
           element={

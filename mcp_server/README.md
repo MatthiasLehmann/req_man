@@ -16,10 +16,12 @@ von ReqMan und enthält keine eigene Fachlogik; Rollen und Rechte des angemeldet
 | `suggest_links` | Link-Kandidaten aus dem Eltern-Dokument (nur Vorschläge) |
 | `analyze_impact` | Was von einer Änderung betroffen wäre |
 | `check_requirement_quality` | Qualitätsprüfung auslösen – **speichert** das Ergebnis (nicht nur lesend) |
+| `propose_text_change`, `propose_new_requirement`, `propose_link` | **Legen einen Vorschlag an**, ändern nichts; ein Mensch übernimmt oder lehnt ab (ReqMan → „Vorschläge“). Begründung Pflicht |
 | `reqman_help` | Wie etwas in ReqMan bedient wird |
 
 Prompts: `einstieg(project)`, `review_dokument(project, document)`. Alle lesenden Werkzeuge sind als
-`read_only` markiert; der Server ändert keine Anforderungen.
+`read_only` markiert; der Server ändert keine Anforderungen. Vorschläge dürfen auch `viewer` anlegen,
+übernehmen dürfen nur `editor` und `admin` – in der ReqMan-Oberfläche.
 
 ## Einrichtung
 

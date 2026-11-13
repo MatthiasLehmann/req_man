@@ -14,6 +14,7 @@ import ReferencesTab from './ReferencesTab';
 import { AiQualityTab, useAiQuality } from '../../ai';
 import { LinkSuggestions, DuplicateHint, ImpactTab } from '../../assist';
 import { useOpenRequirement } from '../../../shared/search';
+import { OpenProposalsHint } from '../../proposals';
 import SimulinkTab from './SimulinkTab';
 import GitHistoryTab from './GitHistoryTab';
 import { useSimulinkLinks } from '../hooks/useSimulinkLinks';
@@ -220,6 +221,8 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
           </button>
         </div>
       </div>
+
+      <OpenProposalsHint projectId={projectId} uid={uid} />
 
       {/* ── Tabs ── */}
       <div className="flex border-b border-gray-200 bg-white shrink-0">

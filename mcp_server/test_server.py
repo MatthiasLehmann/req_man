@@ -35,6 +35,7 @@ ROUTES = {
     ("GET", "/api/projects/p1/items/SRS016/similar"): [HIT],
     ("GET", "/api/projects/p1/items/SRS016/link-suggestions"): {"parent_document": "SYRS", "suggestions": [HIT]},
     ("POST", "/api/projects/p1/items/SRS016/ai-quality"): QUALITY,
+    ("POST", "/api/projects/p1/proposals"): {"id": 7, "status": "open"},
     ("GET", "/api/help/search"): [{"title": "Excel importieren", "text": "Menü Import", "route": "/requirements"}],
 }
 
@@ -77,7 +78,8 @@ async def test_all_tools_registered_and_annotated(fake_backend):
         tools = {t.name: t for t in (await client.list_tools()).tools}
     assert set(tools) == {"list_projects", "get_project_overview", "list_requirements", "get_requirement",
                           "search_requirements", "find_similar_requirements", "suggest_links", "analyze_impact",
-                          "check_requirement_quality", "reqman_help"}
+                          "check_requirement_quality", "reqman_help",
+                          "propose_text_change", "propose_new_requirement", "propose_link"}
     assert tools["search_requirements"].annotations.read_only_hint is True
     assert tools["check_requirement_quality"].annotations.read_only_hint is False
 
@@ -158,3 +160,30 @@ def test_client_error_carries_backend_detail():
     with pytest.raises(ReqManError) as e:
         c.get("/api/nix")
     assert e.value.status == 404 and e.value.detail == "nicht gefunden"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("name,args", [
+    ("propose_text_change", {"project": "Station3", "uid": "SRS016", "new_text": "Neuer Text", "reason": "Wert eindeutig machen"}),
+    ("propose_new_requirement", {"project": "Station3", "document": "SRS", "text": "Neu", "reason": "Fehlt bisher komplett"}),
+    ("propose_link", {"project": "Station3", "uid": "SRS016", "target_uid": "SYRS008", "reason": "Verlinkung fehlt noch"}),
+])
+async def test_propose_tools_create_proposal(fake_backend, name, args):
+    r = await call(name, args)
+    assert not r.is_error
+    assert "Vorschlag Nr. 7" in text(r) and "nichts geändert" in text(r)
+
+
+@pytest.mark.anyio
+async def test_propose_requires_reason(fake_backend):
+    r = await call("propose_link", {"project": "Station3", "uid": "SRS016", "target_uid": "SYRS008", "reason": "kurz"})
+    assert r.is_error and "mindestens 10 Zeichen" in text(r)
+
+
+@pytest.mark.anyio
+async def test_propose_tools_are_not_read_only(fake_backend):
+    async with Client(server.mcp) as client:
+        tools = {t.name: t for t in (await client.list_tools()).tools}
+    for n in ("propose_text_change", "propose_new_requirement", "propose_link"):
+        assert tools[n].annotations.read_only_hint is False
+        assert tools[n].description.startswith("Legt einen Vorschlag an. Ändert nichts an den Anforderungen")

@@ -1,8 +1,10 @@
 import { NavLink, useParams } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, GitBranch, BarChart3, Table2,
-  Link2, Settings, ChevronRight, Database, HelpCircle, Layers
+  Link2, Settings, ChevronRight, Database, HelpCircle, Layers, Inbox
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { getProposalCount } from '../api/client';
 import { useAuthStore } from '../auth/authStore';
 import { useProjectStore } from '../store/projectStore';
 import clsx from 'clsx';
@@ -15,11 +17,20 @@ const navItems = [
   { to: '/metrics', icon: BarChart3, label: 'Metriken' },
   { to: '/matrix', icon: Table2, label: 'Matrix' },
   { to: '/linking', icon: Link2, label: 'Verlinkung' },
+  { to: '/proposals', icon: Inbox, label: 'Vorschläge' },
 ];
 
 export default function Sidebar() {
   const { user } = useAuthStore();
   const { currentProject } = useProjectStore();
+  // Zahl offener Vorschläge als Marke an „Vorschläge“ (alle 60 s neu laden)
+  const { data: proposalCount } = useQuery({
+    queryKey: ['proposal-count', currentProject?.id],
+    queryFn: async () => (await getProposalCount(currentProject!.id)).data.open,
+    enabled: !!currentProject,
+    refetchInterval: 60_000,
+    retry: false,
+  });
 
   return (
     <aside className="w-64 bg-gray-900 text-white flex flex-col h-full shrink-0">
@@ -67,6 +78,11 @@ export default function Sidebar() {
             >
               <Icon className="w-4 h-4 shrink-0" />
               {label}
+              {to === '/proposals' && !!proposalCount && (
+                <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500 text-white font-semibold">
+                  {proposalCount}
+                </span>
+              )}
             </NavLink>
           );
         })}

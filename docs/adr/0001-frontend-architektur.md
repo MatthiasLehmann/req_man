@@ -118,8 +118,9 @@ Headless-CMS (Strapi, Contentful), Backstage und Grafana (Shell + Plugins).
    ProseMirror als eigener Chunk, keine Chunk-Größenwarnung mehr.
 4. ✅ Abhängigkeitsregeln per Skript absichern (#25).
 5. ✅ MCP-Server-Prototyp mit lesenden Werkzeugen (`mcp_server/`: Projekte, Dokumente, Anforderungen,
-   Suche nach Bedeutung, Auswirkungen, Qualitätsprüfung), als Client der REST-API. Offen: vorschlagende
-   Werkzeuge (Review-Kommentare, Qualitätsbewertung).
+   Suche nach Bedeutung, Auswirkungen, Qualitätsprüfung), als Client der REST-API. Vorschlagende Werkzeuge
+   (`propose_*`, Tabelle `proposals`, Seite „Vorschläge“): Agenten legen Änderungen nur als Vorschlag ab,
+   ein Mensch übernimmt. Offen: Review-Kommentare.
 
 ## Auslöser für eine Neubewertung
 
