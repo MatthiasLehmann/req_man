@@ -1124,6 +1124,83 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "ImpactItem": {
+        "properties": {
+          "depth": {
+            "title": "Depth",
+            "type": "integer"
+          },
+          "prefix": {
+            "title": "Prefix",
+            "type": "string"
+          },
+          "reviewed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "uid": {
+            "title": "Uid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uid",
+          "prefix",
+          "text",
+          "depth",
+          "reviewed"
+        ],
+        "title": "ImpactItem",
+        "type": "object"
+      },
+      "ImpactResult": {
+        "properties": {
+          "downstream": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactItem"
+            },
+            "title": "Downstream",
+            "type": "array"
+          },
+          "similar_unlinked": {
+            "items": {
+              "$ref": "#/components/schemas/RagHit"
+            },
+            "title": "Similar Unlinked",
+            "type": "array"
+          },
+          "uid": {
+            "title": "Uid",
+            "type": "string"
+          },
+          "upstream": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactItem"
+            },
+            "title": "Upstream",
+            "type": "array"
+          }
+        },
+        "required": [
+          "uid",
+          "downstream",
+          "upstream",
+          "similar_unlinked"
+        ],
+        "title": "ImpactResult",
+        "type": "object"
+      },
       "ImportCheck": {
         "properties": {
           "invalid": {
@@ -1553,6 +1630,35 @@
         "title": "LinkCreate",
         "type": "object"
       },
+      "LinkSuggestions": {
+        "properties": {
+          "parent_document": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Document"
+          },
+          "suggestions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RagHit"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "parent_document",
+          "suggestions"
+        ],
+        "title": "LinkSuggestions",
+        "type": "object"
+      },
       "NewRow": {
         "properties": {
           "comment": {
@@ -1847,6 +1953,68 @@
         "title": "PropertyDefinition",
         "type": "object"
       },
+      "RagHit": {
+        "properties": {
+          "level": {
+            "title": "Level",
+            "type": "string"
+          },
+          "linked": {
+            "default": false,
+            "title": "Linked",
+            "type": "boolean"
+          },
+          "prefix": {
+            "title": "Prefix",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "uid": {
+            "title": "Uid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uid",
+          "prefix",
+          "level",
+          "text",
+          "score",
+          "linked"
+        ],
+        "title": "RagHit",
+        "type": "object"
+      },
+      "RagStatus": {
+        "properties": {
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "model",
+          "seconds"
+        ],
+        "title": "RagStatus",
+        "type": "object"
+      },
       "ReferenceIn": {
         "properties": {
           "keyword": {
@@ -2128,6 +2296,48 @@
           "item"
         ],
         "title": "RowCheck",
+        "type": "object"
+      },
+      "SimilarTextRequest": {
+        "properties": {
+          "exclude_uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exclude Uid"
+          },
+          "k": {
+            "default": 5,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "K",
+            "type": "integer"
+          },
+          "prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prefix"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "SimilarTextRequest",
         "type": "object"
       },
       "SimulinkCoverage": {
@@ -4928,6 +5138,130 @@
         ]
       }
     },
+    "/api/projects/{project_id}/items/{uid}/impact": {
+      "get": {
+        "operationId": "item_impact_api_projects__project_id__items__uid__impact_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "uid",
+            "required": true,
+            "schema": {
+              "title": "Uid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Item Impact",
+        "tags": [
+          "rag"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/items/{uid}/link-suggestions": {
+      "get": {
+        "operationId": "item_link_suggestions_api_projects__project_id__items__uid__link_suggestions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "uid",
+            "required": true,
+            "schema": {
+              "title": "Uid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "k",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "K",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkSuggestions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Item Link Suggestions",
+        "tags": [
+          "rag"
+        ]
+      }
+    },
     "/api/projects/{project_id}/items/{uid}/links": {
       "post": {
         "operationId": "add_link_api_projects__project_id__items__uid__links_post",
@@ -5372,6 +5706,78 @@
         ]
       }
     },
+    "/api/projects/{project_id}/items/{uid}/similar": {
+      "get": {
+        "operationId": "item_similar_api_projects__project_id__items__uid__similar_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "uid",
+            "required": true,
+            "schema": {
+              "title": "Uid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "k",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "K",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RagHit"
+                  },
+                  "title": "Response Item Similar Api Projects  Project Id  Items  Uid  Similar Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Item Similar",
+        "tags": [
+          "rag"
+        ]
+      }
+    },
     "/api/projects/{project_id}/items/{uid}/simulink-links": {
       "get": {
         "operationId": "get_item_simulink_links_api_projects__project_id__items__uid__simulink_links_get",
@@ -5666,6 +6072,206 @@
         "summary": "Get Metrics",
         "tags": [
           "metrics"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/rag/search": {
+      "get": {
+        "operationId": "rag_search_api_projects__project_id__rag_search_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "k",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "K",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "prefix",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prefix"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RagHit"
+                  },
+                  "title": "Response Rag Search Api Projects  Project Id  Rag Search Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Rag Search",
+        "tags": [
+          "rag"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/rag/similar-text": {
+      "post": {
+        "operationId": "rag_similar_text_api_projects__project_id__rag_similar_text_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimilarTextRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RagHit"
+                  },
+                  "title": "Response Rag Similar Text Api Projects  Project Id  Rag Similar Text Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Rag Similar Text",
+        "tags": [
+          "rag"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/rag/status": {
+      "get": {
+        "operationId": "rag_status_api_projects__project_id__rag_status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RagStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Rag Status",
+        "tags": [
+          "rag"
         ]
       }
     },

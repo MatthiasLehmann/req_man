@@ -69,6 +69,12 @@ Die App ist dann über nginx unter <http://localhost> erreichbar. Standardmäßi
 Ollama-Container als lokaler KI-Server mitgestartet. Persistente Daten liegen in `data/`
 (Datenbank, Projektliste, Attribute) und `projects/` (doorstop-Projekte).
 
+**Bedeutungssuche (Ähnliche Anforderungen, Link-Vorschläge, Auswirkungen):** braucht ein Embedding-Modell
+über einen OpenAI-kompatiblen Endpunkt, Standard Ollama mit `bge-m3` (`ollama pull bge-m3`, bei Docker
+`docker compose exec ollama ollama pull bge-m3`). Variablen `EMBED_MODEL`, `EMBED_BASE_URL`, `EMBED_API_KEY`.
+Ohne das Modell bleibt ReqMan benutzbar, die Suchfunktionen antworten dann mit 503. Der Index liegt unter
+`data/rag/` und gleicht sich selbst ab.
+
 ## Projektstruktur
 
 ```

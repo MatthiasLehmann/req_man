@@ -18,11 +18,26 @@ from routers import ai_quality_router
 from routers import simulink_router
 from routers import import_router
 from routers import roundtrip_router
+from routers import rag_router
+import threading
+import logging
+
+def _warm_rag_index():
+    """Index im Hintergrund vorwärmen; scheitert still (z. B. Ollama nicht gestartet)."""
+    try:
+        import doorstop_service as ds
+        import rag_service
+        for p in ds.list_projects():
+            rag_service.sync_project(p["id"])
+    except Exception as e:
+        logging.getLogger(__name__).warning("RAG-Index nicht vorgewärmt: %s", e)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     create_default_admin()
+    threading.Thread(target=_warm_rag_index, daemon=True).start()
     print("✓ ReqMan backend started")
     print("  API docs: http://localhost:8000/docs")
     yield
@@ -69,6 +84,7 @@ app.include_router(export_router.router)
 app.include_router(ai_quality_router.router)
 app.include_router(ai_quality_router.settings_router)
 app.include_router(simulink_router.router)
+app.include_router(rag_router.router)
 
 # Hochgeladene Dateien (v. a. SVG) dürfen beim direkten Öffnen kein Skript auf
 # der App-Origin ausführen – sonst könnte ein Upload das Login-Token auslesen.

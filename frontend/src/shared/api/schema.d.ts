@@ -615,6 +615,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/items/{uid}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Item Impact */
+        get: operations["item_impact_api_projects__project_id__items__uid__impact_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/items/{uid}/link-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Item Link Suggestions */
+        get: operations["item_link_suggestions_api_projects__project_id__items__uid__link_suggestions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/items/{uid}/links": {
         parameters: {
             query?: never;
@@ -739,6 +773,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/items/{uid}/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Item Similar */
+        get: operations["item_similar_api_projects__project_id__items__uid__similar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/items/{uid}/simulink-links": {
         parameters: {
             query?: never;
@@ -825,6 +876,57 @@ export interface paths {
         };
         /** Get Metrics */
         get: operations["get_metrics_api_projects__project_id__metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/rag/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rag Search */
+        get: operations["rag_search_api_projects__project_id__rag_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/rag/similar-text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rag Similar Text */
+        post: operations["rag_similar_text_api_projects__project_id__rag_similar_text_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/rag/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rag Status */
+        get: operations["rag_status_api_projects__project_id__rag_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1485,6 +1587,30 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** ImpactItem */
+        ImpactItem: {
+            /** Depth */
+            depth: number;
+            /** Prefix */
+            prefix: string;
+            /** Reviewed */
+            reviewed: boolean | null;
+            /** Text */
+            text: string;
+            /** Uid */
+            uid: string;
+        };
+        /** ImpactResult */
+        ImpactResult: {
+            /** Downstream */
+            downstream: components["schemas"]["ImpactItem"][];
+            /** Similar Unlinked */
+            similar_unlinked: components["schemas"]["RagHit"][];
+            /** Uid */
+            uid: string;
+            /** Upstream */
+            upstream: components["schemas"]["ImpactItem"][];
+        };
         /** ImportCheck */
         ImportCheck: {
             /** Invalid */
@@ -1627,6 +1753,16 @@ export interface components {
             /** Target Uid */
             target_uid: string;
         };
+        /** LinkSuggestions */
+        LinkSuggestions: {
+            /** Parent Document */
+            parent_document: string | null;
+            /**
+             * Suggestions
+             * @default []
+             */
+            suggestions: components["schemas"]["RagHit"][];
+        };
         /** NewRow */
         NewRow: {
             /** Comment */
@@ -1730,6 +1866,33 @@ export interface components {
             /** Type */
             type: string;
         };
+        /** RagHit */
+        RagHit: {
+            /** Level */
+            level: string;
+            /**
+             * Linked
+             * @default false
+             */
+            linked: boolean;
+            /** Prefix */
+            prefix: string;
+            /** Score */
+            score: number;
+            /** Text */
+            text: string;
+            /** Uid */
+            uid: string;
+        };
+        /** RagStatus */
+        RagStatus: {
+            /** Model */
+            model: string;
+            /** Seconds */
+            seconds: number;
+            /** Total */
+            total: number;
+        };
         /** ReferenceIn */
         ReferenceIn: {
             /**
@@ -1822,6 +1985,20 @@ export interface components {
             } | null;
             /** Notes */
             notes: string[];
+        };
+        /** SimilarTextRequest */
+        SimilarTextRequest: {
+            /** Exclude Uid */
+            exclude_uid?: string | null;
+            /**
+             * K
+             * @default 5
+             */
+            k?: number;
+            /** Prefix */
+            prefix?: string | null;
+            /** Text */
+            text: string;
         };
         /**
          * SimulinkCoverage
@@ -3365,6 +3542,72 @@ export interface operations {
             };
         };
     };
+    item_impact_api_projects__project_id__items__uid__impact_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    item_link_suggestions_api_projects__project_id__items__uid__link_suggestions_get: {
+        parameters: {
+            query?: {
+                k?: number;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkSuggestions"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     add_link_api_projects__project_id__items__uid__links_post: {
         parameters: {
             query?: never;
@@ -3598,6 +3841,40 @@ export interface operations {
             };
         };
     };
+    item_similar_api_projects__project_id__items__uid__similar_get: {
+        parameters: {
+            query?: {
+                k?: number;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RagHit"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_item_simulink_links_api_projects__project_id__items__uid__simulink_links_get: {
         parameters: {
             query?: never;
@@ -3750,6 +4027,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectMetrics"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rag_search_api_projects__project_id__rag_search_get: {
+        parameters: {
+            query: {
+                q: string;
+                k?: number;
+                prefix?: string[] | null;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RagHit"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rag_similar_text_api_projects__project_id__rag_similar_text_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimilarTextRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RagHit"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rag_status_api_projects__project_id__rag_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RagStatus"];
                 };
             };
             /** @description Validation Error */
