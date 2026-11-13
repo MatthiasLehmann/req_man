@@ -1151,7 +1151,10 @@ CONTRADICTION_SYSTEM = """\
 Du vergleichst eine Anforderung A mit anderen Anforderungen desselben Projekts.
 Widerspricht A einer der anderen bei einem Zahlenwert, einer Grenze, einer Einheit oder einem Namen für dieselbe Sache?
 Nur echte Widersprüche zur selben Sache melden, keine bloßen Unterschiede im Thema. Im Zweifel leere Liste.
-Antworte nur mit {"widersprueche": [{"uid": "...", "stelle": "...", "begruendung": "..."}]}"""
+"andere_uid" ist die UID der ANDEREN Anforderung (B), der A widerspricht – nie die UID von A.
+Antworte nur mit {"widersprueche": [{"andere_uid": "...", "stelle": "...", "begruendung": "..."}]}"""
+
+_UID_IN_TEXT = re.compile(r"[A-Za-z][\w.-]*\d")
 
 
 def project_check_enabled() -> bool:
@@ -1205,7 +1208,13 @@ def check_contradictions(provider: "LlmProvider", uid: str, text: str, neighbour
     for f in found if isinstance(found, list) else []:
         if not isinstance(f, dict):
             continue
-        other = allowed.get(str(f.get("uid") or "").strip().strip("[]").upper())
+        named = str(f.get("andere_uid") or f.get("uid") or "").strip().strip("[]").upper()
+        other = allowed.get(named)
+        if not other:
+            # llama3.2 schreibt oft die eigene UID ins Feld und nennt die andere nur im Text
+            # („Widerspricht B [SRD008] …“): dann die erste Nachbar-UID aus Stelle/Begründung nehmen.
+            text_f = f"{f.get('stelle') or ''} {f.get('begruendung') or ''}"
+            other = next((allowed[m.upper()] for m in _UID_IN_TEXT.findall(text_f) if m.upper() in allowed), None)
         if not other or other in seen:
             continue  # erfundene UID oder doppelt
         seen.add(other)

@@ -1221,8 +1221,8 @@ class TestProjectCheckV28:
     def test_contradiction_found_and_invented_uid_dropped(self, tmp_path, monkeypatch):
         monkeypatch.setenv("AI_PROJECT_CHECK", "1")
         answer = json.dumps({"widersprueche": [
-            {"uid": "SRD008", "stelle": "250 m/s²", "begruendung": "SRD008 legt a_max = 300 m/s² fest."},
-            {"uid": "SRD999", "stelle": "x", "begruendung": "erfunden"},
+            {"andere_uid": "SRD008", "stelle": "250 m/s²", "begruendung": "SRD008 legt a_max = 300 m/s² fest."},
+            {"andere_uid": "SRD999", "stelle": "x", "begruendung": "erfunden"},
             {"uid": "SRD008", "stelle": "doppelt", "begruendung": "doppelt"},
         ]})
         provider = SequenceProvider(self.CLEAN, answer)
@@ -1264,3 +1264,14 @@ class TestProjectCheckV28:
             raise RuntimeError("Ollama fehlt")
         monkeypatch.setattr(rag_service, "similar", boom)
         assert aqs.find_neighbours("p", "SRD022") == []
+
+    def test_own_uid_in_field_rescued_from_text(self, tmp_path, monkeypatch):
+        """llama3.2 schreibt die eigene UID ins Feld und nennt die andere nur in der Begründung."""
+        monkeypatch.setenv("AI_PROJECT_CHECK", "1")
+        answer = json.dumps({"widersprueche": [
+            {"uid": "SRD022", "stelle": "a_cmd auf 250 m/s²", "begruendung": "Widerspricht B [SRD008]: 300 m/s²."},
+            {"uid": "SRD022", "stelle": "A", "begruendung": "Widerspricht der Norm XY12."},
+        ]})
+        result = self._run(tmp_path, monkeypatch, SequenceProvider(self.CLEAN, answer))
+        found = [i for i in result.issues if i.description.startswith("Widerspruch")]
+        assert [i.suggestion for i in found] == ["Mit SRD008 abgleichen"]
