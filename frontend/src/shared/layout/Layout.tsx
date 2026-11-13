@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import { AssistantButton } from '../assistant';
 
 export default function Layout() {
   return (
@@ -23,6 +24,7 @@ export default function Layout() {
           </Suspense>
         </main>
       </div>
+      <AssistantButton />
     </div>
   );
 }

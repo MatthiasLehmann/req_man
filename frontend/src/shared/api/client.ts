@@ -183,6 +183,17 @@ export const getLinkSuggestions = (projectId: string, uid: string, k = 8) =>
 export const getImpact = (projectId: string, uid: string) =>
   api.get<ImpactResult>(`/projects/${projectId}/items/${uid}/impact`);
 
+// „Frag ReqMan“ (A4) – Assistent mit Quellen, Hilfe-Suche, offene Punkte
+export type AssistantAnswer = Schemas['AssistantAnswer'];
+export type AssistantSource = Schemas['AssistantSource'];
+export type NextStep = Schemas['NextStep'];
+export const askAssistant = (body: ApiBody<'/api/assistant/ask', 'post'>) =>
+  api.post<ApiResponse<'/api/assistant/ask', 'post'>>('/assistant/ask', body, { timeout: 120_000 });
+export const searchHelp = (q: string, k = 5) =>
+  api.get<ApiResponse<'/api/help/search', 'get'>>('/help/search', { params: { q, k } });
+export const getNextSteps = (projectId: string) =>
+  api.get<ApiResponse<'/api/projects/{project_id}/next-steps', 'get'>>(`/projects/${projectId}/next-steps`);
+
 // Review (doorstop stamp)
 export const reviewItem = (projectId: string, uid: string) =>
   api.post<Item>(

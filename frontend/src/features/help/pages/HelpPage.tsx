@@ -2,8 +2,13 @@ import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { BookOpen, ChevronRight, Menu, X } from 'lucide-react';
-import workflowDoc from '../workflow.md?raw';
+import { useLocation } from 'react-router-dom';
 import clsx from 'clsx';
+import workflowText from '../workflow.md?raw';
+import bedienungText from '../bedienung.md?raw';
+
+// A4: Aufgabenbezogene Bedienung zuerst, danach der ausführliche Workflow (gleiche Texte nutzt „Frag ReqMan“).
+const helpDoc = `${bedienungText}\n\n---\n\n${workflowText}`;
 
 // ─── Table of Contents ───────────────────────────────────────────────────────
 
@@ -122,7 +127,15 @@ export default function HelpPage() {
   const [activeId, setActiveId] = useState('');
   const [mobileTocOpen, setMobileTocOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const toc = buildToc(workflowDoc);
+  const toc = buildToc(helpDoc);
+  const { hash } = useLocation();
+
+  // Sprung zu /help#<abschnitt> (z. B. aus „Frag ReqMan“), auch wenn die Seite schon offen ist
+  useEffect(() => {
+    if (!hash) return;
+    const el = document.getElementById(decodeURIComponent(hash.slice(1)));
+    el?.scrollIntoView({ block: 'start' });
+  }, [hash]);
 
   // Highlight active TOC entry on scroll
   useEffect(() => {
@@ -167,7 +180,7 @@ export default function HelpPage() {
             <div>
               <h1 className="text-lg font-semibold text-gray-900">Hilfe & Dokumentation</h1>
               <p className="text-sm text-gray-500">
-                Workflow für Anforderungen · Review
+                Bedienung · Workflow für Anforderungen · Review
               </p>
             </div>
           </div>
@@ -250,7 +263,7 @@ export default function HelpPage() {
                 remarkPlugins={[remarkGfm]}
                 components={markdownComponents}
               >
-                {workflowDoc}
+                {helpDoc}
               </ReactMarkdown>
             </article>
 

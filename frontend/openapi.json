@@ -198,6 +198,235 @@
         "title": "AssignDocumentTypeRequest",
         "type": "object"
       },
+      "AssistantAnswer": {
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "found": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Found",
+            "type": "array"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "removed_refs": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Removed Refs",
+            "type": "array"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/AssistantSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "answer",
+          "sources",
+          "removed_refs",
+          "found",
+          "model",
+          "seconds"
+        ],
+        "title": "AssistantAnswer",
+        "type": "object"
+      },
+      "AssistantAsk": {
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/AssistantContext",
+            "default": {}
+          },
+          "history": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AssistantTurn"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "question": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "AssistantAsk",
+        "type": "object"
+      },
+      "AssistantContext": {
+        "properties": {
+          "prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prefix"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route"
+          },
+          "uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uid"
+          }
+        },
+        "title": "AssistantContext",
+        "type": "object"
+      },
+      "AssistantSource": {
+        "properties": {
+          "anchor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor"
+          },
+          "kind": {
+            "enum": [
+              "item",
+              "help"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prefix"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route"
+          },
+          "snippet": {
+            "title": "Snippet",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uid"
+          }
+        },
+        "required": [
+          "kind",
+          "ref",
+          "title",
+          "snippet",
+          "uid",
+          "prefix",
+          "route",
+          "anchor"
+        ],
+        "title": "AssistantSource",
+        "type": "object"
+      },
+      "AssistantTurn": {
+        "properties": {
+          "content": {
+            "maxLength": 4000,
+            "title": "Content",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "AssistantTurn",
+        "type": "object"
+      },
       "AttributeDefinition-Input": {
         "properties": {
           "applies_to": {
@@ -1124,6 +1353,44 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HelpHit": {
+        "properties": {
+          "anchor": {
+            "title": "Anchor",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "route": {
+            "title": "Route",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "text",
+          "route",
+          "anchor",
+          "score"
+        ],
+        "title": "HelpHit",
+        "type": "object"
+      },
       "ImpactItem": {
         "properties": {
           "depth": {
@@ -1711,6 +1978,48 @@
           "item"
         ],
         "title": "NewRow",
+        "type": "object"
+      },
+      "NextStep": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "route": {
+            "title": "Route",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "uids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Uids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "title",
+          "count",
+          "explanation",
+          "route",
+          "uids"
+        ],
+        "title": "NextStep",
         "type": "object"
       },
       "ParsedTable": {
@@ -3101,6 +3410,52 @@
         ]
       }
     },
+    "/api/assistant/ask": {
+      "post": {
+        "operationId": "ask_api_assistant_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantAsk"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantAnswer"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Ask",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
     "/api/attributes": {
       "get": {
         "operationId": "get_attributes_api_attributes_get",
@@ -3458,6 +3813,71 @@
         "summary": "Browse Directory",
         "tags": [
           "filesystem"
+        ]
+      }
+    },
+    "/api/help/search": {
+      "get": {
+        "operationId": "help_search_api_help_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 500,
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "k",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "K",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HelpHit"
+                  },
+                  "title": "Response Help Search Api Help Search Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Help Search",
+        "tags": [
+          "assistant"
         ]
       }
     },
@@ -6072,6 +6492,57 @@
         "summary": "Get Metrics",
         "tags": [
           "metrics"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/next-steps": {
+      "get": {
+        "operationId": "next_steps_api_projects__project_id__next_steps_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NextStep"
+                  },
+                  "title": "Response Next Steps Api Projects  Project Id  Next Steps Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Next Steps",
+        "tags": [
+          "assistant"
         ]
       }
     },

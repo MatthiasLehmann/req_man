@@ -19,6 +19,7 @@ from routers import simulink_router
 from routers import import_router
 from routers import roundtrip_router
 from routers import rag_router
+from routers import assistant_router
 import threading
 import logging
 
@@ -29,6 +30,7 @@ def _warm_rag_index():
         import rag_service
         for p in ds.list_projects():
             rag_service.sync_project(p["id"])
+        rag_service.sync_help()
     except Exception as e:
         logging.getLogger(__name__).warning("RAG-Index nicht vorgewärmt: %s", e)
 
@@ -85,6 +87,7 @@ app.include_router(ai_quality_router.router)
 app.include_router(ai_quality_router.settings_router)
 app.include_router(simulink_router.router)
 app.include_router(rag_router.router)
+app.include_router(assistant_router.router)
 
 # Hochgeladene Dateien (v. a. SVG) dürfen beim direkten Öffnen kein Skript auf
 # der App-Origin ausführen – sonst könnte ein Upload das Login-Token auslesen.

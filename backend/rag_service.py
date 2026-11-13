@@ -295,3 +295,151 @@ def impact(project_id: str, uid: str, k_similar: int = 5) -> dict:
     sim = [h for h in similar(project_id, uid, k=k_similar + 20)
            if h["uid"] not in known and h["score"] >= SIMILAR_MIN][:k_similar]
     return {"uid": uid, "downstream": down, "upstream": up, "similar_unlinked": sim}
+
+
+# ─── Hilfetexte (A4): Bedienungswissen und Workflow durchsuchbar ─────────────
+#
+# Quelle: backend/knowledge/*.md (Kopien liegen unter frontend/src/features/help/, ein Test hält sie gleich).
+# Ein Abschnitt je Überschrift ## oder ###; die Kennung ist wie auf der Hilfeseite (/help#<slug>).
+
+KNOWLEDGE_DIR = Path(__file__).parent / "knowledge"
+HELP_FILES = ("bedienung.md", "workflow.md")
+HELP_ID = "_help"
+_HELP_MIN_CHARS = 40
+
+
+class HelpHit(TypedDict):
+    id: str
+    title: str
+    text: str
+    route: str
+    anchor: str
+    score: float
+
+
+def slugify(text: str) -> str:
+    """Wie slugify in frontend/src/features/help/pages/HelpPage.tsx (dort passt \\w nur auf ASCII)."""
+    t = text.lower()
+    t = re.sub(r"[äöü]", lambda m: {"ä": "a", "ö": "o", "ü": "u"}[m.group(0)], t)
+    t = re.sub(r"[^\w\s-]", "", t, flags=re.ASCII)
+    return re.sub(r"\s+", "-", t.strip(), flags=re.ASCII)
+
+
+def _strip_md(text: str) -> str:
+    t = re.sub(r"```.*?```", " ", text, flags=re.S)  # Codeblöcke (Diagramme, YAML) helfen der Suche nicht
+    t = re.sub(r"<[^>]+>", " ", t)
+    t = re.sub(r"[*_`>|]", " ", t)
+    t = re.sub(r"-{3,}", " ", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def help_sections() -> List[dict]:
+    """Alle Abschnitte der Hilfetexte als Einträge (ohne Vektor)."""
+    out: List[dict] = []
+    for name in HELP_FILES:
+        path = KNOWLEDGE_DIR / name
+        if not path.exists():
+            continue
+        doc = path.stem
+        title, body = None, []
+
+        def flush():
+            if title is None:
+                return
+            route = "/help"
+            lines = list(body)
+            for i, line in enumerate(lines):
+                if line.strip():
+                    m = re.match(r"\s*Seite:\s*(\S+)", line)
+                    if m:
+                        route = m.group(1)
+                        del lines[i]
+                    break
+            text = _strip_md("\n".join(lines))
+            clean_title = re.sub(r"[*_`]", "", title).strip()
+            if len(text) < _HELP_MIN_CHARS or clean_title.lower() == "inhaltsverzeichnis":
+                return
+            anchor = slugify(clean_title)
+            out.append({"id": f"{doc}#{anchor}", "title": clean_title, "text": text, "route": route,
+                        "anchor": anchor, "hash": _sha(f"{clean_title}\n{text}")})
+
+        for line in path.read_text(encoding="utf-8").splitlines():
+            m = re.match(r"^(#{2,3})\s+(.+)", line)
+            if m:
+                flush()
+                title, body = m.group(2), []
+            elif title is not None:
+                body.append(line)
+        flush()
+    return out
+
+
+def _help_paths() -> Tuple[Path, Path]:
+    base = RAG_ROOT / HELP_ID
+    return base / "help.json", base / "help.npy"
+
+
+def sync_help() -> dict:
+    """Gleicht den Hilfe-Index mit den Wissensdateien ab (wie sync_project, Hash je Abschnitt)."""
+    t0 = time.time()
+    jp, npp = _help_paths()
+    with _lock(HELP_ID):
+        current = help_sections()
+        meta, vectors = {"model": None, "entries": []}, np.zeros((0, 0), dtype=np.float32)
+        if jp.exists() and npp.exists():
+            try:
+                with open(jp, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                vectors = np.load(npp, allow_pickle=False)
+                if len(meta["entries"]) != len(vectors):
+                    raise ValueError("Index inkonsistent")
+            except Exception as e:
+                logger.warning("Hilfe-Index unbrauchbar (%s) – wird neu aufgebaut", e)
+                meta, vectors = {"model": None, "entries": []}, np.zeros((0, 0), dtype=np.float32)
+        if meta.get("model") != emb.get_model():
+            meta, vectors = {"model": None, "entries": []}, np.zeros((0, 0), dtype=np.float32)
+        old = {e["hash"]: vectors[i] for i, e in enumerate(meta["entries"])}
+        to_embed = [c for c in current if c["hash"] not in old]
+        new = {}
+        if to_embed:
+            vecs = emb.embed([f"{c['title']}\n{c['text']}" for c in to_embed])
+            new = {c["hash"]: vecs[i] for i, c in enumerate(to_embed)}
+        changed = bool(to_embed) or [e["id"] for e in meta["entries"]] != [c["id"] for c in current] \
+            or meta.get("model") is None
+        if changed:
+            rows = [new.get(c["hash"], old.get(c["hash"])) for c in current]
+            mat = np.vstack(rows).astype(np.float32) if rows else np.zeros((0, 0), dtype=np.float32)
+            jp.parent.mkdir(parents=True, exist_ok=True)
+            jtmp, ntmp = jp.with_name("help.json.tmp"), npp.with_name("help.tmp.npy")
+            with open(jtmp, "w", encoding="utf-8") as f:
+                json.dump({"model": emb.get_model(), "entries": current}, f, ensure_ascii=False)
+            with open(ntmp, "wb") as f:
+                np.save(f, mat, allow_pickle=False)
+            os.replace(ntmp, npp)
+            os.replace(jtmp, jp)
+    return {"total": len(current), "embedded": len(to_embed), "seconds": round(time.time() - t0, 3)}
+
+
+def search_help(query: str, k: int = 5) -> List[HelpHit]:
+    """Suche nach Bedeutung in den Hilfetexten, mit kleinem Wortbonus wie search()."""
+    sync_help()
+    q = (query or "").strip()
+    jp, npp = _help_paths()
+    if not q or not jp.exists():
+        return []
+    with open(jp, "r", encoding="utf-8") as f:
+        entries = json.load(f)["entries"]
+    vectors = np.load(npp, allow_pickle=False)
+    if not entries:
+        return []
+    scores = vectors @ emb.embed([q])[0]
+    qw = _words(q)
+    if qw:
+        for i, e in enumerate(entries):
+            scores[i] += 0.15 * (len(qw & _words(e["title"] + " " + e["text"])) / len(qw))
+    out: List[HelpHit] = []
+    for i in np.argsort(-scores)[:k]:
+        e = entries[i]
+        out.append(HelpHit(id=e["id"], title=e["title"], text=_short(e["text"], 600), route=e["route"],
+                           anchor=e["anchor"], score=round(float(scores[i]), 3)))
+    return out
