@@ -16,7 +16,7 @@ von ReqMan und enthält keine eigene Fachlogik; Rollen und Rechte des angemeldet
 | `suggest_links` | Link-Kandidaten aus dem Eltern-Dokument (nur Vorschläge) |
 | `analyze_impact` | Was von einer Änderung betroffen wäre |
 | `check_requirement_quality` | Qualitätsprüfung auslösen – **speichert** das Ergebnis (nicht nur lesend) |
-| `reqman_help` | Wie etwas in ReqMan bedient wird (braucht den Hilfe-Endpunkt aus „Frag ReqMan“) |
+| `reqman_help` | Wie etwas in ReqMan bedient wird |
 
 Prompts: `einstieg(project)`, `review_dokument(project, document)`. Alle lesenden Werkzeuge sind als
 `read_only` markiert; der Server ändert keine Anforderungen.
