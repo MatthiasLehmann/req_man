@@ -16,7 +16,10 @@ interface Turn {
 
 /** Drei Beispiel-Fragen passend zur aktuellen Seite. */
 function exampleQuestions(path: string, projectName?: string): string[] {
-  const topic = projectName ? projectName.split(/[\s_-]+/).find((w) => w.length >= 4) : undefined;
+  // Längstes Wort des Projektnamens als Thema („Station 3 Simulation“ → „Simulation“)
+  const topic = projectName
+    ? projectName.split(/[\s_-]+/).filter((w) => w.length >= 4).sort((a, b) => b.length - a.length)[0]
+    : undefined;
   const projectQuestion = topic ? `Welche Anforderungen betreffen ${topic}?` : 'Was ist doorstop und wo liegen meine Dateien?';
   if (path.startsWith('/requirements')) {
     return ['Wie verlinke ich eine Anforderung?', 'Was bedeutet OUTDATED?', projectQuestion];
@@ -88,7 +91,9 @@ export default function AssistantPanel({ onClose }: { onClose: () => void }) {
     retry: false,
   });
 
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), [turns, busy]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [turns, busy]);
 
   const onRequirementsPage = location.pathname.startsWith('/requirements');
 
