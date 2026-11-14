@@ -60,19 +60,19 @@ def collect_sources(project_id: Optional[str], question: str, context: Dict[str,
             sources.append({"kind": "item", "ref": item["uid"], "uid": item["uid"],
                             "prefix": aqs._uid_to_prefix(item["uid"]) or "",
                             "title": item["uid"], "snippet": _short(rag.clean_text(item.get("text", "")),
-                                                                     SOURCE_CHARS)})
+                                                                     SOURCE_CHARS), "score": 9.0})
             seen_items.add(item["uid"].upper())
     for n, h in enumerate(rag.search_help(question, N_HELP), 1):
         sources.append({"kind": "help", "ref": f"H{n}", "title": h["title"],
                         "snippet": _short(h["text"], SOURCE_CHARS), "route": h["route"],
-                        "anchor": h["anchor"]})
+                        "anchor": h["anchor"], "score": h["score"]})
     if project_id:
         for h in rag.search(project_id, question, N_ITEMS):
             if h["uid"].upper() in seen_items:
                 continue
             seen_items.add(h["uid"].upper())
             sources.append({"kind": "item", "ref": h["uid"], "uid": h["uid"], "prefix": h["prefix"],
-                            "title": h["uid"], "snippet": _short(h["text"], SOURCE_CHARS)})
+                            "title": h["uid"], "snippet": _short(h["text"], SOURCE_CHARS), "score": h["score"]})
     return sources
 
 
@@ -93,8 +93,8 @@ def build_user_prompt(question: str, sources: List[Dict[str, Any]], history: Lis
     return "\n\n".join(lines)
 
 
-def parse_answer(raw: str) -> str:
-    """Text der Antwort aus dem JSON; kein gültiges Objekt → Rohtext."""
+def parse_answer(raw: str) -> tuple[str, List[str]]:
+    """(Text, Liste „quellen“) aus dem JSON; kein gültiges Objekt → (Rohtext, [])."""
     try:
         json_str = aqs.QualityResultParser._extract_json(raw)
         try:
@@ -103,10 +103,12 @@ def parse_answer(raw: str) -> str:
             import json_repair
             data = json_repair.loads(json_str)
         if isinstance(data, dict) and isinstance(data.get("antwort"), str) and data["antwort"].strip():
-            return data["antwort"].strip()
+            refs = data.get("quellen")
+            refs = [str(r).strip().strip("[]") for r in refs if str(r).strip()] if isinstance(refs, list) else []
+            return data["antwort"].strip(), refs
     except Exception:  # noqa: BLE001
         pass
-    return (raw or "").strip()
+    return (raw or "").strip(), []
 
 
 def check_references(answer: str, sources: List[Dict[str, Any]]) -> tuple[str, List[Dict[str, Any]], List[str]]:
@@ -143,7 +145,15 @@ def ask(project_id: Optional[str], question: str, context: Optional[Dict[str, An
     provider = provider or aqs.create_provider()
     model = aqs.resolve_model(None, {})
     raw = provider.complete(system, user, model=model)
-    answer, cited, removed = check_references(parse_answer(raw), sources)
+    text, listed = parse_answer(raw)
+    answer, cited, removed = check_references(text, sources)
+    if not cited and listed and NOTHING_FOUND not in answer:
+        # Die lokalen Modelle setzen die Verweise oft nur in „quellen“, nicht in den Text: dieselbe Prüfung,
+        # gültige Verweise werden als Marken an die Antwort angehängt, erfundene entfernt und gezählt.
+        _, cited, removed_listed = check_references(" ".join(f"[{r}]" for r in listed), sources)
+        removed += removed_listed
+        if cited:
+            answer = f"{answer} " + " ".join(f"[{s['ref']}]" for s in cited)
     if removed:
         logger.info("Assistent: erfundene Verweise entfernt: %s", ", ".join(removed))
     if cited:
@@ -151,7 +161,8 @@ def ask(project_id: Optional[str], question: str, context: Optional[Dict[str, An
     elif NOTHING_FOUND in answer:
         out_sources = []
     else:
-        out_sources = sources[:2]
+        # Ersatz: die zwei besten Treffer der Suche (Hilfe und Projekt nach Ähnlichkeit gemeinsam sortiert)
+        out_sources = sorted(sources, key=lambda s: -s.get("score", 0.0))[:2]
         if out_sources:
             answer = f"{answer}\n\n{UNCITED_NOTE}".strip()
     return {
