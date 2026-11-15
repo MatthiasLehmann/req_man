@@ -75,6 +75,16 @@ Ollama-Container als lokaler KI-Server mitgestartet. Persistente Daten liegen in
 Ohne das Modell bleibt ReqMan benutzbar, die Suchfunktionen antworten dann mit 503. Der Index liegt unter
 `data/rag/` und gleicht sich selbst ab.
 
+## In Obsidian öffnen (Export)
+
+Der Knopf „In Obsidian öffnen“ (Traceability-Seite und Projektkarte) schreibt das Projekt als Ordner mit
+Markdown-Notizen, `Start.md`, `Uebersicht.base` und `Traceability.canvas` nach `data/obsidian/<Projekt>/`
+(umstellbar über `OBSIDIAN_EXPORT_ROOT`; `REQMAN_PUBLIC_URL` setzt die Adresse in `reqman_url`). Nur
+ReqMan → Obsidian; Dateien, die nicht von ReqMan stammen, werden nie angefasst (Liste in
+`.reqman-export.json`). In Obsidian: „Ordner als Vault öffnen“ und diesen Ordner wählen. Bei Docker liegt er im
+Volume `data/`, also auf dem Host unter `<Projektordner>/data/obsidian/<Projekt>/` – diesen Host-Pfad in
+Obsidian öffnen, nicht den Pfad im Container.
+
 ## MCP-Server
 
 `mcp_server/` macht ReqMan für KI-Agenten (Claude Desktop, Claude Code, VS Code) nutzbar: lesen, suchen,

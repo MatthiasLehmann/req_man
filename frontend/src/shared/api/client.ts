@@ -194,6 +194,14 @@ export const acceptProposal = (projectId: string, id: number) =>
 export const rejectProposal = (projectId: string, id: number) =>
   api.post<Proposal>(`/projects/${projectId}/proposals/${id}/reject`);
 
+// Brücken (B1) – Projekt als Obsidian-Ordner ausliefern (Markdown, .base, .canvas)
+export type ObsidianExport = Schemas['ObsidianExport'];
+export type ObsidianStatus = Schemas['ObsidianStatus'];
+export const exportToObsidian = (projectId: string) =>
+  api.post<ObsidianExport>(`/projects/${projectId}/obsidian/export`);
+export const getObsidianStatus = (projectId: string) =>
+  api.get<ObsidianStatus>(`/projects/${projectId}/obsidian/status`);
+
 // „Frag ReqMan“ (A4) – Assistent mit Quellen, Hilfe-Suche, offene Punkte
 export type AssistantAnswer = Schemas['AssistantAnswer'];
 export type AssistantSource = Schemas['AssistantSource'];

@@ -935,6 +935,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/obsidian/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Obsidian Export */
+        post: operations["obsidian_export_api_projects__project_id__obsidian_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/obsidian/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Obsidian Status */
+        get: operations["obsidian_status_api_projects__project_id__obsidian_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/proposals": {
         parameters: {
             query?: never;
@@ -2014,6 +2048,50 @@ export interface components {
              * @default []
              */
             uids: string[];
+        };
+        /** ObsidianExport */
+        ObsidianExport: {
+            /** Canvases */
+            canvases: string[];
+            /** Documents */
+            documents: number;
+            /** Kept Edited */
+            kept_edited: number;
+            /** Open Url */
+            open_url: string;
+            /** Path */
+            path: string;
+            /** Removed */
+            removed: number;
+            /** Requirements */
+            requirements: number;
+            /** Seconds */
+            seconds: number;
+            /** Sections */
+            sections: number;
+            /** Start Path */
+            start_path: string;
+            /** Unchanged */
+            unchanged: number;
+            /** Without Link */
+            without_link: number;
+            /** Written */
+            written: number;
+        };
+        /** ObsidianStatus */
+        ObsidianStatus: {
+            /** Exported */
+            exported: boolean;
+            /** Exported At */
+            exported_at: string | null;
+            /** Files */
+            files: number;
+            /** Open Url */
+            open_url: string;
+            /** Path */
+            path: string;
+            /** Pending Changes */
+            pending_changes: number | null;
         };
         /** ParsedTable */
         ParsedTable: {
@@ -4424,6 +4502,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NextStep"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    obsidian_export_api_projects__project_id__obsidian_export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObsidianExport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    obsidian_status_api_projects__project_id__obsidian_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObsidianStatus"];
                 };
             };
             /** @description Validation Error */

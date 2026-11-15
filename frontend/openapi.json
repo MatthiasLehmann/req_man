@@ -2022,6 +2022,134 @@
         "title": "NextStep",
         "type": "object"
       },
+      "ObsidianExport": {
+        "properties": {
+          "canvases": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Canvases",
+            "type": "array"
+          },
+          "documents": {
+            "title": "Documents",
+            "type": "integer"
+          },
+          "kept_edited": {
+            "title": "Kept Edited",
+            "type": "integer"
+          },
+          "open_url": {
+            "title": "Open Url",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "removed": {
+            "title": "Removed",
+            "type": "integer"
+          },
+          "requirements": {
+            "title": "Requirements",
+            "type": "integer"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "sections": {
+            "title": "Sections",
+            "type": "integer"
+          },
+          "start_path": {
+            "title": "Start Path",
+            "type": "string"
+          },
+          "unchanged": {
+            "title": "Unchanged",
+            "type": "integer"
+          },
+          "without_link": {
+            "title": "Without Link",
+            "type": "integer"
+          },
+          "written": {
+            "title": "Written",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "start_path",
+          "written",
+          "removed",
+          "unchanged",
+          "kept_edited",
+          "seconds",
+          "open_url",
+          "documents",
+          "requirements",
+          "sections",
+          "without_link",
+          "canvases"
+        ],
+        "title": "ObsidianExport",
+        "type": "object"
+      },
+      "ObsidianStatus": {
+        "properties": {
+          "exported": {
+            "title": "Exported",
+            "type": "boolean"
+          },
+          "exported_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exported At"
+          },
+          "files": {
+            "title": "Files",
+            "type": "integer"
+          },
+          "open_url": {
+            "title": "Open Url",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "pending_changes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Changes"
+          }
+        },
+        "required": [
+          "path",
+          "exported",
+          "files",
+          "exported_at",
+          "pending_changes",
+          "open_url"
+        ],
+        "title": "ObsidianStatus",
+        "type": "object"
+      },
       "ParsedTable": {
         "properties": {
           "rows": {
@@ -6826,6 +6954,100 @@
         "summary": "Next Steps",
         "tags": [
           "assistant"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/obsidian/export": {
+      "post": {
+        "operationId": "obsidian_export_api_projects__project_id__obsidian_export_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObsidianExport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Obsidian Export",
+        "tags": [
+          "obsidian"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/obsidian/status": {
+      "get": {
+        "operationId": "obsidian_status_api_projects__project_id__obsidian_status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObsidianStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Obsidian Status",
+        "tags": [
+          "obsidian"
         ]
       }
     },
