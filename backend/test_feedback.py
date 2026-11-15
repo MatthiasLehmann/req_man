@@ -246,6 +246,16 @@ def test_proposal_cases_do_not_demote(project):
     assert out[0].severity == "high"
 
 
+def test_rule_findings_are_never_demoted(project):
+    cases.upsert_cases(project["pid"], [case("k1", "SRS012", "Die Bremsung soll ausreichend schnell sein."),
+                                        case("k2", "SRS013", "Die Lenkung soll ausreichend schnell sein.")])
+    rule = aqs.AiQualityIssue(category="Clarity", severity="high", suggestion="x",
+                              description=aqs.RULE_PREFIX + "Unbestimmte Begriffe: 'ausreichend'")
+    out, info = aqs.apply_feedback(project["pid"], TEXT, [rule, issue("high")], min_sim=0.5)
+    assert out[0].severity == "high" and out[0].description == rule.description   # wie SRD018
+    assert out[1].severity == "medium" and len(info["demoted"]) == 1              # Modellbefund weiterhin herabgesetzt
+
+
 def test_empty_store_and_embedder_failure_leave_issues_untouched(project):
     issues = [issue("high")]
     assert aqs.apply_feedback(project["pid"], TEXT, issues)[0][0].severity == "high"

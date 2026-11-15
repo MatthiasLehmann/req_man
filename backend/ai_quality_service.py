@@ -1440,6 +1440,9 @@ def apply_feedback(project_id: str, text: str, issues: List["AiQualityIssue"],
     out: List[AiQualityIssue] = []
     for issue in issues:
         new_sev = _demoted(issue.severity)
+        if (issue.description or "").startswith(RULE_PREFIX):   # Regelbefunde sind keine Modellbefunde: nie herabsetzen
+            out.append(issue)
+            continue
         mine = [c for c in cases if (c.get("category") or "").lower() == (issue.category or "").lower()]
         no = {c["hash"]: c for c in mine if c.get("verdict") == "not_applies"}   # je Anforderungstext einmal
         yes = {c["hash"] for c in mine if c.get("verdict") == "applies"}
