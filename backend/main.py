@@ -22,6 +22,7 @@ from routers import rag_router
 from routers import assistant_router
 from routers import proposals_router
 from routers import feedback_router
+from routers import obsidian_router
 import threading
 import logging
 
@@ -92,6 +93,7 @@ app.include_router(rag_router.router)
 app.include_router(assistant_router.router)
 app.include_router(proposals_router.router)
 app.include_router(feedback_router.router)
+app.include_router(obsidian_router.router)
 
 # Offene Vorschläge stehen in „Was steht als Nächstes an?“ an erster Stelle (A4-Erweiterungspunkt).
 import next_steps_service
