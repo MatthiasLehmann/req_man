@@ -541,8 +541,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/projects/{project_id}/finding-feedback": {
     "/api/projects/{project_id}/export/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Pdf
+         * @description Setzt das Projekt (oder ein Dokument) mit Typst zu einem PDF.
+         */
+        get: operations["export_pdf_api_projects__project_id__export_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/finding-feedback": {
         parameters: {
             query?: never;
             header?: never;
@@ -589,14 +608,6 @@ export interface paths {
         post?: never;
         /** Delete Feedback */
         delete: operations["delete_feedback_api_projects__project_id__finding_feedback__feedback_id__delete"];
-        /**
-         * Export Pdf
-         * @description Setzt das Projekt (oder ein Dokument) mit Typst zu einem PDF.
-         */
-        get: operations["export_pdf_api_projects__project_id__export_pdf_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3871,11 +3882,6 @@ export interface operations {
             };
         };
     };
-    list_feedback_api_projects__project_id__finding_feedback_get: {
-        parameters: {
-            query?: {
-                uid?: string | null;
-                only_mine?: boolean;
     export_pdf_api_projects__project_id__export_pdf_get: {
         parameters: {
             query?: {
@@ -3896,8 +3902,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FeedbackResponse"][];
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feedback_api_projects__project_id__finding_feedback_get: {
+        parameters: {
+            query?: {
+                uid?: string | null;
+                only_mine?: boolean;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackResponse"][];
                 };
             };
             /** @description Validation Error */

@@ -1235,7 +1235,7 @@ def check_contradictions(provider: "LlmProvider", uid: str, text: str, neighbour
 # V28 fragte llama3.2 nach Widersprüchen und verdreifachte die Fehlalarme. Hier vergleicht reiner Code:
 # Aus jedem Text werden Tripel (Bezeichner, Wert, Einheit) gezogen; nennt eine ähnliche (k=5, ab SIMILAR_MIN)
 # oder verlinkte Anforderung für denselben Bezeichner in derselben Einheit einen anderen Wert, gibt es einen
-# Befund Consistency/medium. Kein Modellaufruf. Schaltbar über AI_NUMBER_CHECK (Standard aus = Verhalten wie V23).
+# Befund Consistency/medium. Kein Modellaufruf. Abschaltbar über AI_NUMBER_CHECK=0 (Standard an seit B5; aus = Verhalten wie V23).
 
 NUMBER_CHECK_ENV = "AI_NUMBER_CHECK"
 NUMBER_CHECK_K = 5
@@ -1339,7 +1339,7 @@ def compare_numbers(uid: str, text: str, others: List[Dict[str, Any]]) -> List[A
 
 
 def number_check_enabled() -> bool:
-    return os.environ.get(NUMBER_CHECK_ENV, "").strip().lower() in ("1", "true", "on", "yes", "ja")
+    return os.environ.get(NUMBER_CHECK_ENV, "").strip().lower() not in ("0", "false", "off", "no", "nein", "aus")
 
 
 def find_number_peers(project_id: str, uid: str, item: Dict[str, Any]) -> List[Dict[str, Any]]:

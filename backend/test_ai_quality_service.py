@@ -1329,12 +1329,12 @@ class TestNumberCheckL1:
         assert aqs.compare_numbers("A2", "Die Latenz soll mindestens 5 ms betragen.", peers) == []
         assert len(aqs.compare_numbers("A2", "Die Latenz soll höchstens 30 ms betragen.", peers)) == 1
 
-    def test_default_off_and_no_model_call_when_on(self, tmp_path, monkeypatch):
-        monkeypatch.delenv("AI_NUMBER_CHECK", raising=False)
+    def test_off_by_switch_default_on_and_no_model_call(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AI_NUMBER_CHECK", "0")
         provider = SequenceProvider(self.CLEAN)
         result = self._run(tmp_path, monkeypatch, provider)
         assert not [i for i in result.issues if i.description.startswith("Zahlenabgleich")]
-        monkeypatch.setenv("AI_NUMBER_CHECK", "1")
+        monkeypatch.delenv("AI_NUMBER_CHECK", raising=False)  # Standard: an
         provider = SequenceProvider(self.CLEAN)
         result = self._run(tmp_path, monkeypatch, provider)
         assert len(provider.calls) == 1  # nur der Haupt-Aufruf, kein zweiter
