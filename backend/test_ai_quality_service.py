@@ -1275,3 +1275,76 @@ class TestProjectCheckV28:
         result = self._run(tmp_path, monkeypatch, SequenceProvider(self.CLEAN, answer))
         found = [i for i in result.issues if i.description.startswith("Widerspruch")]
         assert [i.suggestion for i in found] == ["Mit SRD008 abgleichen"]
+
+
+class TestNumberCheckL1:
+    """L1: Zahlenabgleich ohne Sprachmodell (AI_NUMBER_CHECK)."""
+    ITEM = TestProjectCheckV28.ITEM
+    CLEAN = TestProjectCheckV28.CLEAN
+    PEERS = [{"uid": "SRD008", "text": "Die Software soll a_cmd auf den Bereich −a_max…+a_max mit "
+                                       "a_max = 300 m/s² begrenzen.", "score": 0.81}]
+
+    def _run(self, tmp_path, monkeypatch, provider, item=None, peers=None):
+        import asyncio
+        item = item or self.ITEM
+        (tmp_path / "SRD").mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr("doorstop_service.get_item", lambda pid, uid: item)
+        monkeypatch.setattr("doorstop_service.get_project", lambda pid: {"id": pid, "path": str(tmp_path)})
+        monkeypatch.setattr("doorstop_service.list_documents", lambda pid: [])
+        monkeypatch.setattr("doorstop_service.load_attribute_config", lambda: [])
+        monkeypatch.setattr(aqs, "find_number_peers", lambda pid, uid, it: self.PEERS if peers is None else peers)
+        return asyncio.run(aqs.QualityAnalyzer(provider=provider).analyze("p1", item["uid"]))
+
+    def test_extract_triples(self):
+        assert aqs.extract_triples("Die Software soll a_cmd auf 250 m/s² begrenzen.") == [
+            ("a_cmd", 250.0, "m/s²", "=")]
+        assert ("a_max", 300.0, "m/s²", "=") in aqs.extract_triples("a_max = 300 m/s^2 und weiter.")
+        assert aqs.extract_triples("Die Beschleunigung soll höchstens 12,5 m/s² betragen.") == [
+            ("beschleunigung", 12.5, "m/s²", "<=")]
+        assert aqs.extract_triples("N = 3 und ohne Einheit 250 begrenzen.") == []
+
+    def test_limited_variable_gets_assigned_value(self):
+        t = aqs.extract_triples("Die Software soll a_cmd auf ±a_max begrenzen (a_max = 300 m/s², siehe SRD008).")
+        assert ("a_cmd", 300.0, "m/s²", "=") in t and ("a_max", 300.0, "m/s²", "=") in t
+
+    def test_finding_on_different_value(self):
+        issues = aqs.compare_numbers("SRD022", self.ITEM["text"], self.PEERS)
+        assert len(issues) == 1
+        i = issues[0]
+        assert i.category == "Consistency" and i.severity == "medium"
+        assert "SRD022 nennt 250 m/s²" in i.description and "SRD008 nennt 300 m/s²" in i.description
+        assert "a_cmd" in i.description
+
+    def test_no_finding_for_equal_value_other_unit_or_other_name(self):
+        assert aqs.compare_numbers("X1", "a_cmd auf 300 m/s² begrenzen.", self.PEERS) == []
+        assert aqs.compare_numbers("X1", "a_cmd auf 250 km/h begrenzen.", self.PEERS) == []
+        assert aqs.compare_numbers("X1", "v_max = 250 m/s².", self.PEERS) == []
+
+    def test_min_and_max_do_not_conflict(self):
+        peers = [{"uid": "A1", "text": "Die Latenz soll höchstens 20 ms betragen."}]
+        assert aqs.compare_numbers("A2", "Die Latenz soll mindestens 5 ms betragen.", peers) == []
+        assert len(aqs.compare_numbers("A2", "Die Latenz soll höchstens 30 ms betragen.", peers)) == 1
+
+    def test_default_off_and_no_model_call_when_on(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("AI_NUMBER_CHECK", raising=False)
+        provider = SequenceProvider(self.CLEAN)
+        result = self._run(tmp_path, monkeypatch, provider)
+        assert not [i for i in result.issues if i.description.startswith("Zahlenabgleich")]
+        monkeypatch.setenv("AI_NUMBER_CHECK", "1")
+        provider = SequenceProvider(self.CLEAN)
+        result = self._run(tmp_path, monkeypatch, provider)
+        assert len(provider.calls) == 1  # nur der Haupt-Aufruf, kein zweiter
+        found = [i for i in result.issues if i.description.startswith("Zahlenabgleich")]
+        assert len(found) == 1 and found[0].severity == "medium"
+        log = yaml.safe_load((tmp_path / "SRD" / "SRD022.ai-quality-log.yml").read_text(encoding="utf-8"))
+        assert log["number_check"]["peers"][0]["uid"] == "SRD008"
+
+    def test_find_number_peers_uses_links_and_survives_index_error(self, monkeypatch):
+        import rag_service
+
+        def boom(*a, **k):
+            raise RuntimeError("Ollama fehlt")
+        monkeypatch.setattr(rag_service, "similar", boom)
+        monkeypatch.setattr("doorstop_service.get_item", lambda pid, uid: {"uid": uid, "text": "a_max = 300 m/s²."})
+        peers = aqs.find_number_peers("p", "SRD022", {"links": ["SRD008"]})
+        assert [p["uid"] for p in peers] == ["SRD008"]

@@ -1230,6 +1230,144 @@ def check_contradictions(provider: "LlmProvider", uid: str, text: str, neighbour
     return issues, protocol
 
 
+# ─── L1: Zahlenabgleich ohne Sprachmodell (Nachfolger von V28) ────────────────
+#
+# V28 fragte llama3.2 nach Widersprüchen und verdreifachte die Fehlalarme. Hier vergleicht reiner Code:
+# Aus jedem Text werden Tripel (Bezeichner, Wert, Einheit) gezogen; nennt eine ähnliche (k=5, ab SIMILAR_MIN)
+# oder verlinkte Anforderung für denselben Bezeichner in derselben Einheit einen anderen Wert, gibt es einen
+# Befund Consistency/medium. Kein Modellaufruf. Schaltbar über AI_NUMBER_CHECK (Standard aus = Verhalten wie V23).
+
+NUMBER_CHECK_ENV = "AI_NUMBER_CHECK"
+NUMBER_CHECK_K = 5
+
+_N = r"[-−–+±]?\s?\d+(?:[.,]\d+)?"
+_U = (r"(?:m/s(?:²|\^2|2)|m/s|rad/s|km/h|°/s|°C|°|%|kHz|MHz|Hz|ms|µs|us|min|km|cm|mm|kg|dB|bar|kPa|Pa|"
+      r"m|s|g|N|V|A|W|K)(?![\w/²])")
+_ID = r"[A-Za-zλ][A-Za-z0-9λ]*(?:_[A-Za-z0-9]+)+|[A-Za-zλ][A-Za-z0-9λ]{0,3}"
+_ASSIGN = re.compile(rf"(?<![\w])(?P<id>{_ID})\s*(?P<op><=|>=|=|≤|≥|<|>|:)\s*(?P<num>{_N})\s*(?P<unit>{_U})")
+_AUF = re.compile(rf"(?<![\w])(?P<id>{_ID})\s+auf\s+(?:(?P<cmp>höchstens|mindestens|maximal|minimal)\s+)?"
+                  rf"(?P<num>{_N})\s*(?P<unit>{_U})")
+_NOUN = re.compile(rf"(?<![\w])(?P<id>[A-ZÄÖÜ][a-zäöüß]{{3,}})\s+(?:soll|muss|darf|sollen|müssen|beträgt|ist)\b"
+                   rf"(?P<mid>[^.;()=]{{0,40}}?)(?P<num>{_N})\s*(?P<unit>{_U})")
+_LIMIT_WORD = re.compile(r"begrenz|limit|sättig", re.IGNORECASE)
+_LIMITED = re.compile(rf"(?<![\w])(?P<id>{_ID})\s+auf\b")
+_SENTENCE = re.compile(r"(?<=[.;!?])\s+(?=[A-ZÄÖÜ])|\n+")
+_NOUN_STOP = {"software", "system", "subsystem", "funktion", "komponente", "modul", "anforderung", "schnittstelle",
+              "wert", "ausgabe", "eingabe", "ergebnis", "betrieb", "test", "dokument", "anwendung"}
+_MAX_WORDS = ("höchstens", "maximal", "nicht mehr als", "bis zu", "nicht größer", "nicht über")
+_MIN_WORDS = ("mindestens", "minimal", "nicht weniger als", "nicht kleiner", "nicht unter")
+
+Triple = Tuple[str, float, str, str]  # (Bezeichner klein, Wert, Einheit, Vergleich)
+
+
+def _num(s: str) -> float:
+    s = s.strip().replace("−", "-").replace("–", "-").replace(" ", "")
+    if s.startswith("±"):
+        s = s[1:]
+    return float(s.lstrip("+").replace(",", "."))
+
+
+def _unit(u: str) -> str:
+    return re.sub(r"\^?2$", "²", u) if u.startswith("m/s") else u
+
+
+def _cmp(op: str = "", before: str = "") -> str:
+    if op in ("≤", "<=", "<"):
+        return "<="
+    if op in ("≥", ">=", ">"):
+        return ">="
+    low = before.lower()
+    if any(w in low for w in _MAX_WORDS):
+        return "<="
+    if any(w in low for w in _MIN_WORDS):
+        return ">="
+    return "="
+
+
+def extract_triples(text: str) -> List[Triple]:
+    """Tripel (Bezeichner, Wert, Einheit, Vergleich) aus einem Anforderungstext, nur per regulärem Ausdruck.
+    Berücksichtigt: „a_max = 300 m/s²“, „a_cmd auf (höchstens) 250 m/s² begrenzen“, „Die Beschleunigung soll
+    höchstens 300 m/s² betragen“ und bei Begrenzungssätzen den Wert für die begrenzte Größe
+    („a_cmd auf ±a_max begrenzen (a_max = 300 m/s²)“ → a_cmd = 300 m/s²)."""
+    out: List[Triple] = []
+    for sentence in _SENTENCE.split(text or ""):
+        found: List[Triple] = []
+        for m in _ASSIGN.finditer(sentence):
+            found.append((m["id"].lower(), _num(m["num"]), _unit(m["unit"]), _cmp(m["op"])))
+        assigned = list(found)
+        for m in _AUF.finditer(sentence):
+            found.append((m["id"].lower(), _num(m["num"]), _unit(m["unit"]), _cmp("", m["cmp"] or "")))
+        for m in _NOUN.finditer(sentence):
+            if m["id"].lower() not in _NOUN_STOP:
+                found.append((m["id"].lower(), _num(m["num"]), _unit(m["unit"]), _cmp("", m["mid"])))
+        if assigned and _LIMIT_WORD.search(sentence):
+            limited = _LIMITED.search(sentence)
+            if limited:
+                name = limited["id"].lower()
+                found += [(name, v, u, c) for (i, v, u, c) in assigned if i != name]
+        out += [t for t in found if t not in out]
+    return out
+
+
+def _fmt(v: float) -> str:
+    return f"{v:g}".replace(".", ",")
+
+
+def compare_numbers(uid: str, text: str, others: List[Dict[str, Any]]) -> List[AiQualityIssue]:
+    """Gleicher Bezeichner, gleiche Einheit, gleicher Vergleich, anderer Wert → Consistency/medium."""
+    mine = extract_triples(text)
+    issues: List[AiQualityIssue] = []
+    if not mine:
+        return issues
+    seen = set()
+    for other in others:
+        for (name, value, unit, cmp_) in mine:
+            for (o_name, o_value, o_unit, o_cmp) in extract_triples(other.get("text") or ""):
+                if (name, unit, cmp_) != (o_name, o_unit, o_cmp) or abs(value - o_value) < 1e-9:
+                    continue
+                if (other["uid"], name) in seen:
+                    continue
+                seen.add((other["uid"], name))
+                issues.append(AiQualityIssue(
+                    category="Consistency", severity="medium",
+                    description=(f"Zahlenabgleich: {uid} nennt {_fmt(value)} {unit}, {other['uid']} nennt "
+                                 f"{_fmt(o_value)} {unit} für {name}"),
+                    suggestion=f"Wert mit {other['uid']} abgleichen und nur an einer Stelle festlegen",
+                ))
+    return issues
+
+
+def number_check_enabled() -> bool:
+    return os.environ.get(NUMBER_CHECK_ENV, "").strip().lower() in ("1", "true", "on", "yes", "ja")
+
+
+def find_number_peers(project_id: str, uid: str, item: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Ähnliche (k=5, ab SIMILAR_MIN) und alle verlinkten Anforderungen mit vollem Text. Fehler im
+    Wissensindex führen dazu, dass nur die verlinkten verglichen werden."""
+    peers: Dict[str, Dict[str, Any]] = {}
+    linked = {str(link).split(":")[0] for link in item.get("links") or []}
+    try:
+        import rag_service
+        for h in rag_service.similar(project_id, uid, k=NUMBER_CHECK_K):
+            if h["score"] >= rag_service.SIMILAR_MIN:
+                peers[h["uid"]] = {"uid": h["uid"], "text": h["text"], "score": h["score"]}
+        entries, _ = rag_service._index(project_id)
+        linked |= {e["uid"] for e in entries if uid in e["links"]}
+    except Exception as e:  # noqa: BLE001 – Zusatzprüfung darf die Analyse nie verhindern
+        logger.warning("Zahlenabgleich: Wissensindex nicht verfügbar (%s): %s", uid, e)
+    for other in sorted(linked | set(peers)):
+        if other == uid:
+            continue
+        try:  # voller Text statt der gekürzten Fassung des Index
+            full = ds.get_item(project_id, other)
+            if full and not full.get("header"):
+                peers[other] = {"uid": other, "text": full.get("text") or "",
+                                "score": peers.get(other, {}).get("score")}
+        except Exception:  # noqa: BLE001
+            pass
+    return [p for u, p in peers.items() if u != uid and p["text"]]
+
+
 # ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
 
 
@@ -1393,7 +1531,13 @@ class QualityAnalyzer:
                 found, project_protocol = check_contradictions(
                     self._provider, uid, text, neighbours, used_model)
                 ai_issues = ai_issues + found
-        result.issues = rule_issues + ai_issues
+        # L1: Zahlenabgleich ohne Sprachmodell
+        number_issues: List[AiQualityIssue] = []
+        peers: List[Dict[str, Any]] = []
+        if number_check_enabled():
+            peers = find_number_peers(project_id, uid, item)
+            number_issues = compare_numbers(uid, text, peers)
+        result.issues = rule_issues + ai_issues + number_issues
         # V19: Gesamtnote aus Teilnoten, Profilgewichten und den endgültigen Befunden
         result.score = compute_score(result.score, result.issues, profile)
 
@@ -1404,6 +1548,11 @@ class QualityAnalyzer:
                 result, item, used_model, system_prompt, user_prompt, raw,
                 llm_seconds, time.perf_counter() - started, rule_issues, ai_issues_parsed,
             )
+            if number_check_enabled():
+                protocol["number_check"] = {
+                    "peers": [{"uid": p["uid"], "score": p.get("score")} for p in peers],
+                    "triples": extract_triples(text),
+                    "findings": [i.description for i in number_issues]}
             if project_protocol is not None:
                 protocol["project_check"] = project_protocol
         save_quality_result(project_id, uid, result, protocol=protocol)
