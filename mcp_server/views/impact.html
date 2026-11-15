@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReqMan – Auswirkungen</title>
+<style>/*CSS*/</style></head>
+<body>
+<div id="root" class="muted">Warte auf die Auswirkungen …</div>
+<script>/*BRIDGE*/</script>
+<script>
+var el = ReqManApp.el, root = document.getElementById("root");
+function section(title, items) {
+  root.appendChild(el("h2", "sec", title + " (" + items.length + ")"));
+  if (!items.length) { root.appendChild(el("div", "muted", "keine")); return; }
+  items.forEach(function (x) {
+    var row = el("div", "item");
+    row.appendChild(el("b", null, x.uid));
+    var tag = x.prefix + (x.depth !== undefined ? ", Tiefe " + x.depth : "") + (x.reviewed ? ", reviewed" : "") +
+      (x.score !== undefined ? ", Ähnlichkeit " + x.score : "");
+    row.appendChild(el("span", "tag", tag));
+    row.appendChild(el("div", null, x.text));
+    root.appendChild(row);
+  });
+}
+function render(d) {
+  root.textContent = ""; root.className = "";
+  root.appendChild(el("h1", null, "Auswirkungen einer Änderung an " + d.uid));
+  var docs = {}; d.downstream.forEach(function (x) { docs[x.prefix] = 1; });
+  var s = el("div", "sum");
+  s.appendChild(el("span", "badge", d.downstream.length + " abhängige Anforderungen"));
+  s.appendChild(el("span", "badge", Object.keys(docs).length + " Dokumente"));
+  s.appendChild(el("span", "badge", d.upstream.length + " Eltern"));
+  root.appendChild(s);
+  section("Abwärts (hängt davon ab)", d.downstream);
+  section("Aufwärts (davon abhängig)", d.upstream);
+  section("Ähnlich, aber nicht verlinkt", d.similar_unlinked);
+  if (d.truncated) root.appendChild(el("div", "muted", "Gekürzt: nur die ersten " + d.truncated + " Einträge je Gruppe."));
+}
+ReqManApp.start({
+  name: "ReqMan Auswirkungen",
+  onResult: function (res) {
+    var sc = res && res.structuredContent;
+    if (sc && sc.downstream) render(sc);
+    else root.textContent = ReqManApp.firstText(res) || "Keine Daten erhalten.";
+  },
+  onNoHost: function () { root.textContent = "Diese Ansicht wird von einem MCP-Apps-fähigen Host geöffnet."; }
+});
+</script></body></html>
