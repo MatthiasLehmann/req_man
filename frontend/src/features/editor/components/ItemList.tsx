@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
-import { listItems, createItem, deleteItem, exportDocument, ExportFormat } from '../../../shared/api/client';
+import { listItems, createItem, deleteItem, exportDocument, exportPdf, ExportFormat } from '../../../shared/api/client';
 import { Item } from '../../../shared/types';
 import { useAuthStore } from '../../../shared/auth/authStore';
 import ImportDialog from './import/ImportDialog';
@@ -134,6 +134,18 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
+
+  const handlePdf = async () => {
+    setExportOpen(false);
+    setExporting(true);
+    try {
+      await exportPdf(projectId, prefix);
+    } catch (e: any) {
+      toast.error(e.message || 'PDF-Satz fehlgeschlagen');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleExport = async (format: ExportFormat) => {
     setExportOpen(false);
@@ -283,7 +295,7 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
           {exportOpen && (
             <div
               className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200
-                         rounded-lg shadow-lg py-1 min-w-[110px]"
+                         rounded-lg shadow-lg py-1 min-w-[130px]"
               onMouseLeave={() => setExportOpen(false)}
             >
               {(['xlsx', 'csv', 'tsv', 'yaml'] as ExportFormat[]).map((fmt) => (
@@ -296,6 +308,13 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
                   {fmt.toUpperCase()}
                 </button>
               ))}
+              <button
+                onClick={handlePdf}
+                className="w-full text-left px-3 py-1.5 text-xs text-gray-700 border-t border-gray-100
+                           hover:bg-gray-50 transition-colors whitespace-nowrap"
+              >
+                PDF (gesetzt)
+              </button>
             </div>
           )}
         </div>

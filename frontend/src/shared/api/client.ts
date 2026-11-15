@@ -365,6 +365,27 @@ export const exportDocument = (projectId: string, prefix: string, format: Export
     });
 };
 
+/** Gesetztes Lastenheft als PDF (Typst); ohne `document` das ganze Projekt. */
+export const exportPdf = async (projectId: string, document?: string) => {
+  const token = localStorage.getItem('token');
+  const qs = document ? `?document=${encodeURIComponent(document)}` : '';
+  const res = await fetch(`/api/projects/${projectId}/export/pdf${qs}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail ?? detail; } catch { /* keine JSON-Antwort */ }
+    throw new Error(detail);
+  }
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = window.document.createElement('a');
+  a.href = objectUrl;
+  a.download = `${document ?? 'Lastenheft'}.pdf`;
+  window.document.body.appendChild(a);
+  a.click();
+  window.document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
+};
+
 /** Löst einen Browser-Download für das gesamte Projekt (ZIP) aus. */
 export const exportProject = (projectId: string, projectName: string, format: ExportFormat = 'xlsx') => {
   const token = localStorage.getItem('token');
