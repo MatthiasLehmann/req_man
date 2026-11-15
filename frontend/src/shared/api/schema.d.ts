@@ -542,6 +542,7 @@ export interface paths {
         trace?: never;
     };
     "/api/projects/{project_id}/finding-feedback": {
+    "/api/projects/{project_id}/export/pdf": {
         parameters: {
             query?: never;
             header?: never;
@@ -588,6 +589,14 @@ export interface paths {
         post?: never;
         /** Delete Feedback */
         delete: operations["delete_feedback_api_projects__project_id__finding_feedback__feedback_id__delete"];
+        /**
+         * Export Pdf
+         * @description Setzt das Projekt (oder ein Dokument) mit Typst zu einem PDF.
+         */
+        get: operations["export_pdf_api_projects__project_id__export_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3867,6 +3876,11 @@ export interface operations {
             query?: {
                 uid?: string | null;
                 only_mine?: boolean;
+    export_pdf_api_projects__project_id__export_pdf_get: {
+        parameters: {
+            query?: {
+                /** @description Dokument-Präfix; leer = alle Dokumente */
+                document?: string | null;
             };
             header?: never;
             path: {
@@ -3883,6 +3897,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeedbackResponse"][];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

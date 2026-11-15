@@ -5690,6 +5690,10 @@
     "/api/projects/{project_id}/finding-feedback": {
       "get": {
         "operationId": "list_feedback_api_projects__project_id__finding_feedback_get",
+    "/api/projects/{project_id}/export/pdf": {
+      "get": {
+        "description": "Setzt das Projekt (oder ein Dokument) mit Typst zu einem PDF.",
+        "operationId": "export_pdf_api_projects__project_id__export_pdf_get",
         "parameters": [
           {
             "in": "path",
@@ -5703,6 +5707,9 @@
           {
             "in": "query",
             "name": "uid",
+            "description": "Dokument-Präfix; leer = alle Dokumente",
+            "in": "query",
+            "name": "document",
             "required": false,
             "schema": {
               "anyOf": [
@@ -5724,6 +5731,8 @@
               "default": false,
               "title": "Only Mine",
               "type": "boolean"
+              "description": "Dokument-Präfix; leer = alle Dokumente",
+              "title": "Document"
             }
           }
         ],
@@ -5738,6 +5747,7 @@
                   "title": "Response List Feedback Api Projects  Project Id  Finding Feedback Get",
                   "type": "array"
                 }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -5912,6 +5922,9 @@
         "summary": "Delete Feedback",
         "tags": [
           "finding-feedback"
+        "summary": "Export Pdf",
+        "tags": [
+          "export"
         ]
       }
     },
