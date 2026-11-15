@@ -1297,15 +1297,17 @@ class TestNumberCheckL1:
 
     def test_extract_triples(self):
         assert aqs.extract_triples("Die Software soll a_cmd auf 250 m/s² begrenzen.") == [
-            ("a_cmd", 250.0, "m/s²", "=")]
+            ("a_cmd", 250.0, "m/s²", "<=")]
         assert ("a_max", 300.0, "m/s²", "=") in aqs.extract_triples("a_max = 300 m/s^2 und weiter.")
         assert aqs.extract_triples("Die Beschleunigung soll höchstens 12,5 m/s² betragen.") == [
             ("beschleunigung", 12.5, "m/s²", "<=")]
         assert aqs.extract_triples("N = 3 und ohne Einheit 250 begrenzen.") == []
+        # Initialwert („setzen“) ist keine Grenze (Scheinfund SRD007/SRD010 im ersten Lauf)
+        assert aqs.extract_triples("Die Software soll a_cmd auf 0 m/s² setzen.") == []
 
     def test_limited_variable_gets_assigned_value(self):
         t = aqs.extract_triples("Die Software soll a_cmd auf ±a_max begrenzen (a_max = 300 m/s², siehe SRD008).")
-        assert ("a_cmd", 300.0, "m/s²", "=") in t and ("a_max", 300.0, "m/s²", "=") in t
+        assert ("a_cmd", 300.0, "m/s²", "<=") in t and ("a_max", 300.0, "m/s²", "=") in t
 
     def test_finding_on_different_value(self):
         issues = aqs.compare_numbers("SRD022", self.ITEM["text"], self.PEERS)
@@ -1319,6 +1321,8 @@ class TestNumberCheckL1:
         assert aqs.compare_numbers("X1", "a_cmd auf 300 m/s² begrenzen.", self.PEERS) == []
         assert aqs.compare_numbers("X1", "a_cmd auf 250 km/h begrenzen.", self.PEERS) == []
         assert aqs.compare_numbers("X1", "v_max = 250 m/s².", self.PEERS) == []
+        assert aqs.compare_numbers("SRD007", "Die Software soll a_cmd auf 0 m/s² setzen.", self.PEERS) == []
+        assert aqs.compare_numbers("SRD010", "Bei NaN soll a_cmd = 0 m/s² ausgegeben werden.", self.PEERS) == []
 
     def test_min_and_max_do_not_conflict(self):
         peers = [{"uid": "A1", "text": "Die Latenz soll höchstens 20 ms betragen."}]

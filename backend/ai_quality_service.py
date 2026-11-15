@@ -1286,7 +1286,7 @@ def _cmp(op: str = "", before: str = "") -> str:
 
 def extract_triples(text: str) -> List[Triple]:
     """Tripel (Bezeichner, Wert, Einheit, Vergleich) aus einem Anforderungstext, nur per regulärem Ausdruck.
-    Berücksichtigt: „a_max = 300 m/s²“, „a_cmd auf (höchstens) 250 m/s² begrenzen“, „Die Beschleunigung soll
+    Berücksichtigt: „a_max = 300 m/s²“, „a_cmd auf 250 m/s² begrenzen“ (Obergrenze, Vergleich „<=“), „Die Beschleunigung soll
     höchstens 300 m/s² betragen“ und bei Begrenzungssätzen den Wert für die begrenzte Größe
     („a_cmd auf ±a_max begrenzen (a_max = 300 m/s²)“ → a_cmd = 300 m/s²)."""
     out: List[Triple] = []
@@ -1295,16 +1295,17 @@ def extract_triples(text: str) -> List[Triple]:
         for m in _ASSIGN.finditer(sentence):
             found.append((m["id"].lower(), _num(m["num"]), _unit(m["unit"]), _cmp(m["op"])))
         assigned = list(found)
-        for m in _AUF.finditer(sentence):
-            found.append((m["id"].lower(), _num(m["num"]), _unit(m["unit"]), _cmp("", m["cmp"] or "")))
+        limiting = bool(_LIMIT_WORD.search(sentence))
+        for m in _AUF.finditer(sentence) if limiting else ():  # „a_cmd auf 0 m/s² setzen“ ist keine Grenze
+            found.append((m["id"].lower(), _num(m["num"]), _unit(m["unit"]), _cmp("", m["cmp"] or "höchstens")))
         for m in _NOUN.finditer(sentence):
             if m["id"].lower() not in _NOUN_STOP:
                 found.append((m["id"].lower(), _num(m["num"]), _unit(m["unit"]), _cmp("", m["mid"])))
-        if assigned and _LIMIT_WORD.search(sentence):
+        if assigned and limiting:
             limited = _LIMITED.search(sentence)
             if limited:
                 name = limited["id"].lower()
-                found += [(name, v, u, c) for (i, v, u, c) in assigned if i != name]
+                found += [(name, v, u, "<=") for (i, v, u, c) in assigned if i != name]
         out += [t for t in found if t not in out]
     return out
 
