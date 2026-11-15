@@ -293,3 +293,19 @@ def test_analyze_uses_feedback_only_when_switched_on(project, monkeypatch):
     assert sev(asyncio.run(az.analyze(project["pid"], project["a"]))) == ["high"]
     monkeypatch.setenv("AI_FEEDBACK", "1")
     assert sev(asyncio.run(az.analyze(project["pid"], project["a"]))) == ["medium"]
+
+
+def test_index_vector_reused_without_extra_embedding(project):
+    rag.sync_project(project["pid"])
+    cases.upsert_cases(project["pid"], [case("k1", "SRS012", "Die Bremsung soll ausreichend schnell sein."),
+                                        case("k2", "SRS013", "Die Lenkung soll ausreichend schnell sein.")])
+    calls = []
+
+    def counting(texts):
+        calls.append(len(texts))
+        return fake_embed(texts)
+    emb.set_embedder(counting)
+    out, _ = aqs.apply_feedback(project["pid"], TEXT, [issue("high")], min_sim=0.5, uid=project["a"])
+    assert out[0].severity == "medium" and calls == []          # Vektor kam aus dem Wissensindex
+    aqs.apply_feedback(project["pid"], TEXT + " Neu.", [issue("high")], min_sim=0.5, uid=project["a"])
+    assert calls                                                # Text weicht ab → eingebettet

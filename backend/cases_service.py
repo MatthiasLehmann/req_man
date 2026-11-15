@@ -116,15 +116,17 @@ def count(project_id: str) -> int:
 
 
 def similar_cases(project_id: str, text: str, kind: Optional[str] = None, category: Optional[str] = None,
-                  min_score: float = 0.0, k: int = 10) -> List[Dict[str, Any]]:
-    """Die ähnlichsten Fälle zum Anforderungstext (Kosinus), optional nach Art und Kategorie gefiltert."""
+                  min_score: float = 0.0, k: int = 10, vector: Optional[np.ndarray] = None) -> List[Dict[str, Any]]:
+    """Die ähnlichsten Fälle zum Anforderungstext (Kosinus), optional nach Art und Kategorie gefiltert.
+    `vector`: schon vorhandener (normierter) Vektor des Texts, z. B. aus dem Wissensindex – spart den Einbettungsaufruf
+    (bei Ollama wechselt sonst das geladene Modell zwischen Einbetter und Prüfmodell)."""
     meta, vectors = _load(project_id)
     t = rag.clean_text(text)
     if not meta["entries"] or not t:
         return []
     if meta.get("model") != emb.get_model():
         return []
-    scores = vectors @ emb.embed([t])[0]
+    scores = vectors @ (vector if vector is not None else emb.embed([t])[0])
     out: List[Dict[str, Any]] = []
     for i in np.argsort(-scores):
         e = meta["entries"][i]

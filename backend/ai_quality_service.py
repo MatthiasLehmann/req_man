@@ -1404,8 +1404,23 @@ def _demoted(severity: str) -> Optional[str]:
     return _SEV_ORDER[_SEV_ORDER.index(sev) - 1]
 
 
+def _index_vector(project_id: str, uid: Optional[str], text: str):
+    """Vektor der Anforderung aus dem Wissensindex, wenn er zum aktuellen Text passt (sonst None → einbetten)."""
+    if not uid:
+        return None
+    try:
+        import rag_service
+        entries, vectors = rag_service._index(project_id)
+        for i, e in enumerate(entries):
+            if e["uid"] == uid and e["text"] == rag_service.clean_text(text):
+                return vectors[i]
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
 def apply_feedback(project_id: str, text: str, issues: List["AiQualityIssue"],
-                   min_sim: Optional[float] = None) -> Tuple[List["AiQualityIssue"], Dict[str, Any]]:
+                   min_sim: Optional[float] = None, uid: Optional[str] = None) -> Tuple[List["AiQualityIssue"], Dict[str, Any]]:
     """Setzt Befunde herab, zu denen es ähnliche abgelehnte Befunde gibt. Gibt (Befunde, Protokoll) zurück; bei
     leerem Fallspeicher oder Fehlern bleiben die Befunde unverändert."""
     info: Dict[str, Any] = {"min_sim": min_sim, "demoted": [], "cases": 0}
@@ -1415,7 +1430,8 @@ def apply_feedback(project_id: str, text: str, issues: List["AiQualityIssue"],
     info["min_sim"] = min_sim
     try:
         import cases_service
-        cases = cases_service.similar_cases(project_id, text, kind="finding", min_score=min_sim, k=50)
+        cases = cases_service.similar_cases(project_id, text, kind="finding", min_score=min_sim, k=50,
+                                              vector=_index_vector(project_id, uid, text))
     except Exception as e:  # noqa: BLE001 – Zusatz darf die Analyse nie verhindern (z. B. Ollama aus)
         logger.warning("Rückmeldung: Fallspeicher nicht verfügbar (%s): %s", project_id, e)
         info["error"] = str(e)
@@ -1613,7 +1629,7 @@ class QualityAnalyzer:
         # L2: Rückmeldung – Befunde mit ähnlichen abgelehnten Befunden gleicher Kategorie eine Stufe herabsetzen
         feedback_info = None
         if feedback_enabled():
-            result.issues, feedback_info = apply_feedback(project_id, text, result.issues)
+            result.issues, feedback_info = apply_feedback(project_id, text, result.issues, uid=uid)
         # V19: Gesamtnote aus Teilnoten, Profilgewichten und den endgültigen Befunden
         result.score = compute_score(result.score, result.issues, profile)
 
