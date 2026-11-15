@@ -4,6 +4,7 @@ API-Router für den Obsidian-Export (B1).
 Endpunkte (Präfix /api/projects/{pid}/obsidian):
   POST  /export  – Projekt als Obsidian-Ordner schreiben (Abgleich per Hash)
   GET   /status  – Ziel, Zahl der Dateien, ausstehende Änderungen
+  POST  /import-changes – Änderungen aus Obsidian als Vorschläge ablegen (B2, nur editor/admin)
 """
 import os
 from typing import List, Optional
@@ -14,7 +15,7 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 import obsidian_service as svc
-from auth import get_current_user
+from auth import get_current_user, require_editor
 from database import User, get_db
 
 router = APIRouter(prefix="/api/projects/{project_id}/obsidian", tags=["obsidian"])
@@ -34,6 +35,18 @@ class ObsidianExport(BaseModel):
     sections: int
     without_link: int
     canvases: List[str]
+
+
+class ObsidianImport(BaseModel):
+    created: int
+    existing: int
+    unchanged: int
+    conflicts: int
+    skipped: int
+    changed: List[str]
+    new: List[str]
+    conflict_uids: List[str]
+    proposal_ids: List[int]
 
 
 class ObsidianStatus(BaseModel):
@@ -71,3 +84,13 @@ async def obsidian_status(project_id: str, request: Request, db: Session = Depen
         return await run_in_threadpool(svc.status, project_id, db, _base_url(request))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/import-changes", response_model=ObsidianImport)
+async def obsidian_import_changes(project_id: str, db: Session = Depends(get_db),
+                                  current_user: User = Depends(require_editor)):
+    """Legt für in Obsidian geänderte oder neue Notizen Vorschläge an; übernommen wird nichts."""
+    try:
+        return await run_in_threadpool(svc.import_changes, project_id, db, current_user.username)
+    except ValueError as e:
+        raise HTTPException(status_code=404 if "nicht gefunden" in str(e) else 409, detail=str(e))

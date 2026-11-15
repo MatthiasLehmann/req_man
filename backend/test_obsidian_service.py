@@ -197,3 +197,134 @@ def test_router_export_and_status(project):
     st = c.get(f"{base}/status", headers={"Origin": "http://localhost:5173"}).json()
     assert st["exported"] is True and st["pending_changes"] == 0
     assert c.post("/api/projects/gibtsnicht/obsidian/export").status_code == 404
+
+
+# ─── B2: Rückweg ─────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def db(project):
+    engine = create_engine(f"sqlite:///{project['tmp'] / 'b2.db'}", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+    s = sessionmaker(bind=engine)()
+    yield s
+    s.close()
+
+
+def edit_note(project, prefix, uid, old, new):
+    p = note(project, prefix, uid)
+    text = p.read_text(encoding="utf-8")
+    assert old in text
+    p.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
+
+
+def test_import_changed_note_creates_one_proposal(project, db):
+    obs.export_project(project["pid"], db)
+    edit_note(project, "SRS", project["srs1"], "4 Sekunden", "3 Sekunden")
+    r = obs.import_changes(project["pid"], db, "noah")
+    assert r["created"] == 1 and r["changed"] == [project["srs1"]] and r["unchanged"] == 3
+    (p,) = ps.list_proposals(db, project["pid"], status="open")
+    assert p.kind == "change_text" and p.source == "obsidian" and p.uid == project["srs1"]
+    assert "3 Sekunden" in json.loads(p.payload)["new_text"] and p.reason.startswith("In Obsidian geändert am ")
+    assert ds.get_item(project["pid"], project["srs1"])["text"] == "Die Beschleunigung beträgt 4 Sekunden."
+
+
+def test_import_unchanged_creates_nothing(project, db):
+    obs.export_project(project["pid"], db)
+    r = obs.import_changes(project["pid"], db, "noah")
+    assert r["created"] == 0 and r["changed"] == [] and r["new"] == []
+    assert ps.list_proposals(db, project["pid"]) == []
+
+
+def test_import_twice_does_not_duplicate(project, db):
+    obs.export_project(project["pid"], db)
+    edit_note(project, "SRS", project["srs1"], "4 Sekunden", "3 Sekunden")
+    obs.import_changes(project["pid"], db, "noah")
+    r = obs.import_changes(project["pid"], db, "noah")
+    assert r["created"] == 0 and r["existing"] == 1
+    assert len(ps.list_proposals(db, project["pid"])) == 1
+
+
+def test_import_new_note_creates_new_item_once(project, db):
+    obs.export_project(project["pid"], db)
+    (project["dir"] / "SRS" / "Idee Kühlung.md").write_text("Das System muss gekühlt werden.\n", encoding="utf-8")
+    (project["dir"] / "Eigene Notiz.md").write_text("liegt nicht in einem Dokumentordner\n", encoding="utf-8")
+    r = obs.import_changes(project["pid"], db, "noah")
+    assert r["created"] == 1 and r["new"] == ["SRS/Idee Kühlung.md"]
+    (p,) = ps.list_proposals(db, project["pid"], status="open")
+    assert p.kind == "new_item" and p.prefix == "SRS" and "gekühlt" in json.loads(p.payload)["text"]
+    assert obs.import_changes(project["pid"], db, "noah")["created"] == 0
+    assert len(ps.list_proposals(db, project["pid"])) == 1
+
+
+def test_import_reqman_changed_meanwhile_is_conflict(project, db):
+    obs.export_project(project["pid"], db)
+    edit_note(project, "SRS", project["srs1"], "4 Sekunden", "3 Sekunden")
+    ds.update_item(project["pid"], project["srs1"], {"text": "Die Beschleunigung beträgt 5 Sekunden."})
+    r = obs.import_changes(project["pid"], db, "noah")
+    assert r["created"] == 0 and r["conflict_uids"] == [project["srs1"]]
+
+
+def test_import_requires_export(project, db):
+    with pytest.raises(ValueError):
+        obs.import_changes(project["pid"], db, "noah")
+
+
+def test_export_keeps_note_while_proposal_open_then_shows_accepted_text(project, db):
+    obs.export_project(project["pid"], db)
+    edit_note(project, "SRS", project["srs1"], "4 Sekunden", "3 Sekunden")
+    obs.import_changes(project["pid"], db, "noah")
+    # ReqMan-Seite ändert sich (anderer Grund): ohne offenen Vorschlag würde der Export die Notiz überschreiben
+    ds.update_item(project["pid"], project["srs2"], {"text": "Der Bremsweg beträgt 35 Meter."})
+    ds.update_item(project["pid"], project["srs1"], {"text": "Die Beschleunigung beträgt 5 Sekunden."})
+    r = obs.export_project(project["pid"], db)
+    assert r["kept_edited"] == 1
+    assert "3 Sekunden" in note(project, "SRS", project["srs1"]).read_text(encoding="utf-8")
+    # Vorschlag ist jetzt veraltet (409) -> abgelehnt/entschieden; neuer Import + Übernahme
+    (p,) = ps.list_proposals(db, project["pid"], status="open")
+    with pytest.raises(ps.ProposalConflict):
+        ps.accept(db, project["pid"], p.id, "noah")
+    ds.update_item(project["pid"], project["srs1"], {"text": "Die Beschleunigung beträgt 4 Sekunden."})
+    obs.export_project(project["pid"], db)           # Notiz wird wieder von ReqMan geschrieben
+    edit_note(project, "SRS", project["srs1"], "4 Sekunden", "3 Sekunden")
+    obs.import_changes(project["pid"], db, "noah")
+    (p,) = ps.list_proposals(db, project["pid"], status="open")
+    ps.accept(db, project["pid"], p.id, "noah")
+    assert "3 Sekunden" in ds.get_item(project["pid"], project["srs1"])["text"]
+    obs.export_project(project["pid"], db)
+    text = note(project, "SRS", project["srs1"]).read_text(encoding="utf-8")
+    assert "3 Sekunden" in text and "4 Sekunden" not in text
+    assert obs.import_changes(project["pid"], db, "noah")["created"] == 0
+
+
+def test_markdown_roundtrip():
+    md = "Das Fahrzeug muss **schnell** und *sicher* sein.\n\n- eins\n- zwei"
+    assert obs.to_markdown(obs.from_markdown(md)) == md
+
+
+def test_router_import_changes(project, db):
+    engine = db.get_bind()
+    Session = sessionmaker(bind=engine)
+    app = FastAPI()
+    app.include_router(obsidian_router.router)
+
+    def _db():
+        s = Session()
+        try:
+            yield s
+        finally:
+            s.close()
+
+    app.dependency_overrides[get_db] = _db
+    role = {"r": "editor"}
+    app.dependency_overrides[get_current_user] = lambda: User(username="u", role=role["r"], is_active=True)
+    c = TestClient(app)
+    base = f"/api/projects/{project['pid']}/obsidian"
+    assert c.post(f"{base}/import-changes").status_code == 409    # noch nicht exportiert
+    c.post(f"{base}/export")
+    edit_note(project, "SRS", project["srs1"], "4 Sekunden", "3 Sekunden")
+    role["r"] = "viewer"
+    assert c.post(f"{base}/import-changes").status_code == 403
+    role["r"] = "editor"
+    r = c.post(f"{base}/import-changes")
+    assert r.status_code == 200 and r.json()["created"] == 1 and len(r.json()["proposal_ids"]) == 1
+    assert c.post("/api/projects/gibtsnicht/obsidian/import-changes").status_code in (404, 409)

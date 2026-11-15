@@ -9,7 +9,7 @@ import '@xyflow/react/dist/style.css';
 import { GitBranch, Table2, List, ArrowLeft, Loader2, AlertCircle, ArrowDown, ArrowUp, ChevronDown } from 'lucide-react';
 import clsx from 'clsx';
 import { getTraceability } from '../../../shared/api/client';
-import { OpenInObsidianButton } from '../../bridges';
+import { ImportFromObsidianButton, OpenInObsidianButton } from '../../bridges';
 import { TraceabilityData, TraceabilityNode } from '../../../shared/types';
 
 // Document color map
@@ -196,6 +196,7 @@ export default function TraceabilityPage() {
 
         <div className="flex items-center gap-3">
           {projectId && <OpenInObsidianButton projectId={projectId} />}
+          {projectId && <ImportFromObsidianButton projectId={projectId} />}
           {/* Document selection */}
           {viewMode === 'graph' || viewMode === 'matrix' ? (
             <DocSelectMenu docList={docList} selectedDocs={selectedDocs} onToggle={toggleDoc} />

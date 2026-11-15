@@ -69,6 +69,7 @@ def to_markdown(raw: str) -> str:
     t = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", t)
     t = re.sub(r"<(strong|b)>(.*?)</\1>", r"**\2**", t, flags=re.S)
     t = re.sub(r"<(em|i)>(.*?)</\1>", r"*\2*", t, flags=re.S)
+    t = re.sub(r"<li[^>]*>\s*<p[^>]*>(.*?)</p>\s*(?=</li>)", r"<li>\1", t, flags=re.S)   # TipTap: <li><p>
     t = re.sub(r"<li[^>]*>", "\n- ", t)
     t = re.sub(r"<br\s*/?>", "\n", t)
     t = re.sub(r"</(p|div|ul|ol|h[1-6]|tr)>", "\n\n", t)
@@ -410,6 +411,138 @@ def _file_sha(p: Path) -> Optional[str]:
         return None
 
 
+# ─── Rückweg (B2): Änderungen aus Obsidian als Vorschläge ────────────────────
+
+GENERATED = re.compile(r"^## (Verlinkt nach oben|Abgeleitet|Ähnlich, aber nicht verlinkt)\s*$", re.M)
+
+
+def _split_note(raw: str) -> Tuple[Dict[str, Any], str]:
+    """(Frontmatter, Textteil bis zur ersten erzeugten Überschrift)."""
+    fm: Dict[str, Any] = {}
+    body = raw.replace("\r\n", "\n")
+    if body.startswith("---\n"):
+        end = body.find("\n---\n", 3)
+        if end != -1:
+            try:
+                loaded = yaml.safe_load(body[4:end])
+                fm = loaded if isinstance(loaded, dict) else {}
+            except yaml.YAMLError:
+                fm = {}
+            body = body[end + 5:]
+    m = GENERATED.search(body)
+    if m:
+        body = body[:m.start()]
+    return fm, body.strip()
+
+
+def _norm(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip()
+
+
+def from_markdown(md: str) -> str:
+    """Gegenstück zu to_markdown (Absätze, Listen, fett, kursiv): in ReqMan ist der Text wieder HTML."""
+    def inline(t: str) -> str:
+        t = html.escape(t, quote=False)
+        t = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", t)
+        return re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<em>\1</em>", t)
+
+    out: List[str] = []
+    for block in re.split(r"\n{2,}", (md or "").strip()):
+        lines = block.split("\n")
+        if all(l.startswith("- ") for l in lines):
+            out.append("<ul>" + "".join(f"<li><p>{inline(l[2:])}</p></li>" for l in lines) + "</ul>")
+        else:
+            out.append("<p>" + "<br>".join(inline(l) for l in lines) + "</p>")
+    return "".join(out)
+
+
+def _protected_files(project_id: str, db, files: Dict[str, str]) -> set:
+    """Notizen mit offenem Obsidian-Vorschlag: der Export überschreibt sie nicht."""
+    if db is None:
+        return set()
+    try:
+        import proposals_service as ps
+        keys = {rel.split("/", 1)[1][:-3]: rel for rel in files if rel.endswith(".md") and "/" in rel}
+        return {keys[p.uid] for p in ps.list_proposals(db, project_id, status="open")
+                if p.source == "obsidian" and p.uid in keys}
+    except Exception as e:
+        logger.warning("Obsidian-Export: Vorschläge nicht lesbar: %s", e)
+        return set()
+
+
+def import_changes(project_id: str, db, user: str) -> dict:
+    """Notizen im Exportordner mit ReqMan vergleichen und Abweichungen als Vorschlag ablegen.
+
+    Nichts wird übernommen. Geändert = der Textteil der Notiz weicht von dem ab, was der Export für den
+    aktuellen ReqMan-Text schreiben würde. Hat sich ReqMan seit dem Export selbst geändert (reqman_hash passt
+    nicht mehr), wird die Notiz als Konflikt gemeldet und kein Vorschlag angelegt.
+    """
+    import proposals_service as ps
+    project = ds.get_project(project_id)
+    if not project:
+        raise ValueError(f"Projekt {project_id} nicht gefunden")
+    target = project_dir(project)
+    manifest = _read_manifest(target)
+    if not manifest:
+        raise ValueError("Das Projekt wurde noch nicht nach Obsidian exportiert")
+    docs, items = _collect(project)
+    prefixes = {d["prefix"] for d in docs}
+    by_uid = {i["uid"]: i for i in items if not i["header"]}
+    texts_by_doc: Dict[str, set] = {}
+    for i in by_uid.values():
+        texts_by_doc.setdefault(i["prefix"], set()).add(_norm(to_markdown(i["text"])))
+    res: Dict[str, Any] = {"created": 0, "existing": 0, "unchanged": 0, "conflicts": 0, "skipped": 0,
+                           "changed": [], "new": [], "conflict_uids": [], "proposal_ids": []}
+
+    def propose(**kw) -> None:
+        before = {p.id for p in ps.list_proposals(db, project_id, status="open")}
+        p = ps.create(db, project_id, source="obsidian", user=user, **kw)
+        res["existing" if p.id in before else "created"] += 1
+        res["proposal_ids"].append(p.id)
+
+    for prefix in sorted(prefixes):
+        folder = target / prefix
+        if not folder.is_dir():
+            continue
+        for f in sorted(folder.glob("*.md")):
+            rel = f"{prefix}/{f.name}"
+            if f.name.startswith("_"):
+                continue
+            try:
+                raw = f.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                res["skipped"] += 1
+                continue
+            fm, body = _split_note(raw)
+            day = datetime.fromtimestamp(f.stat().st_mtime).strftime("%d.%m.%Y")
+            uid = fm.get("uid")
+            if uid:
+                item = by_uid.get(uid)
+                if item is None or fm.get("typ") != "anforderung" or not body:
+                    res["skipped"] += 1
+                    continue
+                if _norm(body) == _norm(to_markdown(item["text"])):
+                    res["unchanged"] += 1
+                    continue
+                if fm.get("reqman_hash") != _sha(item["text"]):
+                    res["conflicts"] += 1
+                    res["conflict_uids"].append(uid)
+                    continue
+                propose(kind="change_text", reason=f"In Obsidian geändert am {day}", uid=uid,
+                        new_text=from_markdown(body))
+                res["changed"].append(uid)
+            elif rel not in manifest and body:
+                if _norm(body) in texts_by_doc.get(prefix, set()):
+                    res["unchanged"] += 1   # steht schon in ReqMan (z. B. früher übernommen)
+                    continue
+                propose(kind="new_item", reason=f"Neue Notiz in Obsidian ({f.name}) vom {day}",
+                        prefix=prefix, text=from_markdown(body))
+                res["new"].append(rel)
+            else:
+                res["skipped"] += 1
+    return res
+
+
 def open_url(target: Path) -> str:
     return "obsidian://open?path=" + quote(str(target / "Start.md"), safe="")
 
@@ -424,6 +557,7 @@ def export_project(project_id: str, db=None, base_url: str = "", dry_run: bool =
     manifest = _read_manifest(target)
     new_hashes = {rel: _sha(c) for rel, c in files.items()}
     written, kept, removed, skipped = [], [], [], 0
+    protected = _protected_files(project_id, db, files)
 
     for rel, content in files.items():
         p = _inside(target, rel)
@@ -433,9 +567,11 @@ def export_project(project_id: str, db=None, base_url: str = "", dry_run: bool =
         if on_disk == new_hashes[rel]:
             skipped += 1
             continue
-        if rel in manifest and on_disk is not None and on_disk != manifest[rel] \
-                and manifest[rel] == new_hashes[rel]:
-            kept.append(rel)   # in Obsidian geändert, ReqMan unverändert: Änderung nicht überschreiben (B2)
+        edited = rel in manifest and on_disk is not None and on_disk != manifest[rel]
+        if edited and (manifest[rel] == new_hashes[rel] or rel in protected):
+            # in Obsidian geändert: nicht überschreiben, wenn ReqMan unverändert ist oder ein offener
+            # Obsidian-Vorschlag auf die Notiz wartet (B2)
+            kept.append(rel)
             new_hashes[rel] = on_disk
             continue
         written.append(rel)

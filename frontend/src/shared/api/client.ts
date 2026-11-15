@@ -199,6 +199,9 @@ export type ObsidianExport = Schemas['ObsidianExport'];
 export type ObsidianStatus = Schemas['ObsidianStatus'];
 export const exportToObsidian = (projectId: string) =>
   api.post<ObsidianExport>(`/projects/${projectId}/obsidian/export`);
+export type ObsidianImport = Schemas['ObsidianImport'];
+export const importFromObsidian = (projectId: string) =>
+  api.post<ObsidianImport>(`/projects/${projectId}/obsidian/import-changes`);
 export const getObsidianStatus = (projectId: string) =>
   api.get<ObsidianStatus>(`/projects/${projectId}/obsidian/status`);
 

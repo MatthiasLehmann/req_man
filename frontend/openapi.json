@@ -2098,6 +2098,71 @@
         "title": "ObsidianExport",
         "type": "object"
       },
+      "ObsidianImport": {
+        "properties": {
+          "changed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed",
+            "type": "array"
+          },
+          "conflict_uids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Conflict Uids",
+            "type": "array"
+          },
+          "conflicts": {
+            "title": "Conflicts",
+            "type": "integer"
+          },
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "existing": {
+            "title": "Existing",
+            "type": "integer"
+          },
+          "new": {
+            "items": {
+              "type": "string"
+            },
+            "title": "New",
+            "type": "array"
+          },
+          "proposal_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Proposal Ids",
+            "type": "array"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "unchanged": {
+            "title": "Unchanged",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created",
+          "existing",
+          "unchanged",
+          "conflicts",
+          "skipped",
+          "changed",
+          "new",
+          "conflict_uids",
+          "proposal_ids"
+        ],
+        "title": "ObsidianImport",
+        "type": "object"
+      },
       "ObsidianStatus": {
         "properties": {
           "exported": {
@@ -6999,6 +7064,54 @@
           }
         ],
         "summary": "Obsidian Export",
+        "tags": [
+          "obsidian"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/obsidian/import-changes": {
+      "post": {
+        "description": "Legt für in Obsidian geänderte oder neue Notizen Vorschläge an; übernommen wird nichts.",
+        "operationId": "obsidian_import_changes_api_projects__project_id__obsidian_import_changes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObsidianImport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Obsidian Import Changes",
         "tags": [
           "obsidian"
         ]

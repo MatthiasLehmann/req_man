@@ -952,6 +952,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/obsidian/import-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Obsidian Import Changes
+         * @description Legt für in Obsidian geänderte oder neue Notizen Vorschläge an; übernommen wird nichts.
+         */
+        post: operations["obsidian_import_changes_api_projects__project_id__obsidian_import_changes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/obsidian/status": {
         parameters: {
             query?: never;
@@ -2077,6 +2097,27 @@ export interface components {
             without_link: number;
             /** Written */
             written: number;
+        };
+        /** ObsidianImport */
+        ObsidianImport: {
+            /** Changed */
+            changed: string[];
+            /** Conflict Uids */
+            conflict_uids: string[];
+            /** Conflicts */
+            conflicts: number;
+            /** Created */
+            created: number;
+            /** Existing */
+            existing: number;
+            /** New */
+            new: string[];
+            /** Proposal Ids */
+            proposal_ids: number[];
+            /** Skipped */
+            skipped: number;
+            /** Unchanged */
+            unchanged: number;
         };
         /** ObsidianStatus */
         ObsidianStatus: {
@@ -4533,6 +4574,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ObsidianExport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    obsidian_import_changes_api_projects__project_id__obsidian_import_changes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObsidianImport"];
                 };
             };
             /** @description Validation Error */
