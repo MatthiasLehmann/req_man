@@ -133,7 +133,20 @@ def accept(db: Session, project_id: str, proposal_id: int, user: str) -> Proposa
     else:
         ds.add_link(project_id, p.uid, payload["target_uid"])
     _decide(db, p, "accepted", user)
+    _store_case(project_id, p)
     return p
+
+
+def _store_case(project_id: str, p: Proposal) -> None:
+    """L2: angenommener Textvorschlag kommt als Fall „alt → neu“ in den Fallspeicher (scheitert still)."""
+    try:
+        import cases_service
+        case = cases_service.proposal_case(p)
+        if case:
+            cases_service.upsert_cases(project_id, [case])
+    except Exception as e:  # noqa: BLE001 – ohne Ollama später per sync-cases nachtragen
+        import logging
+        logging.getLogger(__name__).warning("Fall zu Vorschlag %s nicht gespeichert: %s", p.id, e)
 
 
 def reject(db: Session, project_id: str, proposal_id: int, user: str) -> Proposal:

@@ -194,6 +194,18 @@ export const acceptProposal = (projectId: string, id: number) =>
 export const rejectProposal = (projectId: string, id: number) =>
   api.post<Proposal>(`/projects/${projectId}/proposals/${id}/reject`);
 
+// Rückmeldung zu KI-Befunden (L2) – „trifft zu“ / „trifft nicht zu“, speist den Fallspeicher
+export type FindingFeedback = Schemas['FeedbackResponse'];
+export type FindingVerdict = 'applies' | 'not_applies';
+export const listFindingFeedback = (projectId: string, params?: { uid?: string; only_mine?: boolean }) =>
+  api.get<FindingFeedback[]>(`/projects/${projectId}/finding-feedback`, { params });
+export const sendFindingFeedback = (
+  projectId: string,
+  body: { uid: string; category: string; finding: string; verdict: FindingVerdict },
+) => api.post<FindingFeedback>(`/projects/${projectId}/finding-feedback`, body);
+export const deleteFindingFeedback = (projectId: string, id: number) =>
+  api.delete(`/projects/${projectId}/finding-feedback/${id}`);
+
 // „Frag ReqMan“ (A4) – Assistent mit Quellen, Hilfe-Suche, offene Punkte
 export type AssistantAnswer = Schemas['AssistantAnswer'];
 export type AssistantSource = Schemas['AssistantSource'];

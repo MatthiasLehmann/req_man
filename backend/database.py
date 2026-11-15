@@ -72,6 +72,22 @@ class Proposal(Base):
     decided_at = Column(DateTime, nullable=True)
 
 
+class FindingFeedback(Base):
+    """Rückmeldung eines Menschen zu einem KI-Befund („trifft zu“ / „trifft nicht zu“), Quelle des Fallspeichers (L2)."""
+    __tablename__ = "finding_feedback"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, nullable=False, index=True)
+    uid = Column(String, nullable=False, index=True)
+    category = Column(String, nullable=False)
+    finding = Column(Text, nullable=False)              # Befundtext (Beschreibung)
+    requirement_text = Column(Text, nullable=False)     # Text der Anforderung zum Zeitpunkt des Urteils
+    text_hash = Column(String, nullable=False)          # SHA-256 des Anforderungstexts
+    verdict = Column(String, nullable=False)            # applies | not_applies
+    created_by = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 def get_db():
     db = SessionLocal()
     try:

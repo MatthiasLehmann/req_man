@@ -1369,6 +1369,77 @@ def find_number_peers(project_id: str, uid: str, item: Dict[str, Any]) -> List[D
     return [p for u, p in peers.items() if u != uid and p["text"]]
 
 
+# ─── L2: Rückmeldung zu Befunden (Fallspeicher), Wirkung nur im Code ───────────
+#
+# Menschen urteilen je Befund „trifft zu“ / „trifft nicht zu“ (feedback_service); die Urteile liegen mit dem
+# Anforderungstext als Fälle im Fallspeicher (cases_service). Zu jedem neuen Befund werden die ähnlichsten Fälle
+# GLEICHER KATEGORIE gesucht: Mindestens zwei „trifft nicht zu“ aus verschiedenen Anforderungen ab FEEDBACK_MIN_SIM
+# (und mehr „nicht zu“ als „zu“) → der Befund wird um eine Stufe herabgesetzt und mit Verweis gekennzeichnet.
+# Nie ausblenden; high/critical nie unter medium. Kein Modellaufruf, nichts im Prompt.
+# Schaltbar über AI_FEEDBACK (Standard aus = Verhalten wie V23), Schwelle über AI_FEEDBACK_MIN_SIM.
+
+FEEDBACK_ENV = "AI_FEEDBACK"
+FEEDBACK_MIN_SIM_DEFAULT = 0.80
+FEEDBACK_MIN_CASES = 2
+FEEDBACK_MARK = "Rückmeldung:"
+_SEV_ORDER = ["low", "medium", "high", "critical"]
+
+
+def feedback_enabled() -> bool:
+    return os.environ.get(FEEDBACK_ENV, "").strip().lower() in ("1", "true", "on", "yes", "ja")
+
+
+def feedback_min_sim() -> float:
+    try:
+        return float(os.environ.get("AI_FEEDBACK_MIN_SIM", "").replace(",", "."))
+    except ValueError:
+        return FEEDBACK_MIN_SIM_DEFAULT
+
+
+def _demoted(severity: str) -> Optional[str]:
+    """Eine Stufe tiefer; high/critical nie unter medium, low bleibt (dann keine Herabsetzung)."""
+    sev = (severity or "").strip().lower()
+    if sev not in _SEV_ORDER or sev == "low":
+        return None
+    return _SEV_ORDER[_SEV_ORDER.index(sev) - 1]
+
+
+def apply_feedback(project_id: str, text: str, issues: List["AiQualityIssue"],
+                   min_sim: Optional[float] = None) -> Tuple[List["AiQualityIssue"], Dict[str, Any]]:
+    """Setzt Befunde herab, zu denen es ähnliche abgelehnte Befunde gibt. Gibt (Befunde, Protokoll) zurück; bei
+    leerem Fallspeicher oder Fehlern bleiben die Befunde unverändert."""
+    info: Dict[str, Any] = {"min_sim": min_sim, "demoted": [], "cases": 0}
+    if not issues or not text:
+        return issues, info
+    min_sim = feedback_min_sim() if min_sim is None else min_sim
+    info["min_sim"] = min_sim
+    try:
+        import cases_service
+        cases = cases_service.similar_cases(project_id, text, kind="finding", min_score=min_sim, k=50)
+    except Exception as e:  # noqa: BLE001 – Zusatz darf die Analyse nie verhindern (z. B. Ollama aus)
+        logger.warning("Rückmeldung: Fallspeicher nicht verfügbar (%s): %s", project_id, e)
+        info["error"] = str(e)
+        return issues, info
+    info["cases"] = len(cases)
+    out: List[AiQualityIssue] = []
+    for issue in issues:
+        new_sev = _demoted(issue.severity)
+        mine = [c for c in cases if (c.get("category") or "").lower() == (issue.category or "").lower()]
+        no = {c["hash"]: c for c in mine if c.get("verdict") == "not_applies"}   # je Anforderungstext einmal
+        yes = {c["hash"] for c in mine if c.get("verdict") == "applies"}
+        if new_sev is None or len(no) < FEEDBACK_MIN_CASES or len(no) <= len(yes):
+            out.append(issue)
+            continue
+        refs = list(dict.fromkeys(c.get("uid") for c in no.values() if c.get("uid")))[:2]
+        example = f", z. B. {' und '.join(refs)}" if refs else ""
+        mark = (f" ({FEEDBACK_MARK} von {issue.severity} auf {new_sev} herabgesetzt – ähnlich zu {len(no)} "
+                f"abgelehnten Befunden{example})")
+        info["demoted"].append({"category": issue.category, "from": issue.severity, "to": new_sev,
+                                "cases": [{"uid": c.get("uid"), "score": c["score"]} for c in no.values()]})
+        out.append(issue.model_copy(update={"severity": new_sev, "description": issue.description + mark}))
+    return out, info
+
+
 # ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
 
 
@@ -1539,6 +1610,10 @@ class QualityAnalyzer:
             peers = find_number_peers(project_id, uid, item)
             number_issues = compare_numbers(uid, text, peers)
         result.issues = rule_issues + ai_issues + number_issues
+        # L2: Rückmeldung – Befunde mit ähnlichen abgelehnten Befunden gleicher Kategorie eine Stufe herabsetzen
+        feedback_info = None
+        if feedback_enabled():
+            result.issues, feedback_info = apply_feedback(project_id, text, result.issues)
         # V19: Gesamtnote aus Teilnoten, Profilgewichten und den endgültigen Befunden
         result.score = compute_score(result.score, result.issues, profile)
 
@@ -1556,6 +1631,8 @@ class QualityAnalyzer:
                     "findings": [i.description for i in number_issues]}
             if project_protocol is not None:
                 protocol["project_check"] = project_protocol
+            if feedback_info is not None:
+                protocol["feedback_check"] = feedback_info
         save_quality_result(project_id, uid, result, protocol=protocol)
         return result
 

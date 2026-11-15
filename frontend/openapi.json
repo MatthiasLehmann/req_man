@@ -1307,6 +1307,110 @@
         "title": "DocumentWithType",
         "type": "object"
       },
+      "FeedbackCreate": {
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "finding": {
+            "description": "Befundtext (Beschreibung)",
+            "minLength": 1,
+            "title": "Finding",
+            "type": "string"
+          },
+          "uid": {
+            "title": "Uid",
+            "type": "string"
+          },
+          "verdict": {
+            "description": "applies | not_applies",
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uid",
+          "category",
+          "finding",
+          "verdict"
+        ],
+        "title": "FeedbackCreate",
+        "type": "object"
+      },
+      "FeedbackResponse": {
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "finding": {
+            "title": "Finding",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "requirement_text": {
+            "title": "Requirement Text",
+            "type": "string"
+          },
+          "text_hash": {
+            "title": "Text Hash",
+            "type": "string"
+          },
+          "uid": {
+            "title": "Uid",
+            "type": "string"
+          },
+          "verdict": {
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "uid",
+          "category",
+          "finding",
+          "requirement_text",
+          "text_hash",
+          "verdict",
+          "created_by",
+          "created_at"
+        ],
+        "title": "FeedbackResponse",
+        "type": "object"
+      },
       "FieldChange": {
         "properties": {
           "conflict": {
@@ -3134,6 +3238,24 @@
           "model"
         ],
         "title": "SimulinkSidecar",
+        "type": "object"
+      },
+      "SyncResult": {
+        "properties": {
+          "findings": {
+            "title": "Findings",
+            "type": "integer"
+          },
+          "proposals": {
+            "title": "Proposals",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "findings",
+          "proposals"
+        ],
+        "title": "SyncResult",
         "type": "object"
       },
       "Token": {
@@ -5369,6 +5491,234 @@
         "summary": "Export Project",
         "tags": [
           "export"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/finding-feedback": {
+      "get": {
+        "operationId": "list_feedback_api_projects__project_id__finding_feedback_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "uid",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Uid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "only_mine",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Only Mine",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FeedbackResponse"
+                  },
+                  "title": "Response List Feedback Api Projects  Project Id  Finding Feedback Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Feedback",
+        "tags": [
+          "finding-feedback"
+        ]
+      },
+      "post": {
+        "operationId": "create_feedback_api_projects__project_id__finding_feedback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Feedback",
+        "tags": [
+          "finding-feedback"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/finding-feedback/sync-cases": {
+      "post": {
+        "operationId": "sync_cases_api_projects__project_id__finding_feedback_sync_cases_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Sync Cases",
+        "tags": [
+          "finding-feedback"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/finding-feedback/{feedback_id}": {
+      "delete": {
+        "operationId": "delete_feedback_api_projects__project_id__finding_feedback__feedback_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "feedback_id",
+            "required": true,
+            "schema": {
+              "title": "Feedback Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete Feedback",
+        "tags": [
+          "finding-feedback"
         ]
       }
     },

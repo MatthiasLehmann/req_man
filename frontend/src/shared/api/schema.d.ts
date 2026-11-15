@@ -541,6 +541,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/finding-feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Feedback */
+        get: operations["list_feedback_api_projects__project_id__finding_feedback_get"];
+        put?: never;
+        /** Create Feedback */
+        post: operations["create_feedback_api_projects__project_id__finding_feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/finding-feedback/sync-cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sync Cases */
+        post: operations["sync_cases_api_projects__project_id__finding_feedback_sync_cases_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/finding-feedback/{feedback_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Feedback */
+        delete: operations["delete_feedback_api_projects__project_id__finding_feedback__feedback_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/git/log": {
         parameters: {
             query?: never;
@@ -1765,6 +1817,46 @@ export interface components {
             /** Sep */
             sep: string;
         };
+        /** FeedbackCreate */
+        FeedbackCreate: {
+            /** Category */
+            category: string;
+            /**
+             * Finding
+             * @description Befundtext (Beschreibung)
+             */
+            finding: string;
+            /** Uid */
+            uid: string;
+            /**
+             * Verdict
+             * @description applies | not_applies
+             */
+            verdict: string;
+        };
+        /** FeedbackResponse */
+        FeedbackResponse: {
+            /** Category */
+            category: string;
+            /** Created At */
+            created_at: string | null;
+            /** Created By */
+            created_by: string | null;
+            /** Finding */
+            finding: string;
+            /** Id */
+            id: number;
+            /** Project Id */
+            project_id: string;
+            /** Requirement Text */
+            requirement_text: string;
+            /** Text Hash */
+            text_hash: string;
+            /** Uid */
+            uid: string;
+            /** Verdict */
+            verdict: string;
+        };
         /** FieldChange */
         FieldChange: {
             /** Conflict */
@@ -2383,6 +2475,13 @@ export interface components {
             model: string;
             /** Requirement Uid */
             requirement_uid: string;
+        };
+        /** SyncResult */
+        SyncResult: {
+            /** Findings */
+            findings: number;
+            /** Proposals */
+            proposals: number;
         };
         /** Token */
         Token: {
@@ -3632,6 +3731,136 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feedback_api_projects__project_id__finding_feedback_get: {
+        parameters: {
+            query?: {
+                uid?: string | null;
+                only_mine?: boolean;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_feedback_api_projects__project_id__finding_feedback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_cases_api_projects__project_id__finding_feedback_sync_cases_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_feedback_api_projects__project_id__finding_feedback__feedback_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                feedback_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
