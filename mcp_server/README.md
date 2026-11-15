@@ -14,7 +14,7 @@ von ReqMan und enthält keine eigene Fachlogik; Rollen und Rechte des angemeldet
 | `search_requirements` | Suche nach Bedeutung (zuerst, wenn die UID unbekannt ist) |
 | `find_similar_requirements` | Dubletten und mögliche Widersprüche |
 | `suggest_links` | Link-Kandidaten aus dem Eltern-Dokument (nur Vorschläge) |
-| `analyze_impact` | Was von einer Änderung betroffen wäre |
+| `analyze_impact` | Was von einer Änderung betroffen wäre (mit Ansicht, siehe „MCP Apps“) |
 | `check_requirement_quality` | Qualitätsprüfung auslösen – **speichert** das Ergebnis (nicht nur lesend) |
 | `propose_text_change`, `propose_new_requirement`, `propose_link` | **Legen einen Vorschlag an**, ändern nichts; ein Mensch übernimmt oder lehnt ab (ReqMan → „Vorschläge“). Begründung Pflicht |
 | `reqman_help` | Wie etwas in ReqMan bedient wird |
@@ -22,6 +22,34 @@ von ReqMan und enthält keine eigene Fachlogik; Rollen und Rechte des angemeldet
 Prompts: `einstieg(project)`, `review_dokument(project, document)`. Alle lesenden Werkzeuge sind als
 `read_only` markiert; der Server ändert keine Anforderungen. Vorschläge dürfen auch `viewer` anlegen,
 übernehmen dürfen nur `editor` und `admin` – in der ReqMan-Oberfläche.
+
+## Stand der Spezifikation
+
+Der Server nutzt das Python-SDK `mcp` **2.3.0** (Stand 15.11.2026, die neueste Version; `requirements.txt`:
+`>=2.3,<3`). Ab SDK 2.0.0 (28.07.2026, Beta seit 2.0.0b1) spricht es die MCP-Spezifikation **2026-07-28** und
+bedient ältere Revisionen vom selben Server aus; ein Live-Aufruf über stdio hat 2026-07-28 ausgehandelt. Der
+Server ist zustandslos und nutzt weder Sampling, Roots, Logging noch Sitzungen (alle drei sind in 2026-07-28
+abgekündigt). Er ist nur ein Client der REST-API. Einzelheiten: `experimente\B0_mcp_stand.md`.
+
+## MCP Apps
+
+Zwei Ansichten als `ui://`-Ressourcen (`text/html;profile=mcp-app`, Erweiterung `io.modelcontextprotocol/ui`),
+die ein Host mit MCP-Apps-Unterstützung in einem abgeschotteten Rahmen zeigt:
+
+| Ressource | Gehört zu | Inhalt |
+|---|---|---|
+| `ui://reqman/proposal.html` | `propose_text_change`, `propose_new_requirement`, `propose_link` | Vorschlagskarte: Bisher/Vorschlag (Wortvergleich), Begründung, Status; Knöpfe „Übernehmen“/„Ablehnen“ nur, wenn der Benutzer editor/admin ist |
+| `ui://reqman/impact.html` | `analyze_impact` | abhängige, übergeordnete und ähnliche Anforderungen |
+
+- **Text bleibt:** Die Werkzeuge liefern den gleichen Text wie ohne Apps. Nur wenn der Host MCP Apps aushandelt
+  (`client_supports_apps`), kommen die Daten der Ansicht zusätzlich als `structuredContent`; andere Hosts verlieren nichts.
+- **Knöpfe:** `accept_proposal` und `reject_proposal` sind nur für die Ansicht gedacht (`visibility: ["app"]`; ein
+  Host zeigt sie dem Agenten nicht). Rolle und veraltete Vorschläge prüft das Backend (403/409). Der Agent selbst
+  entscheidet also weiterhin nichts.
+- **Aufbau:** `views\*.html` (eine Datei je Ansicht, ohne externe Skripte, Texte nur über `textContent`),
+  `viewsridge.js` (Verbindung zum Host, JSON-RPC über `postMessage`), `viewsase.css`; `server.py` setzt sie zusammen.
+- **Geprüft** nur in einer eigenen Minimal-Hülle (Ablauf `ui/initialize`, Tool-Ergebnis, Knopfklick, helles/dunkles
+  Theme), **nicht** in Claude, ChatGPT, VS Code oder Goose. Siehe `experimente\B4_mcp_apps.md`.
 
 ## Einrichtung
 
