@@ -8,6 +8,7 @@ import { exportDocument, exportForExcel, exportPdf, type ExportFormat } from '..
 import { ImportFromObsidianButton, OpenInObsidianButton } from '../../../bridges';
 import ExcelFileImport, { type ExcelFileImportHandle } from './ExcelFileImport';
 import ImportDialog from './ImportDialog';
+import { useRegisterAction, withShortcut } from '../../../../shared/search';
 
 interface Props {
   projectId: string;
@@ -21,12 +22,12 @@ interface Props {
 
 // ─── Menü ─────────────────────────────────────────────────────────────────────
 
-function Menu({ label, icon, busy, children }: {
+function Menu({ label, icon, busy, open, setOpen, title, children }: {
   label: string; icon: ReactNode; busy?: boolean;
+  open: boolean; setOpen: (v: boolean | ((o: boolean) => boolean)) => void; title?: string;
   /** Bekommt eine Funktion zum Schließen des Menüs */
   children: (close: () => void) => ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,11 +37,12 @@ function Menu({ label, icon, busy, children }: {
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
-  }, [open]);
+  }, [open, setOpen]);
 
   return (
     <div className="relative" ref={ref}>
       <button
+        title={title}
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu" aria-expanded={open}
         className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium px-3 py-1.5 rounded-lg
@@ -86,6 +88,12 @@ export default function ImportExportMenus({ projectId, selectedPrefix, onSelectD
   const obsidianIn = useRef<HTMLDivElement>(null);
   const [clipboardOpen, setClipboardOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+
+  // Befehlsfeld/Kürzel (C5): „Importieren“ und „Exportieren“ öffnen das jeweilige Menü
+  useRegisterAction('import', () => { setExportOpen(false); setImportOpen(true); }, canEdit);
+  useRegisterAction('export', () => { setImportOpen(false); setExportOpen(true); }, !!selectedPrefix);
 
   const noDoc = 'Zuerst links ein Dokument auswählen';
 
@@ -126,7 +134,7 @@ export default function ImportExportMenus({ projectId, selectedPrefix, onSelectD
   return (
     <div className={clsx('flex items-center gap-2', className)}>
       {canEdit && (
-        <Menu label="Importieren" icon={<Upload className="w-3.5 h-3.5" />}>
+        <Menu label="Importieren" icon={<Upload className="w-3.5 h-3.5" />} open={importOpen} setOpen={setImportOpen} title={withShortcut('Importieren', 'import')}>
           {(close) => (<>
             <Item icon={<FileSpreadsheet className="w-4 h-4 text-green-600" />}
                   hint={selectedPrefix ? `Excel-Datei in ${selectedPrefix} laden` : 'Excel-Datei laden'}
@@ -146,7 +154,7 @@ export default function ImportExportMenus({ projectId, selectedPrefix, onSelectD
         </Menu>
       )}
 
-      <Menu label="Exportieren" icon={<Download className="w-3.5 h-3.5" />} busy={busy}>
+      <Menu label="Exportieren" icon={<Download className="w-3.5 h-3.5" />} busy={busy} open={exportOpen} setOpen={setExportOpen} title={withShortcut('Exportieren', 'export')}>
         {(close) => (<>
           <Item icon={<FileSpreadsheet className="w-4 h-4 text-green-600" />} disabled={!selectedPrefix}
                 hint={selectedPrefix ? 'Zum Bearbeiten und Kommentieren – danach über „Excel-Datei laden“ zurückholen' : noDoc}

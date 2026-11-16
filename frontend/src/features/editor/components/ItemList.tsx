@@ -10,6 +10,8 @@ import { listItems, createItem, deleteItem } from '../../../shared/api/client';
 import { Item } from '../../../shared/types';
 import { useAuthStore } from '../../../shared/auth/authStore';
 import ImportDialog from './import/ImportDialog';
+import { useRegisterAction, withShortcut } from '../../../shared/search';
+
 import { parseClipboardTable } from './import/tableParsing';
 
 // ─── Level-Hilfsfunktionen ────────────────────────────────────────────────────
@@ -204,6 +206,8 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
     onError: () => toast.error('Fehler beim Löschen'),
   });
 
+  useRegisterAction('new-item', () => createMut.mutate(), canEdit && !createMut.isPending);
+
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
@@ -233,7 +237,7 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
             onClick={() => createMut.mutate()}
             disabled={createMut.isPending}
             className="btn-primary text-xs py-1 px-2"
-            title="Neue Anforderung"
+            title={withShortcut('Neue Anforderung', 'new-item')}
           >
             {createMut.isPending
               ? <Loader2 className="w-3 h-3 animate-spin" />

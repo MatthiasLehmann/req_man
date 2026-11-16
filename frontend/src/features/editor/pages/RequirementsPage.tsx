@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { FileText, AlertTriangle, PanelsTopLeft, Table2 } from 'lucide-react';
 import clsx from 'clsx';
 import { getProject } from '../../../shared/api/client';
+import { useRegisterAction, withShortcut } from '../../../shared/search';
+
 import { useProjectStore } from '../../../shared/store/projectStore';
 import DocumentTree from '../components/DocumentTree';
 import ItemList from '../components/ItemList';
@@ -264,6 +266,9 @@ export default function RequirementsPage() {
     setPendingAction(null);
   };
 
+  useRegisterAction('view-table', () => guardedAction(() => setView('table')), view !== 'table');
+  useRegisterAction('view-list', () => guardedAction(() => setView('editor')), view !== 'editor');
+
   // ── Kein Projekt ─────────────────────────────────────────────────────────────
   if (!projectId) return <EmptyProject icon={FileText} />;
 
@@ -287,6 +292,7 @@ export default function RequirementsPage() {
         ] as const).map(([mode, label, Icon]) => (
           <button
             key={mode}
+            title={withShortcut(label, mode === 'table' ? 'view-table' : 'view-list')}
             onClick={() => view !== mode && guardedAction(() => setView(mode))}
             className={clsx('inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md transition-colors',
               view === mode ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100')}
