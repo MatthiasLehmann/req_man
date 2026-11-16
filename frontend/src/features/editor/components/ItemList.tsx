@@ -1,12 +1,12 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, Loader2, CheckCircle, Circle, AlertCircle,
-  Tag, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, Download, FileSpreadsheet,
+  Tag, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, FileSpreadsheet,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
-import { listItems, createItem, deleteItem, exportDocument, exportPdf, ExportFormat } from '../../../shared/api/client';
+import { listItems, createItem, deleteItem } from '../../../shared/api/client';
 import { Item } from '../../../shared/types';
 import { useAuthStore } from '../../../shared/auth/authStore';
 import ImportDialog from './import/ImportDialog';
@@ -131,35 +131,6 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
     return () => document.removeEventListener('paste', onPaste);
   }, [canEdit, importTable]);
 
-  const [exportOpen, setExportOpen] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const exportRef = useRef<HTMLDivElement>(null);
-
-  const handlePdf = async () => {
-    setExportOpen(false);
-    setExporting(true);
-    try {
-      await exportPdf(projectId, prefix);
-    } catch (e: any) {
-      toast.error(e.message || 'PDF-Satz fehlgeschlagen');
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const handleExport = async (format: ExportFormat) => {
-    setExportOpen(false);
-    setExporting(true);
-    try {
-      await exportDocument(projectId, prefix, format);
-      toast.success(`${prefix}.${format === 'yaml' ? 'yml' : format} heruntergeladen`);
-    } catch (e: any) {
-      toast.error(e.message || 'Export fehlgeschlagen');
-    } finally {
-      setExporting(false);
-    }
-  };
-
   const { data: itemsRes, isLoading } = useQuery({
     queryKey: ['items', projectId, prefix],
     queryFn: () => listItems(projectId, prefix),
@@ -241,7 +212,7 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
           type="text"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder="Suchen..."
+          placeholder="Filtern…"
           className="flex-1 text-sm px-2 py-1 border border-gray-200 rounded
                      focus:outline-none focus:ring-1 focus:ring-primary-400"
         />
@@ -270,54 +241,6 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
           </button>
         )}
 
-        {canEdit && (
-          <button
-            onClick={() => setImportTable([])}
-            className="p-1 text-gray-400 hover:text-green-700 transition-colors"
-            title="Aus Excel einfügen (oder Tabelle kopieren und hier Strg+V drücken)"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-          </button>
-        )}
-
-        {/* Export-Dropdown */}
-        <div className="relative" ref={exportRef}>
-          <button
-            onClick={() => setExportOpen((o) => !o)}
-            disabled={exporting}
-            title="Dokument exportieren"
-            className="p-1 text-gray-400 hover:text-gray-700 transition-colors"
-          >
-            {exporting
-              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              : <Download className="w-3.5 h-3.5" />}
-          </button>
-          {exportOpen && (
-            <div
-              className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200
-                         rounded-lg shadow-lg py-1 min-w-[130px]"
-              onMouseLeave={() => setExportOpen(false)}
-            >
-              {(['xlsx', 'csv', 'tsv', 'yaml'] as ExportFormat[]).map((fmt) => (
-                <button
-                  key={fmt}
-                  onClick={() => handleExport(fmt)}
-                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700
-                             hover:bg-gray-50 transition-colors"
-                >
-                  {fmt.toUpperCase()}
-                </button>
-              ))}
-              <button
-                onClick={handlePdf}
-                className="w-full text-left px-3 py-1.5 text-xs text-gray-700 border-t border-gray-100
-                           hover:bg-gray-50 transition-colors whitespace-nowrap"
-              >
-                PDF (gesetzt)
-              </button>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Zähler */}

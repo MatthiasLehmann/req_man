@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Loader2, AlertCircle, CheckCircle, Circle, ExternalLink, Plus, FileSpreadsheet, X, Lock,
+  Loader2, AlertCircle, CheckCircle, Circle, ExternalLink, Plus, X, Lock, ArrowUp, ArrowDown, ArrowUpDown, Filter,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
@@ -10,6 +10,9 @@ import type { AttributeDefinition, Item } from '../../../../shared/types';
 import { useAuthStore } from '../../../../shared/auth/authStore';
 import ImportDialog from '../import/ImportDialog';
 import { attributesFor, parseClipboardTable } from '../import/tableParsing';
+import {
+  useColumnView, columnMatches, compareCells, ColumnPicker, type SortState,
+} from './columnView';
 
 // ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
 
@@ -149,7 +152,9 @@ export default function RequirementsTable({ projectId, prefix, onOpenItem }: Pro
   });
   const { data: attrsRes } = useQuery({ queryKey: ['attributes'], queryFn: getAttributes });
   const attrs = useMemo(() => attributesFor(prefix, attrsRes?.data ?? []), [prefix, attrsRes]);
-  const columns = useMemo(() => buildColumns(attrs), [attrs]);
+  const allColumns = useMemo(() => buildColumns(attrs), [attrs]);
+  const view = useColumnView(prefix, allColumns);
+  const columns = view.shown;
 
   const [filter, setFilter] = useState('');
   const [onlyIncomplete, setOnlyIncomplete] = useState(false);
@@ -167,12 +172,26 @@ export default function RequirementsTable({ projectId, prefix, onOpenItem }: Pro
     () => allItems.filter((it) => columns.some((c) => isMissing(it, c))),
     [allItems, columns],
   );
+  const colFilterCount = Object.values(view.filters).filter((v) => v.trim()).length;
   const rows = useMemo(() => {
     const q = filter.toLowerCase();
-    return (onlyIncomplete ? incomplete : allItems).filter((it) =>
-      !q || it.uid.toLowerCase().includes(q) || it.text.toLowerCase().includes(q)
-      || Object.values(it.custom_attributes ?? {}).some((v) => String(v).toLowerCase().includes(q)));
-  }, [allItems, incomplete, onlyIncomplete, filter]);
+    const active = Object.entries(view.filters).filter(([, v]) => v.trim());
+    let list = (onlyIncomplete ? incomplete : allItems).filter((it) =>
+      (!q || it.uid.toLowerCase().includes(q) || it.text.toLowerCase().includes(q)
+        || Object.values(it.custom_attributes ?? {}).some((v) => String(v).toLowerCase().includes(q)))
+      && active.every(([id, raw]) => {
+        const col = id === 'uid' ? null : (allColumns.find((c) => c.id === id) ?? null);
+        return columnMatches(it, col, raw, cellValue, isBoolCol);
+      }));
+    if (view.sort) {
+      const { id, dir } = view.sort;
+      const col = id === 'uid' ? null : (allColumns.find((c) => c.id === id) ?? null);
+      if (id === 'uid' || col) {
+        list = [...list].sort((a, b) => dir * compareCells(a, b, col, cellValue, compareLevel));
+      }
+    }
+    return list;
+  }, [allItems, incomplete, onlyIncomplete, filter, view.filters, view.sort, allColumns]);
 
   // ── Speichern ──────────────────────────────────────────────────────────────
   const replaceItem = (updated: Item) => {
@@ -351,6 +370,18 @@ export default function RequirementsTable({ projectId, prefix, onOpenItem }: Pro
           className="text-sm px-2 py-1 border border-gray-200 rounded w-56 focus:outline-none focus:ring-1 focus:ring-primary-400"
         />
         <span className="text-xs text-gray-400">{rows.length} von {allItems.length} Einträgen</span>
+        <ColumnPicker
+          columns={allColumns} hidden={view.hidden} onToggle={(id) => { setActive(null); view.toggle(id); }}
+          onReset={() => { setActive(null); view.reset(); }}
+        />
+        <button
+          onClick={() => view.setFiltersOpen(!view.filtersOpen)}
+          className={clsx('text-xs inline-flex items-center gap-1 px-2 py-1 rounded border transition-colors',
+            view.filtersOpen || colFilterCount ? 'border-primary-300 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50')}
+          title="Eingabefeld je Spalte zum Filtern ein-/ausblenden"
+        >
+          <Filter className="w-3.5 h-3.5" /> Spaltenfilter{colFilterCount ? ` (${colFilterCount})` : ''}
+        </button>
         <button
           onClick={() => setOnlyIncomplete((v) => !v)}
           className={clsx('text-xs inline-flex items-center gap-1 px-2 py-1 rounded border transition-colors',
@@ -364,11 +395,6 @@ export default function RequirementsTable({ projectId, prefix, onOpenItem }: Pro
             : <><AlertCircle className="w-3.5 h-3.5" /> {incomplete.length} unvollständig{onlyIncomplete ? ' (gefiltert)' : ''}</>}
         </button>
         <div className="ml-auto flex items-center gap-2">
-          {canEdit && (
-            <button onClick={() => setImportTable([])} className="btn-secondary text-xs py-1 px-2" title="Aus Excel einfügen">
-              <FileSpreadsheet className="w-3.5 h-3.5 text-green-600" /> Aus Excel
-            </button>
-          )}
           <span className="text-[11px] text-gray-400 hidden xl:inline">
             Pfeiltasten · Enter/F2 bearbeiten · Tab weiter · Esc abbrechen
           </span>
@@ -415,15 +441,35 @@ export default function RequirementsTable({ projectId, prefix, onOpenItem }: Pro
               <th className="border-b border-r border-gray-200 px-2 py-1.5">
                 {canEdit && <input type="checkbox" checked={allSelected} onChange={toggleAllSel} className="rounded border-gray-300" />}
               </th>
-              <th className="border-b border-r border-gray-200 px-2 py-1.5 text-left font-medium">UID</th>
+              <th className="border-b border-r border-gray-200 px-2 py-1.5 text-left font-medium cursor-pointer select-none hover:bg-gray-100"
+                  onClick={() => view.cycleSort('uid')} title="Nach UID sortieren">
+                <span className="inline-flex items-center gap-1">UID <SortIcon id="uid" sort={view.sort} /></span>
+              </th>
               {columns.map((c) => (
-                <th key={c.id} className="border-b border-r border-gray-200 px-2 py-1.5 text-left font-medium truncate"
-                    title={c.attr?.help_text ?? (c.attr?.possible_values ? `erlaubt: ${c.attr.possible_values.join(', ')}` : undefined)}>
-                  {c.label}{c.required && <span className="text-red-500"> *</span>}
+                <th key={c.id} className="border-b border-r border-gray-200 px-2 py-1.5 text-left font-medium truncate cursor-pointer select-none hover:bg-gray-100"
+                    onClick={() => view.cycleSort(c.id)}
+                    title={`${c.attr?.help_text ?? (c.attr?.possible_values ? `erlaubt: ${c.attr.possible_values.join(', ')}` : c.label)} – Klick sortiert`}>
+                  <span className="inline-flex items-center gap-1">
+                    {c.label}{c.required && <span className="text-red-500"> *</span>} <SortIcon id={c.id} sort={view.sort} />
+                  </span>
                 </th>
               ))}
               <th className="border-b border-gray-200" />
             </tr>
+            {view.filtersOpen && (
+              <tr>
+                <th className="border-b border-r border-gray-200 bg-gray-50" />
+                <th className="border-b border-r border-gray-200 px-1 py-1 bg-gray-50">
+                  <FilterInput value={view.filters['uid'] ?? ''} onChange={(v) => view.setFilter('uid', v)} />
+                </th>
+                {columns.map((c) => (
+                  <th key={c.id} className="border-b border-r border-gray-200 px-1 py-1 bg-gray-50">
+                    <FilterInput value={view.filters[c.id] ?? ''} onChange={(v) => view.setFilter(c.id, v)} bool={isBoolCol(c)} />
+                  </th>
+                ))}
+                <th className="border-b border-gray-200 bg-gray-50" />
+              </tr>
+            )}
           </thead>
           <tbody>
             {rows.map((item, r) => (
@@ -475,7 +521,7 @@ export default function RequirementsTable({ projectId, prefix, onOpenItem }: Pro
                 </td>
               </tr>
             ))}
-            {canEdit && !onlyIncomplete && !filter && (
+            {canEdit && !onlyIncomplete && !filter && !colFilterCount && (
               <DraftRow
                 columns={columns} attrs={attrs}
                 onCreate={async (text, custom) => {
@@ -487,7 +533,7 @@ export default function RequirementsTable({ projectId, prefix, onOpenItem }: Pro
             )}
           </tbody>
         </table>
-        {rows.length === 0 && (onlyIncomplete || filter) && (
+        {rows.length === 0 && (onlyIncomplete || filter || colFilterCount > 0) && (
           <p className="text-center text-sm text-gray-400 py-8">Keine Treffer</p>
         )}
       </div>
@@ -501,6 +547,24 @@ export default function RequirementsTable({ projectId, prefix, onOpenItem }: Pro
         />
       )}
     </div>
+  );
+}
+
+function SortIcon({ id, sort }: { id: string; sort: SortState | null }) {
+  if (sort?.id !== id) return <ArrowUpDown className="w-3 h-3 opacity-25 shrink-0" />;
+  return sort.dir === 1
+    ? <ArrowUp className="w-3 h-3 text-primary-600 shrink-0" />
+    : <ArrowDown className="w-3 h-3 text-primary-600 shrink-0" />;
+}
+
+function FilterInput({ value, onChange, bool }: { value: string; onChange: (v: string) => void; bool?: boolean }) {
+  const cls = 'w-full text-xs border border-gray-300 rounded px-1.5 py-0.5 font-normal bg-white focus:outline-none focus:ring-1 focus:ring-primary-400';
+  return bool ? (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={cls}>
+      <option value="">Alle</option><option value="true">Ja</option><option value="false">Nein</option>
+    </select>
+  ) : (
+    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder="Filtern…" className={cls} />
   );
 }
 

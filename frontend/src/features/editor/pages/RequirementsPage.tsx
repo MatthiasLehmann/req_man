@@ -9,7 +9,7 @@ import DocumentTree from '../components/DocumentTree';
 import ItemList from '../components/ItemList';
 import ItemEditor from '../components/ItemEditor';
 import RequirementsTable from '../components/table/RequirementsTable';
-import ExcelFileImport from '../components/import/ExcelFileImport';
+import ImportExportMenus from '../components/import/ImportExportMenus';
 import { useAuthStore } from '../../../shared/auth/authStore';
 
 const VIEW_KEY = 'reqman_requirements_view';
@@ -282,16 +282,15 @@ export default function RequirementsPage() {
   // ── Render ───────────────────────────────────────────────────────────────────
   const viewSwitch = (
     <div className="flex items-center justify-end gap-2 px-3 h-11 border-b border-gray-200 bg-gray-50 shrink-0">
-      {canEdit && (
-        <ExcelFileImport
-          projectId={projectId}
-          selectedPrefix={selectedPrefix}
-          onSelectDocument={(prefix) => {
-            if (prefix !== selectedPrefix) guardedAction(() => { setSelectedPrefix(prefix); setSelectedUid(null); });
-          }}
-          className="mr-auto"
-        />
-      )}
+      <ImportExportMenus
+        projectId={projectId}
+        selectedPrefix={selectedPrefix}
+        canEdit={canEdit}
+        onSelectDocument={(prefix) => {
+          if (prefix !== selectedPrefix) guardedAction(() => { setSelectedPrefix(prefix); setSelectedUid(null); });
+        }}
+        className="mr-auto"
+      />
       <span className="text-xs text-gray-400 mr-1">Ansicht</span>
       <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
         {([
