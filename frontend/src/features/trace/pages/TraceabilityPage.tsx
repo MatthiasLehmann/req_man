@@ -1,16 +1,17 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ReactFlow, Node, Edge, Background, Controls, MiniMap,
   MarkerType, Panel, Position,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { GitBranch, Table2, List, ArrowLeft, Loader2, AlertCircle, ArrowDown, ArrowUp, ChevronDown } from 'lucide-react';
+import { GitBranch, Table2, List, Loader2, AlertCircle, ArrowDown, ArrowUp, ChevronDown } from 'lucide-react';
 import clsx from 'clsx';
 import { getTraceability } from '../../../shared/api/client';
 import { ImportFromObsidianButton, OpenInObsidianButton } from '../../bridges';
 import { TraceabilityData, TraceabilityNode } from '../../../shared/types';
+import { EmptyProject } from '../../../shared/ui/EmptyProject';
 
 // Document color map
 const DOC_COLORS: Record<string, string> = {
@@ -101,7 +102,6 @@ function DocSelectMenu({
 
 export default function TraceabilityPage() {
   const { projectId } = useParams<{ projectId: string }>();
-  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('graph');
   const [filterDoc, setFilterDoc] = useState<string>('');
   const [selectedUid, setSelectedUid] = useState<string>('');
@@ -170,15 +170,7 @@ export default function TraceabilityPage() {
     [data.links, multiDocNodeIds]
   );
 
-  if (!projectId) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <button onClick={() => navigate('/')} className="btn-secondary">
-          <ArrowLeft className="w-4 h-4" /> Zur Projektübersicht
-        </button>
-      </div>
-    );
-  }
+  if (!projectId) return <EmptyProject icon={GitBranch} />;
 
   return (
     <div className="flex flex-col h-full">

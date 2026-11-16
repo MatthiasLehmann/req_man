@@ -10,7 +10,6 @@ import toast from 'react-hot-toast';
 import { listProjects, createProject, importProject, deleteProject, browseFilesystem } from '../../../shared/api/client';
 import { useProjectStore } from '../../../shared/store/projectStore';
 import { Project } from '../../../shared/types';
-import { ImportFromObsidianButton, OpenInObsidianButton } from '../../bridges';
 
 // ─── Hilfsfunktionen ─────────────────────────────────────────────────────────
 
@@ -563,12 +562,6 @@ export default function DashboardPage() {
                   <span className="font-mono truncate">{project.path}</span>
                 </div>
               </button>
-              <div className="mt-3 pt-3 border-t border-gray-100">
-                <div className="flex flex-wrap gap-2">
-                  <OpenInObsidianButton projectId={project.id} />
-                  <ImportFromObsidianButton projectId={project.id} />
-                </div>
-              </div>
             </div>
           ))}
         </div>
