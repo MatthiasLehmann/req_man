@@ -7,6 +7,8 @@ import { listDocuments, createDocument, parseImportFile, detectRoundtrip, export
 import type { Document } from '../../../../shared/types';
 import ImportDialog from './ImportDialog';
 import RoundtripDialog from './RoundtripDialog';
+import { useRegisterAction, withShortcut } from '../../../../shared/search';
+
 
 interface Props {
   projectId: string;
@@ -99,6 +101,9 @@ export default function ExcelFileImport({ projectId, selectedPrefix, onSelectDoc
     }
   };
 
+  useRegisterAction('import', () => fileRef.current?.click(), !busy);
+  useRegisterAction('export', download, !!selectedPrefix && !exporting);
+
   return (
     <div className={clsx('flex items-center gap-2', className)}>
       <button
@@ -106,7 +111,7 @@ export default function ExcelFileImport({ projectId, selectedPrefix, onSelectDoc
         disabled={busy}
         className={clsx('inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg',
           'bg-green-600 hover:bg-green-700 text-white transition-colors disabled:opacity-60')}
-        title={selectedPrefix ? `Excel-Datei in ${selectedPrefix} laden` : 'Excel-Datei laden'}
+        title={withShortcut(selectedPrefix ? `Excel-Datei in ${selectedPrefix} laden` : 'Excel-Datei laden', 'import')}
       >
         {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
         Excel-Datei laden
@@ -116,7 +121,7 @@ export default function ExcelFileImport({ projectId, selectedPrefix, onSelectDoc
           onClick={download}
           disabled={exporting}
           className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg border border-green-600 text-green-700 bg-white hover:bg-green-50 transition-colors disabled:opacity-60"
-          title={`${selectedPrefix} als Excel-Datei zum Bearbeiten und Kommentieren herunterladen – danach über „Excel-Datei laden“ zurückholen`}
+          title={withShortcut(`${selectedPrefix} als Excel-Datei zum Bearbeiten und Kommentieren herunterladen – danach über „Excel-Datei laden“ zurückholen`, 'export')}
         >
           {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
           Für Excel exportieren
