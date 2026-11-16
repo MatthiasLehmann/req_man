@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   CheckCircle, XCircle, AlertCircle, X, GitCommit,
-  Loader2, ChevronDown, ChevronUp,
+  Loader2, ChevronDown, ChevronUp, Stamp,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
@@ -44,6 +44,10 @@ interface Props {
   uid: string;
   onClose: () => void;
   onSuccess?: (result: ValidationCreateResponse) => void;
+  /** Nur stempeln (doorstop review, ohne Protokoll/Commit). Ohne diese Funktion gibt es die Auswahl nicht. */
+  onStamp?: () => Promise<unknown>;
+  /** Grund, warum Stempeln gerade nicht geht (z. B. „Zuerst speichern“). */
+  stampBlockedReason?: string;
 }
 
 // ─── Hilfkomponente: Einzelne Checklisten-Zeile ──────────────────────────────
@@ -122,7 +126,7 @@ function CheckRow({ label, checked, onToggle, notApplicable, onToggleNA, childre
 
 // ─── Haupt-Dialog ─────────────────────────────────────────────────────────────
 
-export default function ValidationDialog({ projectId, uid, onClose, onSuccess }: Props) {
+export default function ValidationDialog({ projectId, uid, onClose, onSuccess, onStamp, stampBlockedReason }: Props) {
   const qc = useQueryClient();
 
   const [status, setStatus] = useState<ValidationStatus>('APPROVED');
@@ -131,6 +135,22 @@ export default function ValidationDialog({ projectId, uid, onClose, onSuccess }:
   const [skipDoorstopCheck, setSkipDoorstopCheck] = useState(false);
   const [skipReviewStamp, setSkipReviewStamp] = useState(false);
   const [newRef, setNewRef] = useState('');
+  const [stampOnly, setStampOnly] = useState(false);
+  const [stampPending, setStampPending] = useState(false);
+
+  const handleStamp = async () => {
+    if (!onStamp || stampBlockedReason) return;
+    setStampPending(true);
+    try {
+      await onStamp();
+      qc.invalidateQueries({ queryKey: ['item-commits', projectId, uid] });
+      onClose();
+    } catch {
+      // Fehlermeldung zeigt der Aufrufer (Toast); Dialog bleibt offen
+    } finally {
+      setStampPending(false);
+    }
+  };
 
   const updateChecklist = <K extends keyof ValidationChecklist>(
     key: K,
@@ -217,6 +237,35 @@ export default function ValidationDialog({ projectId, uid, onClose, onSuccess }:
 
         {/* ── Body ── */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+
+          {onStamp && (
+            <label
+              className={clsx(
+                'flex items-start gap-2 rounded-lg border px-3 py-2 text-xs',
+                stampBlockedReason ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer',
+                stampOnly ? 'bg-primary-50 border-primary-200' : 'bg-gray-50 border-gray-200',
+              )}
+              title={stampBlockedReason ?? 'doorstop review: nur den Review-Stempel setzen'}
+            >
+              <input
+                type="checkbox"
+                checked={stampOnly}
+                disabled={!!stampBlockedReason}
+                onChange={(e) => setStampOnly(e.target.checked)}
+                className="mt-0.5 rounded border-gray-300"
+              />
+              <span>
+                <span className="font-medium text-gray-700">Nur als geprüft stempeln (ohne Protokoll)</span>
+                <span className="block text-gray-500">
+                  {stampBlockedReason
+                    ? `${stampBlockedReason} – ungespeicherte Änderungen würden sonst nicht mitgestempelt.`
+                    : 'Setzt nur den doorstop-Stempel; kein Checklisten-Protokoll, kein Git-Commit.'}
+                </span>
+              </span>
+            </label>
+          )}
+
+          {stampOnly ? null : (<>
 
           {/* Status */}
           <div>
@@ -450,12 +499,13 @@ export default function ValidationDialog({ projectId, uid, onClose, onSuccess }:
               </label>
             </div>
           </details>
+          </>)}
         </div>
 
         {/* ── Footer ── */}
         <div className="flex items-center justify-between px-5 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
           <p className="text-xs text-gray-400">
-            {allRequired
+            {stampOnly ? '' : allRequired
               ? <span className="text-green-600">Pflichtfelder ausgefüllt</span>
               : 'Pflichtfelder unvollständig'}
           </p>
@@ -463,16 +513,29 @@ export default function ValidationDialog({ projectId, uid, onClose, onSuccess }:
             <button onClick={onClose} className="btn-secondary text-xs py-2">
               Abbrechen
             </button>
-            <button
-              onClick={handleSubmit}
-              disabled={mutation.isPending || !summary.trim()}
-              className="btn-primary text-xs py-2 gap-1.5"
-            >
-              {mutation.isPending
-                ? <Loader2 className="w-3 h-3 animate-spin" />
-                : <GitCommit className="w-3 h-3" />}
-              Speichern & Committen
-            </button>
+            {stampOnly ? (
+              <button
+                onClick={handleStamp}
+                disabled={stampPending || !!stampBlockedReason}
+                className="btn-primary text-xs py-2 gap-1.5"
+              >
+                {stampPending
+                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                  : <Stamp className="w-3 h-3" />}
+                Stempeln
+              </button>
+            ) : (
+              <button
+                onClick={handleSubmit}
+                disabled={mutation.isPending || !summary.trim()}
+                className="btn-primary text-xs py-2 gap-1.5"
+              >
+                {mutation.isPending
+                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                  : <GitCommit className="w-3 h-3" />}
+                Speichern & Committen
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ComponentType, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, X, Link2, Tag, ChevronDown, ChevronUp, Loader2, GitCommit, History, Stamp, Paperclip, AlertTriangle, Sparkles, Boxes, Network } from 'lucide-react';
+import { Save, X, Link2, Tag, ChevronDown, ChevronUp, Loader2, GitCommit, History, FileText, Paperclip, AlertTriangle, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 import { getItem, updateItem, getAttributes, getLatestValidation, reviewItem } from '../../../shared/api/client';
@@ -18,6 +18,15 @@ import { OpenProposalsHint } from '../../proposals';
 import SimulinkTab from './SimulinkTab';
 import GitHistoryTab from './GitHistoryTab';
 import { useSimulinkLinks } from '../hooks/useSimulinkLinks';
+
+type TabId = 'details' | 'links' | 'ai-quality' | 'references' | 'history';
+
+interface TabDef {
+  id: TabId;
+  label: string;
+  Icon: ComponentType<{ className?: string }>;
+  badge?: ReactNode;
+}
 
 interface Props {
   projectId: string;
@@ -58,7 +67,7 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
   const [newLink, setNewLink] = useState('');
   const [showCustom, setShowCustom] = useState(false);
   const [showValidationDialog, setShowValidationDialog] = useState(false);
-  const [activeTab, setActiveTab] = useState<'details' | 'references' | 'validation' | 'ai-quality' | 'simulink' | 'git' | 'impact'>('details');
+  const [activeTab, setActiveTab] = useState<TabId>('details');
 
   // KI-Qualitäts-Badge
   const { data: aiQualityResult } = useAiQuality(projectId, uid);
@@ -165,6 +174,63 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
     });
   };
 
+  // Reiterleiste: eine Liste statt kopierter Blöcke
+  const linkCount = (form.links || []).length;
+  const tabs: TabDef[] = [
+    { id: 'details', label: 'Details', Icon: FileText },
+    {
+      id: 'links',
+      label: 'Verknüpfungen',
+      Icon: Link2,
+      badge: linkCount > 0 ? (
+        <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700">
+          {linkCount}
+        </span>
+      ) : undefined,
+    },
+    ...(!item?.header ? [{
+      id: 'ai-quality' as const,
+      label: 'KI-Qualität',
+      Icon: Sparkles,
+      badge: aiQualityResult ? (
+        <span
+          className={clsx(
+            'ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold',
+            aiQualityResult.score.overall >= 70
+              ? 'bg-green-100 text-green-700'
+              : aiQualityResult.score.overall >= 40
+                ? 'bg-yellow-100 text-yellow-700'
+                : 'bg-red-100 text-red-700',
+          )}
+        >
+          {aiQualityResult.score.overall}
+        </span>
+      ) : undefined,
+    }] : []),
+    {
+      id: 'references',
+      label: 'Referenzen',
+      Icon: Paperclip,
+      badge: refHasIssues ? (
+        <span className="ml-1 flex items-center gap-0.5 text-[10px] px-1 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
+          <AlertTriangle className="w-2.5 h-2.5" />
+          {refCount}
+        </span>
+      ) : refCount > 0 ? (
+        <span className="ml-1 text-[10px] px-1 py-0.5 rounded-full bg-gray-100 text-gray-500">{refCount}</span>
+      ) : undefined,
+    },
+    { id: 'history', label: 'Verlauf', Icon: History },
+  ];
+
+  const reviewTooltip = !item
+    ? ''
+    : item.reviewed && item.reviewed_current === true
+      ? `Reviewed – Stempel: ${item.reviewed}`
+      : item.reviewed && item.reviewed_current === false
+        ? `Veraltet – Inhalt geändert seit letztem Review (Stempel: ${item.reviewed})`
+        : 'Ausstehend – noch nicht gestempelt';
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -190,8 +256,15 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
             />
           </div>
           {dirty && <span className="badge-yellow text-xs">Ungespeichert</span>}
-          {item.reviewed && item.reviewed_current === true && <span className="badge-green text-xs">Reviewed</span>}
-          {item.reviewed && item.reviewed_current === false && <span className="badge-yellow text-xs">Veraltet</span>}
+          {item.reviewed && item.reviewed_current === true && (
+            <span className="badge-green text-xs cursor-help" title={reviewTooltip}>Reviewed</span>
+          )}
+          {item.reviewed && item.reviewed_current === false && (
+            <span className="badge-yellow text-xs cursor-help" title={reviewTooltip}>Veraltet</span>
+          )}
+          {!item.reviewed && (
+            <span className="badge-yellow text-xs cursor-help" title={reviewTooltip}>Ausstehend</span>
+          )}
           {!item.active && <span className="badge-gray text-xs">Inaktiv</span>}
           <ValidationBadge info={validationInfo} size="sm" />
         </div>
@@ -209,7 +282,7 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
               <button
                 onClick={() => setShowValidationDialog(true)}
                 className="btn-secondary text-xs py-1.5"
-                title="Review starten"
+                title="Review starten (Protokoll mit Git-Commit oder nur stempeln)"
               >
                 <GitCommit className="w-3 h-3" />
                 Review
@@ -224,161 +297,33 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
 
       <OpenProposalsHint projectId={projectId} uid={uid} />
 
-      {/* ── Tabs ── */}
-      <div className="flex border-b border-gray-200 bg-white shrink-0">
-        <button
-          onClick={() => setActiveTab('details')}
-          className={clsx(
-            'px-4 py-2 text-xs font-medium border-b-2 transition-colors',
-            activeTab === 'details'
-              ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700',
-          )}
-        >
-          Details
-        </button>
-        <button
-          onClick={() => setActiveTab('references')}
-          className={clsx(
-            'flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors',
-            activeTab === 'references'
-              ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700',
-          )}
-        >
-          <Paperclip className="w-3 h-3" />
-          Referenzen
-          {refCount > 0 && !refHasIssues && (
-            <span className="ml-1 text-[10px] px-1 py-0.5 rounded-full bg-gray-100 text-gray-500">
-              {refCount}
-            </span>
-          )}
-          {refHasIssues && (
-            <span className="ml-1 flex items-center gap-0.5 text-[10px] px-1 py-0.5
-                              rounded-full bg-yellow-100 text-yellow-700">
-              <AlertTriangle className="w-2.5 h-2.5" />
-              {refCount}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('validation')}
-          className={clsx(
-            'flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors',
-            activeTab === 'validation'
-              ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700',
-          )}
-        >
-          <History className="w-3 h-3" />
-          Reviews
-        </button>
-        <button
-          onClick={() => setActiveTab('impact')}
-          className={clsx(
-            'flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors',
-            activeTab === 'impact'
-              ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700',
-          )}
-        >
-          <Network className="w-3 h-3" />
-          Auswirkungen
-        </button>
-        <button
-          onClick={() => setActiveTab('git')}
-          className={clsx(
-            'flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors',
-            activeTab === 'git'
-              ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700',
-          )}
-        >
-          <GitCommit className="w-3 h-3" />
-          Git
-        </button>
-        {!item?.header && (
+      {/* ── Tabs (aus Liste erzeugt) ── */}
+      <div className="flex border-b border-gray-200 bg-white shrink-0" role="tablist">
+        {tabs.map(({ id, label, Icon, badge }) => (
           <button
-            onClick={() => setActiveTab('ai-quality')}
+            key={id}
+            role="tab"
+            aria-selected={activeTab === id}
+            data-tab={id}
+            onClick={() => setActiveTab(id)}
             className={clsx(
               'flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors',
-              activeTab === 'ai-quality'
+              activeTab === id
                 ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700',
             )}
           >
-            <Sparkles className="w-3 h-3" />
-            KI-Qualität
-            {aiQualityResult && (
-              <span
-                className={clsx(
-                  'ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold',
-                  aiQualityResult.score.overall >= 70
-                    ? 'bg-green-100 text-green-700'
-                    : aiQualityResult.score.overall >= 40
-                      ? 'bg-yellow-100 text-yellow-700'
-                      : 'bg-red-100 text-red-700',
-                )}
-              >
-                {aiQualityResult.score.overall}
-              </span>
-            )}
+            <Icon className="w-3 h-3" />
+            {label}
+            {badge}
           </button>
-        )}
-        {!item?.header && (
-          <button
-            onClick={() => setActiveTab('simulink')}
-            className={clsx(
-              'flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors',
-              activeTab === 'simulink'
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700',
-            )}
-          >
-            <Boxes className="w-3 h-3" />
-            Simulink
-            {simulinkSidecar && simulinkSidecar.links.length > 0 && (
-              <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700">
-                {simulinkSidecar.links.length}
-              </span>
-            )}
-          </button>
-        )}
+        ))}
       </div>
 
       {/* ── Body ── */}
-      {activeTab === 'impact' ? (
-        <div className="flex-1 overflow-y-auto p-4">
-          <ImpactTab projectId={projectId} uid={uid} onOpen={(u, prefix) => openRequirement(projectId, prefix, u)} />
-        </div>
-      ) : activeTab === 'git' ? (
-        <div className="flex-1 overflow-y-auto p-4">
-          <GitHistoryTab projectId={projectId} uid={uid} />
-        </div>
-      ) : activeTab === 'simulink' ? (
-        <div className="flex-1 overflow-y-auto p-4">
-          <SimulinkTab projectId={projectId} uid={uid} />
-        </div>
-      ) : activeTab === 'ai-quality' ? (
-        <div className="flex-1 overflow-y-auto p-4">
-          <AiQualityTab projectId={projectId} uid={uid} />
-        </div>
-      ) : activeTab === 'validation' ? (
-        <div className="flex-1 overflow-y-auto p-4">
-          <ValidationHistory projectId={projectId} uid={uid} />
-        </div>
-      ) : activeTab === 'references' ? (
-        <div className="flex-1 overflow-y-auto p-4">
-          <ReferencesTab
-            projectId={projectId}
-            uid={uid}
-            canEdit={canEdit}
-            onStatusChange={onRefStatusChange}
-          />
-        </div>
-      ) : (
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
-
+        {activeTab === 'details' && (
+          <>
         {/* ── Metaattribute ── */}
         <div className="grid grid-cols-2 gap-3">
           {/* Ebene */}
@@ -435,51 +380,6 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
           </div>
         </div>
 
-        {/* ── Review-Status ── */}
-        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between mb-1">
-            <FieldLabel
-              helpTitle={DOORSTOP_HELP.reviewed.title}
-              helpText={DOORSTOP_HELP.reviewed.text}
-              placement="right"
-            >
-              Review-Status
-            </FieldLabel>
-            {canEdit && (
-              <button
-                onClick={() => reviewMut.mutate()}
-                disabled={reviewMut.isPending || dirty}
-                title={dirty ? 'Zuerst speichern' : 'Anforderung jetzt stempeln (doorstop review)'}
-                className={clsx(
-                  'flex items-center gap-1 text-xs px-2 py-0.5 rounded border transition-colors',
-                  dirty
-                    ? 'text-gray-300 border-gray-200 cursor-not-allowed'
-                    : 'text-primary-600 border-primary-200 hover:bg-primary-50',
-                )}
-              >
-                {reviewMut.isPending
-                  ? <Loader2 className="w-3 h-3 animate-spin" />
-                  : <Stamp className="w-3 h-3" />}
-                Stempeln
-              </button>
-            )}
-          </div>
-          {item.reviewed && item.reviewed_current === true ? (
-            <div className="flex items-center gap-2 mt-1">
-              <span className="badge-green">✓ Reviewed</span>
-              <span className="font-mono text-xs text-gray-400 truncate">{item.reviewed}</span>
-            </div>
-          ) : item.reviewed && item.reviewed_current === false ? (
-            <div className="flex items-center gap-2 mt-1">
-              <span className="badge-yellow">⚠ Veraltet</span>
-              <span className="font-mono text-xs text-gray-400 truncate">{item.reviewed}</span>
-              <span className="text-xs text-yellow-600">Inhalt geändert seit letztem Review</span>
-            </div>
-          ) : (
-            <span className="badge-yellow mt-1 inline-flex">Ausstehend</span>
-          )}
-        </div>
-
         {/* ── Anforderungstext ── */}
         <div>
           <FieldLabel
@@ -505,7 +405,46 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
           />
         </div>
 
-        {/* ── Verlinkungen ── */}
+        {/* ── Benutzerdefinierte Attribute ── */}
+        {customAttrs.length > 0 && (
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowCustom(!showCustom)}
+              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-gray-600
+                         bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+            >
+              <Tag className="w-3.5 h-3.5 text-gray-500" />
+              Benutzerdefinierte Attribute
+              <span className="ml-auto flex items-center gap-1 text-gray-400">
+                {customAttrs.length} Attribute
+                {showCustom ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </span>
+            </button>
+
+            {showCustom && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-white">
+                {customAttrs.map((attr) => (
+                  <CustomAttributeField
+                    key={attr.key}
+                    attr={attr}
+                    value={(form.custom_attributes || {})[attr.key]}
+                    onChange={(val) => setCustomAttr(attr.key, val)}
+                    disabled={!canEdit}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+          </>
+        )}
+
+        {activeTab === 'links' && (
+          <>
+            {/* Platzhalter für den lokalen Graph (C4) */}
+            <div data-slot="local-graph" />
+
         <div>
           <FieldLabel
             helpTitle={DOORSTOP_HELP.links.title}
@@ -563,40 +502,45 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
           )}
         </div>
 
-        {/* ── Benutzerdefinierte Attribute ── */}
-        {customAttrs.length > 0 && (
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setShowCustom(!showCustom)}
-              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-gray-600
-                         bg-gray-50 hover:bg-gray-100 transition-colors text-left"
-            >
-              <Tag className="w-3.5 h-3.5 text-gray-500" />
-              Benutzerdefinierte Attribute
-              <span className="ml-auto flex items-center gap-1 text-gray-400">
-                {customAttrs.length} Attribute
-                {showCustom ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-              </span>
-            </button>
-
-            {showCustom && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-white">
-                {customAttrs.map((attr) => (
-                  <CustomAttributeField
-                    key={attr.key}
-                    attr={attr}
-                    value={(form.custom_attributes || {})[attr.key]}
-                    onChange={(val) => setCustomAttr(attr.key, val)}
-                    disabled={!canEdit}
-                  />
-                ))}
-              </div>
+            <section>
+              <h4 className="text-xs font-semibold text-gray-600 mb-2">Auswirkungen</h4>
+              <ImpactTab projectId={projectId} uid={uid} onOpen={(u, prefix) => openRequirement(projectId, prefix, u)} />
+            </section>
+            {!item.header && (
+              <section>
+                <h4 className="text-xs font-semibold text-gray-600 mb-2">Simulink</h4>
+                <SimulinkTab projectId={projectId} uid={uid} />
+              </section>
             )}
-          </div>
+          </>
+        )}
+
+        {activeTab === 'ai-quality' && !item.header && (
+          <AiQualityTab projectId={projectId} uid={uid} />
+        )}
+
+        {activeTab === 'references' && (
+          <ReferencesTab
+            projectId={projectId}
+            uid={uid}
+            canEdit={canEdit}
+            onStatusChange={onRefStatusChange}
+          />
+        )}
+
+        {activeTab === 'history' && (
+          <>
+            <section>
+              <h4 className="text-xs font-semibold text-gray-600 mb-2">Reviews</h4>
+              <ValidationHistory projectId={projectId} uid={uid} />
+            </section>
+            <section>
+              <h4 className="text-xs font-semibold text-gray-600 mb-2">Git</h4>
+              <GitHistoryTab projectId={projectId} uid={uid} />
+            </section>
+          </>
         )}
       </div>
-      )}
 
       {/* ── Validierungs-Dialog ── */}
       {showValidationDialog && (
@@ -604,7 +548,9 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
           projectId={projectId}
           uid={uid}
           onClose={() => setShowValidationDialog(false)}
-          onSuccess={() => setActiveTab('validation')}
+          onSuccess={() => setActiveTab('history')}
+          onStamp={() => reviewMut.mutateAsync()}
+          stampBlockedReason={dirty ? 'Zuerst speichern' : undefined}
         />
       )}
     </div>
