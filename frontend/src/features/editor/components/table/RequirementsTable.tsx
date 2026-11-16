@@ -10,6 +10,7 @@ import type { AttributeDefinition, Item } from '../../../../shared/types';
 import { useAuthStore } from '../../../../shared/auth/authStore';
 import ImportDialog from '../import/ImportDialog';
 import { attributesFor, parseClipboardTable } from '../import/tableParsing';
+import { compareLevel } from '../../../../shared/ui/requirementUtils';
 import {
   useColumnView, columnMatches, compareCells, ColumnPicker, type SortState,
 } from './columnView';
@@ -17,16 +18,6 @@ import {
 // ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
 
 const LEVEL_RE = /^\d+(\.\d+)*$/;
-
-function compareLevel(a: string, b: string) {
-  const la = a.split('.').map(Number);
-  const lb = b.split('.').map(Number);
-  for (let i = 0; i < Math.max(la.length, lb.length); i++) {
-    const d = (la[i] ?? 0) - (lb[i] ?? 0);
-    if (d) return d;
-  }
-  return 0;
-}
 
 function levelDepth(level: string) {
   const p = level.split('.');

@@ -1,5 +1,5 @@
 import { Suspense, useState, useMemo, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ReactFlow, Node, Edge, Background, Controls, MiniMap,
@@ -13,7 +13,7 @@ import { TraceabilityData, TraceabilityNode } from '../../../shared/types';
 import { EmptyProject } from '../../../shared/ui/EmptyProject';
 import { ForceGraph, buildGraph, getDocColor } from '../../graph';
 import { LinkingPage } from '../../editor';
-import { useOpenRequirement } from '../../../shared/search';
+import { useOpenRequirement, useRegisterAction } from '../../../shared/search';
 
 type ViewMode = 'graph' | 'matrix' | 'tree' | 'link';
 type TreeDirection = 'down' | 'up';
@@ -92,7 +92,14 @@ function DocSelectMenu({
 export default function TraceabilityPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const openRequirement = useOpenRequirement();
-  const [viewMode, setViewMode] = useState<ViewMode>('graph');
+  const [searchParams] = useSearchParams();
+  const viewParam = searchParams.get('view');
+  const paramView = (['graph', 'matrix', 'tree', 'link'] as const).find((v) => v === viewParam);
+  const [viewMode, setViewMode] = useState<ViewMode>(paramView ?? 'graph');
+  // Adresse mit ?view=… (z. B. aus „Nächste Schritte“) stellt die Ansicht ein
+  useEffect(() => { if (paramView) setViewMode(paramView); }, [paramView]);
+  // „Graph öffnen“ (G) stellt die Ansicht „Graph“ ein
+  useRegisterAction('graph', () => setViewMode('graph'));
   const [treeDir, setTreeDir] = useState<TreeDirection>('down');
   const [selectedDocsOverride, setSelectedDocsOverride] = useState<Set<string> | null>(null);
 

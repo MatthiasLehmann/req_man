@@ -7,7 +7,7 @@ import { create } from 'zustand';
  * der Seite verschwindet der Befehl wieder aus dem Feld.
  */
 export type ActionId =
-  | 'new-item' | 'save' | 'review'
+  | 'new-item' | 'save' | 'review' | 'graph'
   | 'view-table' | 'view-list'
   | 'import' | 'export' | 'ask';
 

@@ -79,7 +79,7 @@ def test_regeln_und_reihenfolge(project):
     assert s["empty_documents"]["title"] == "1 Dokument ist noch leer"
     # srs2 ohne Link; srs3 inaktiv und srs4 abgeleitet zählen nicht
     assert s["unlinked"]["uids"] == [uids["srs2"]]
-    assert s["unlinked"]["route"] == f"/linking/{pid}"
+    assert s["unlinked"]["route"] == f"/traceability/{pid}?view=link"
     # sys2 hat kein Kind; Überschrift zählt nicht. SRS hat Kind-Dokument TST → srs1, srs2, srs4 auch
     assert uids["sys2"] in s["uncovered"]["uids"]
     assert uids["sys1"] not in s["uncovered"]["uids"]

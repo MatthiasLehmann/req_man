@@ -112,9 +112,9 @@ def next_steps(project_id: str) -> List[Dict[str, Any]]:
             f"{n} {_plural(n, 'Anforderung', 'Anforderungen')} ohne Verlinkung nach oben",
             unlinked,
             "Diese Anforderungen liegen in einem Dokument mit Eltern-Dokument, verweisen aber auf "
-            "keine Eltern-Anforderung. Auf der Seite Verlinkung oder im Editor verlinken "
+            "keine Eltern-Anforderung. In Traceability (Ansicht „Verknüpfen“) oder im Editor verlinken "
             "(oder als „Abgeleitet“ markieren).",
-            f"/linking/{pid}",
+            f"/traceability/{pid}?view=link",
         ))
 
     parents_with_children = {p for p in parent_of.values() if p}
@@ -127,8 +127,8 @@ def next_steps(project_id: str) -> List[Dict[str, Any]]:
             f"{n} {_plural(n, 'Anforderung', 'Anforderungen')} ohne Ableitung",
             uncovered,
             "Auf diese Anforderungen zeigt keine Anforderung aus einem untergeordneten Dokument. "
-            "In der Matrix sieht man, wo die Ableitung fehlt.",
-            f"/matrix/{pid}",
+            "In Traceability (Ansicht „Matrix“) sieht man, wo die Ableitung fehlt.",
+            f"/traceability/{pid}?view=matrix",
         ))
 
     changed = [d["uid"] for d in counted if d["reviewed_current"] is False]

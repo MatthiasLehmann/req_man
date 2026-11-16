@@ -68,6 +68,7 @@ function inTextField(t: EventTarget | null) {
 export function runCommand(c: Command, navigate: NavigateFunction, projectId?: string) {
   const handlers = useActionStore.getState().handlers as Record<string, (() => void) | undefined>;
   if (c.action) handlers[c.action]?.();
+  else if (c.id === 'graph' && handlers['graph']) handlers['graph']();   // schon in Traceability: Ansicht „Graph“ einstellen
   else if (c.id === 'ask') handlers['ask']?.();
   else c.run?.({ navigate, projectId });
 }

@@ -12,14 +12,10 @@ import { useAuthStore } from '../../../shared/auth/authStore';
 import ImportDialog from './import/ImportDialog';
 import { useRegisterAction, withShortcut } from '../../../shared/search';
 
+import { parseLevel, compareLevel } from '../../../shared/ui/requirementUtils';
 import { parseClipboardTable } from './import/tableParsing';
 
 // ─── Level-Hilfsfunktionen ────────────────────────────────────────────────────
-
-/** Wandelt "1.2.3" in [1, 2, 3] um */
-function parseLevel(level: string): number[] {
-  return level.split('.').map((n) => parseInt(n, 10) || 0);
-}
 
 /**
  * Berechnet die Anzeigetiefe eines Doorstop-Levels.
@@ -38,17 +34,6 @@ function levelDepth(level: string): number {
   // Abschließendes 0 = Doorstop-Sektion → effektiv ein Segment weniger
   const effective = parts[parts.length - 1] === 0 ? parts.slice(0, -1) : parts;
   return Math.max(0, effective.length - 1);
-}
-
-/** Vergleichsfunktion für Level-Sortierung (numerisch) */
-function compareLevel(a: string, b: string): number {
-  const la = parseLevel(a);
-  const lb = parseLevel(b);
-  for (let i = 0; i < Math.max(la.length, lb.length); i++) {
-    const diff = (la[i] ?? 0) - (lb[i] ?? 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
 }
 
 // ─── Baum-Datenstruktur ───────────────────────────────────────────────────────

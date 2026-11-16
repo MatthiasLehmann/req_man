@@ -13,7 +13,7 @@ import { ValidationBadge, ValidationDialog, ValidationHistory } from '../../revi
 import ReferencesTab from './ReferencesTab';
 import { AiQualityTab, useAiQuality } from '../../ai';
 import { LinkSuggestions, DuplicateHint, ImpactTab } from '../../assist';
-import { useOpenRequirement } from '../../../shared/search';
+import { useOpenRequirement, useRegisterAction, withShortcut } from '../../../shared/search';
 import { OpenProposalsHint } from '../../proposals';
 import { LocalGraph } from '../../graph';
 import SimulinkTab from './SimulinkTab';
@@ -112,6 +112,7 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['item', projectId, uid] });
       qc.invalidateQueries({ queryKey: ['items'] });
+      qc.invalidateQueries({ queryKey: ['traceability', projectId] });   // lokaler Graph und Traceability
       setForm(res.data);
       setDirty(false);
       toast.success('Gespeichert');
@@ -174,6 +175,10 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
       custom_attributes: form.custom_attributes,
     });
   };
+
+  // Befehlsfeld/Kürzel (C5): Strg+S und R
+  useRegisterAction('save', handleSave, canEdit && dirty && !updateMut.isPending);
+  useRegisterAction('review', () => setShowValidationDialog(true), canEdit);
 
   // Reiterleiste: eine Liste statt kopierter Blöcke
   const linkCount = (form.links || []).length;
@@ -276,6 +281,7 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
                 onClick={handleSave}
                 disabled={!dirty || updateMut.isPending}
                 className="btn-primary text-xs py-1.5"
+                title={withShortcut('Speichern', 'save')}
               >
                 {updateMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                 Speichern
@@ -283,7 +289,7 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
               <button
                 onClick={() => setShowValidationDialog(true)}
                 className="btn-secondary text-xs py-1.5"
-                title="Review starten (Protokoll mit Git-Commit oder nur stempeln)"
+                title={withShortcut('Review starten (Protokoll mit Git-Commit oder nur stempeln)', 'review')}
               >
                 <GitCommit className="w-3 h-3" />
                 Review

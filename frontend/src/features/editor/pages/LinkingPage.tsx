@@ -23,25 +23,9 @@ import { listDocuments, listItems, addLink, removeLink } from '../../../shared/a
 import { useProjectStore } from '../../../shared/store/projectStore';
 import { Item } from '../../../shared/types';
 import { EmptyProject } from '../../../shared/ui/EmptyProject';
+import { compareLevel, stripHtml } from '../../../shared/ui/requirementUtils';
 
 // ─── Hilfsfunktionen ─────────────────────────────────────────────────────────
-
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
-}
-
-function parseLevel(level: string): number[] {
-  return level.split('.').map((n) => parseInt(n, 10) || 0);
-}
-function compareLevel(a: string, b: string): number {
-  const la = parseLevel(a);
-  const lb = parseLevel(b);
-  for (let i = 0; i < Math.max(la.length, lb.length); i++) {
-    const diff = (la[i] ?? 0) - (lb[i] ?? 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
-}
 
 function sortByLevel(items: Item[]): Item[] {
   return [...items].sort((a, b) => compareLevel(a.level, b.level));
