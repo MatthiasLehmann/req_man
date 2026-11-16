@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react';
+import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, FileSpreadsheet, Loader2, X } from 'lucide-react';
+import { FileSpreadsheet, Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
-import { listDocuments, createDocument, parseImportFile, detectRoundtrip, exportForExcel } from '../../../../shared/api/client';
+import { listDocuments, createDocument, parseImportFile, detectRoundtrip } from '../../../../shared/api/client';
 import type { Document } from '../../../../shared/types';
 import ImportDialog from './ImportDialog';
 import RoundtripDialog from './RoundtripDialog';
@@ -24,11 +24,16 @@ function suggestPrefix(fileName: string, existing: string[]) {
   return candidates.find((c) => !existing.includes(c)) ?? '';
 }
 
+export interface ExcelFileImportHandle { pick: () => void }
+
 /**
+ * Läuft ohne eigene Knöpfe: der Einstieg ist das Menü „Importieren“ (ImportExportMenus), das `pick()` aufruft.
  * Ein Klick: Excel-Datei wählen → (falls nötig) Dokument wählen oder anlegen → Vorschau mit Prüfung
  * → importieren. Die Prüfung aus U1 bleibt unverändert: importiert wird nur, wenn alle Zeilen gültig sind.
  */
-export default function ExcelFileImport({ projectId, selectedPrefix, onSelectDocument, className }: Props) {
+const ExcelFileImport = forwardRef<ExcelFileImportHandle, Props>(function ExcelFileImport(
+  { projectId, selectedPrefix, onSelectDocument, className }, ref,
+) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -36,7 +41,6 @@ export default function ExcelFileImport({ projectId, selectedPrefix, onSelectDoc
   const [target, setTarget] = useState<{ prefix: string; table: string[][] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [roundtrip, setRoundtrip] = useState<File | null>(null);
-  const [exporting, setExporting] = useState(false);
 
   const { data: docsRes } = useQuery({
     queryKey: ['documents', projectId],
@@ -81,47 +85,10 @@ export default function ExcelFileImport({ projectId, selectedPrefix, onSelectDoc
     else setAskTarget(true);
   };
 
-  const download = async () => {
-    if (!selectedPrefix) return;
-    setExporting(true);
-    try {
-      const res = await exportForExcel(projectId, selectedPrefix);
-      const url = URL.createObjectURL(res.data);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${selectedPrefix}_zum_Bearbeiten.xlsx`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch {
-      toast.error('Export fehlgeschlagen');
-    } finally {
-      setExporting(false);
-    }
-  };
+  useImperativeHandle(ref, () => ({ pick: () => fileRef.current?.click() }), []);
 
   return (
     <div className={clsx('flex items-center gap-2', className)}>
-      <button
-        onClick={() => fileRef.current?.click()}
-        disabled={busy}
-        className={clsx('inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg',
-          'bg-green-600 hover:bg-green-700 text-white transition-colors disabled:opacity-60')}
-        title={selectedPrefix ? `Excel-Datei in ${selectedPrefix} laden` : 'Excel-Datei laden'}
-      >
-        {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
-        Excel-Datei laden
-      </button>
-      {selectedPrefix && (
-        <button
-          onClick={download}
-          disabled={exporting}
-          className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg border border-green-600 text-green-700 bg-white hover:bg-green-50 transition-colors disabled:opacity-60"
-          title={`${selectedPrefix} als Excel-Datei zum Bearbeiten und Kommentieren herunterladen – danach über „Excel-Datei laden“ zurückholen`}
-        >
-          {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-          Für Excel exportieren
-        </button>
-      )}
       <input
         ref={fileRef} type="file" accept=".xlsx,.xlsm,.csv,.tsv,.txt" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }}
@@ -173,7 +140,9 @@ export default function ExcelFileImport({ projectId, selectedPrefix, onSelectDoc
       )}
     </div>
   );
-}
+});
+
+export default ExcelFileImport;
 
 // ─── Zieldokument wählen (nur wenn noch keins ausgewählt ist) ──────────────────
 
