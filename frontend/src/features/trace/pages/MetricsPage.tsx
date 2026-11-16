@@ -1,12 +1,13 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, PieChart, Pie, Cell, RadialBarChart, RadialBar,
   Tooltip, Legend, ResponsiveContainer, XAxis, YAxis, CartesianGrid
 } from 'recharts';
-import { BarChart3, ArrowLeft, Loader2, CheckCircle, Link2, FileText, AlertCircle } from 'lucide-react';
+import { BarChart3, Loader2, CheckCircle, Link2, FileText, AlertCircle } from 'lucide-react';
 import { getMetrics } from '../../../shared/api/client';
 import { ProjectMetrics, DocumentMetrics } from '../../../shared/types';
+import { EmptyProject } from '../../../shared/ui/EmptyProject';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 
@@ -37,7 +38,6 @@ function StatCard({ label, value, icon, color, sub }: StatCardProps) {
 
 export default function MetricsPage() {
   const { projectId } = useParams<{ projectId: string }>();
-  const navigate = useNavigate();
 
   const { data: res, isLoading } = useQuery({
     queryKey: ['metrics', projectId],
@@ -46,15 +46,7 @@ export default function MetricsPage() {
   });
   const metrics: ProjectMetrics | undefined = res?.data;
 
-  if (!projectId) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <button onClick={() => navigate('/')} className="btn-secondary">
-          <ArrowLeft className="w-4 h-4" /> Zur Projektübersicht
-        </button>
-      </div>
-    );
-  }
+  if (!projectId) return <EmptyProject icon={BarChart3} />;
 
   if (isLoading) {
     return (

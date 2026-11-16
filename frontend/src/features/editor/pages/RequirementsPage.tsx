@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, FileText, AlertTriangle, PanelsTopLeft, Table2 } from 'lucide-react';
+import { FileText, AlertTriangle, PanelsTopLeft, Table2 } from 'lucide-react';
 import clsx from 'clsx';
 import { getProject } from '../../../shared/api/client';
 import { useProjectStore } from '../../../shared/store/projectStore';
@@ -11,6 +11,7 @@ import ItemEditor from '../components/ItemEditor';
 import RequirementsTable from '../components/table/RequirementsTable';
 import ExcelFileImport from '../components/import/ExcelFileImport';
 import { useAuthStore } from '../../../shared/auth/authStore';
+import { EmptyProject } from '../../../shared/ui/EmptyProject';
 
 const VIEW_KEY = 'reqman_requirements_view';
 type ViewMode = 'editor' | 'table';
@@ -264,20 +265,7 @@ export default function RequirementsPage() {
   };
 
   // ── Kein Projekt ─────────────────────────────────────────────────────────────
-  if (!projectId) {
-    return (
-      <div className="flex items-center justify-center h-full text-gray-400">
-        <div className="text-center">
-          <FileText className="w-16 h-16 mx-auto mb-4 opacity-30" />
-          <p>Kein Projekt ausgewählt</p>
-          <button onClick={() => navigate('/')} className="btn-primary mt-4">
-            <ArrowLeft className="w-4 h-4" />
-            Zur Projektübersicht
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (!projectId) return <EmptyProject icon={FileText} />;
 
   // ── Render ───────────────────────────────────────────────────────────────────
   const viewSwitch = (

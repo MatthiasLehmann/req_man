@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Layers, ArrowLeft } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import clsx from 'clsx';
+import { EmptyProject } from '../../../shared/ui/EmptyProject';
 import DocumentTypesTab from '../components/document-structure/DocumentTypesTab';
 import ProjectStructureTab from '../components/document-structure/ProjectStructureTab';
 
@@ -60,14 +61,7 @@ export default function DocumentStructurePage() {
       <div className="flex-1 overflow-hidden">
         {activeTab === 'types' && <DocumentTypesTab />}
         {activeTab === 'structure' && !projectId && (
-          <div className="flex flex-col items-center justify-center h-full gap-4">
-            <p className="text-gray-500 text-sm">
-              Kein Projekt ausgewählt. Bitte zuerst ein Projekt öffnen.
-            </p>
-            <button onClick={() => navigate('/')} className="btn-secondary flex items-center gap-2">
-              <ArrowLeft className="w-4 h-4" /> Zur Projektübersicht
-            </button>
-          </div>
+          <EmptyProject icon={Layers} />
         )}
         {activeTab === 'structure' && projectId && (
           <ProjectStructureTab projectId={projectId} />
