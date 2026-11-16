@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ComponentType, type ReactNode } from 'react';
+import { Suspense, useState, useEffect, useCallback, type ComponentType, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Save, X, Link2, Tag, ChevronDown, ChevronUp, Loader2, GitCommit, History, FileText, Paperclip, AlertTriangle, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -15,6 +15,7 @@ import { AiQualityTab, useAiQuality } from '../../ai';
 import { LinkSuggestions, DuplicateHint, ImpactTab } from '../../assist';
 import { useOpenRequirement } from '../../../shared/search';
 import { OpenProposalsHint } from '../../proposals';
+import { LocalGraph } from '../../graph';
 import SimulinkTab from './SimulinkTab';
 import GitHistoryTab from './GitHistoryTab';
 import { useSimulinkLinks } from '../hooks/useSimulinkLinks';
@@ -442,8 +443,12 @@ export default function ItemEditor({ projectId, uid, onClose, onDirtyChange }: P
 
         {activeTab === 'links' && (
           <>
-            {/* Platzhalter für den lokalen Graph (C4) */}
-            <div data-slot="local-graph" />
+            {/* Lokaler Graph: Umfeld der Anforderung (C4) */}
+            <div data-slot="local-graph">
+              <Suspense fallback={<div className="h-[260px]" />}>
+                <LocalGraph projectId={projectId} uid={uid} />
+              </Suspense>
+            </div>
 
         <div>
           <FieldLabel
