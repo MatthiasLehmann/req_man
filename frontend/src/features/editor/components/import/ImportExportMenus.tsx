@@ -4,10 +4,11 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
-import { exportDocument, exportForExcel, exportPdf, type ExportFormat } from '../../../../shared/api/client';
+import { exportDocument, exportForExcel, type ExportFormat } from '../../../../shared/api/client';
 import { ImportFromObsidianButton, OpenInObsidianButton } from '../../../bridges';
 import ExcelFileImport, { type ExcelFileImportHandle } from './ExcelFileImport';
 import ImportDialog from './ImportDialog';
+import PdfDialog from './PdfDialog';
 import { useRegisterAction, withShortcut } from '../../../../shared/search';
 
 interface Props {
@@ -90,10 +91,12 @@ export default function ImportExportMenus({ projectId, selectedPrefix, onSelectD
   const [busy, setBusy] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
 
   // Befehlsfeld/Kürzel (C5): „Importieren“ und „Exportieren“ öffnen das jeweilige Menü
   useRegisterAction('import', () => { setExportOpen(false); setImportOpen(true); }, canEdit);
   useRegisterAction('export', () => { setImportOpen(false); setExportOpen(true); }, !!selectedPrefix);
+  useRegisterAction('pdf', () => { setImportOpen(false); setExportOpen(false); setPdfOpen(true); });
 
   const noDoc = 'Zuerst links ein Dokument auswählen';
 
@@ -167,9 +170,9 @@ export default function ImportExportMenus({ projectId, selectedPrefix, onSelectD
               {fmt.toUpperCase()}
             </Item>
           ))}
-          <Item icon={<FileText className="w-4 h-4" />} disabled={!selectedPrefix} hint={selectedPrefix ? undefined : noDoc}
-                onClick={() => { close(); if (selectedPrefix) run(() => exportPdf(projectId, selectedPrefix), undefined, 'PDF-Satz fehlgeschlagen'); }}>
-            PDF (gesetzt)
+          <Item icon={<FileText className="w-4 h-4 text-red-600" />} hint={withShortcut('Spezifikation oder Review-Unterlage als PDF setzen', 'pdf')}
+                onClick={() => { close(); setPdfOpen(true); }}>
+            PDF erstellen…
           </Item>
           <Item icon={<Gem className="w-4 h-4" />} separated
                 hint="Projekt als Obsidian-Ordner ausliefern (Graph, Tabellen, Landkarte)"
@@ -185,6 +188,7 @@ export default function ImportExportMenus({ projectId, selectedPrefix, onSelectD
         <div ref={obsidianIn} className="contents"><ImportFromObsidianButton projectId={projectId} className="!hidden" /></div>
       </div>
       {canEdit && <ExcelFileImport ref={excelRef} projectId={projectId} selectedPrefix={selectedPrefix} onSelectDocument={onSelectDocument} />}
+      {pdfOpen && <PdfDialog projectId={projectId} selectedPrefix={selectedPrefix} canEdit={canEdit} onClose={() => setPdfOpen(false)} />}
       {clipboardOpen && selectedPrefix && (
         <ImportDialog
           projectId={projectId} prefix={selectedPrefix} initialTable={null}

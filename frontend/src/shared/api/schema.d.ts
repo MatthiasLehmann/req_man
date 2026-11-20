@@ -554,7 +554,11 @@ export interface paths {
          */
         get: operations["export_pdf_api_projects__project_id__export_pdf_get"];
         put?: never;
-        post?: never;
+        /**
+         * Export Pdf Post
+         * @description PDF-Bericht nach Vorlage und Optionen; `save_defaults` speichert die Einstellungen im Projekt.
+         */
+        post: operations["export_pdf_post_api_projects__project_id__export_pdf_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1054,6 +1058,30 @@ export interface paths {
         /** Obsidian Status */
         get: operations["obsidian_status_api_projects__project_id__obsidian_status_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/pdf-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Pdf Settings
+         * @description Gespeicherte PDF-Einstellungen des Projekts (`.reqman/pdf.yml`); ohne Datei die Vorgaben.
+         */
+        get: operations["get_pdf_settings_api_projects__project_id__pdf_settings_get"];
+        /**
+         * Put Pdf Settings
+         * @description Speichert die PDF-Einstellungen im Projekt (ohne `filter.uids`).
+         */
+        put: operations["put_pdf_settings_api_projects__project_id__pdf_settings_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2250,6 +2278,218 @@ export interface components {
         ParsedTable: {
             /** Rows */
             rows: string[][];
+        };
+        /** PdfAttributeFilter */
+        "PdfAttributeFilter-Input": {
+            /**
+             * Name
+             * @default
+             */
+            name?: string;
+            /**
+             * Value
+             * @default
+             */
+            value?: string;
+        };
+        /** PdfAttributeFilter */
+        "PdfAttributeFilter-Output": {
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Value
+             * @default
+             */
+            value: string;
+        };
+        /** PdfFilter */
+        "PdfFilter-Input": {
+            attribute?: components["schemas"]["PdfAttributeFilter-Input"] | null;
+            /**
+             * Changed Since
+             * @default
+             */
+            changed_since?: string;
+            /** Status */
+            status?: ("nicht geprüft" | "geändert nach Prüfung" | "geprüft")[];
+            /** Uids */
+            uids?: string[];
+        };
+        /** PdfFilter */
+        "PdfFilter-Output": {
+            attribute: components["schemas"]["PdfAttributeFilter-Output"] | null;
+            /**
+             * Changed Since
+             * @default
+             */
+            changed_since: string;
+            /** Status */
+            status: ("nicht geprüft" | "geändert nach Prüfung" | "geprüft")[];
+            /** Uids */
+            uids: string[];
+        };
+        /** PdfMeeting */
+        "PdfMeeting-Input": {
+            /**
+             * Date
+             * @default
+             */
+            date?: string;
+            /** Participants */
+            participants?: string[];
+            /**
+             * Place
+             * @default
+             */
+            place?: string;
+            /**
+             * Title
+             * @default
+             */
+            title?: string;
+        };
+        /** PdfMeeting */
+        "PdfMeeting-Output": {
+            /**
+             * Date
+             * @default
+             */
+            date: string;
+            /** Participants */
+            participants: string[];
+            /**
+             * Place
+             * @default
+             */
+            place: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+        };
+        /** PdfMeta */
+        "PdfMeta-Input": {
+            /**
+             * Confidentiality
+             * @default
+             */
+            confidentiality?: string;
+            /**
+             * Doc Number
+             * @default
+             */
+            doc_number?: string;
+            /**
+             * Status
+             * @default entwurf
+             * @enum {string}
+             */
+            status?: "entwurf" | "pruefung" | "freigegeben";
+            /**
+             * Version
+             * @default
+             */
+            version?: string;
+        };
+        /** PdfMeta */
+        "PdfMeta-Output": {
+            /**
+             * Confidentiality
+             * @default
+             */
+            confidentiality: string;
+            /**
+             * Doc Number
+             * @default
+             */
+            doc_number: string;
+            /**
+             * Status
+             * @default entwurf
+             * @enum {string}
+             */
+            status: "entwurf" | "pruefung" | "freigegeben";
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+        };
+        /** PdfOptions */
+        "PdfOptions-Input": {
+            /** Appendices */
+            appendices?: ("trace" | "offen" | "glossar")[];
+            /** Attributes */
+            attributes?: string[];
+            /**
+             * Layout
+             * @default fliesstext
+             * @enum {string}
+             */
+            layout?: "fliesstext" | "tabelle";
+            meeting?: components["schemas"]["PdfMeeting-Input"];
+            meta?: components["schemas"]["PdfMeta-Input"];
+        };
+        /** PdfOptions */
+        "PdfOptions-Output": {
+            /** Appendices */
+            appendices: ("trace" | "offen" | "glossar")[];
+            /** Attributes */
+            attributes: string[];
+            /**
+             * Layout
+             * @default fliesstext
+             * @enum {string}
+             */
+            layout: "fliesstext" | "tabelle";
+            meeting: components["schemas"]["PdfMeeting-Output"];
+            meta: components["schemas"]["PdfMeta-Output"];
+        };
+        /**
+         * PdfRequest
+         * @description Körper von POST /api/projects/{id}/export/pdf (Schnittstelle Abschnitt 3a im E-Plan). Alle Felder optional.
+         */
+        "PdfRequest-Input": {
+            /** Documents */
+            documents?: string[];
+            filter?: components["schemas"]["PdfFilter-Input"];
+            options?: components["schemas"]["PdfOptions-Input"];
+            /**
+             * Save Defaults
+             * @default false
+             */
+            save_defaults?: boolean;
+            /**
+             * Template
+             * @default spezifikation
+             * @enum {string}
+             */
+            template?: "spezifikation" | "review";
+        };
+        /**
+         * PdfRequest
+         * @description Körper von POST /api/projects/{id}/export/pdf (Schnittstelle Abschnitt 3a im E-Plan). Alle Felder optional.
+         */
+        "PdfRequest-Output": {
+            /** Documents */
+            documents: string[];
+            filter: components["schemas"]["PdfFilter-Output"];
+            options: components["schemas"]["PdfOptions-Output"];
+            /**
+             * Save Defaults
+             * @default false
+             */
+            save_defaults: boolean;
+            /**
+             * Template
+             * @default spezifikation
+             * @enum {string}
+             */
+            template: "spezifikation" | "review";
         };
         /** ProjectCreate */
         ProjectCreate: {
@@ -3916,6 +4156,41 @@ export interface operations {
             };
         };
     };
+    export_pdf_post_api_projects__project_id__export_pdf_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PdfRequest-Input"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_feedback_api_projects__project_id__finding_feedback_get: {
         parameters: {
             query?: {
@@ -4919,6 +5194,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ObsidianStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_pdf_settings_api_projects__project_id__pdf_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PdfRequest-Output"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_pdf_settings_api_projects__project_id__pdf_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PdfRequest-Input"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PdfRequest-Output"];
                 };
             };
             /** @description Validation Error */
