@@ -35,6 +35,7 @@ export const COMMANDS: Command[] = [
   },
   { id: 'import', label: 'Importieren', keywords: 'excel datei laden', shortcut: 'I', key: 'i', action: 'import' },
   { id: 'export', label: 'Exportieren', keywords: 'excel herunterladen', shortcut: 'E', key: 'e', action: 'export' },
+  { id: 'pdf', label: 'PDF erstellen', keywords: 'bericht spezifikation review drucken', shortcut: 'B', key: 'b', action: 'pdf' },
   { id: 'switch-project', label: 'Projekt wechseln', keywords: 'projekte übersicht', shortcut: 'P', key: 'p', run: ({ navigate }) => navigate('/') },
   {
     id: 'setup', label: 'Projekt einrichten', keywords: 'dokumentenstruktur dokumente', shortcut: 'D', key: 'd', needsProject: true,

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMarkedItems } from '../../../../shared/store/markedItemsStore';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Loader2, AlertCircle, CheckCircle, Circle, ExternalLink, Plus, X, Lock, ArrowUp, ArrowDown, ArrowUpDown, Filter,
@@ -150,6 +151,8 @@ export default function RequirementsTable({ projectId, prefix, onOpenItem }: Pro
   const [filter, setFilter] = useState('');
   const [onlyIncomplete, setOnlyIncomplete] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const setMarked = useMarkedItems((st) => st.setMarked);
+  useEffect(() => { setMarked(projectId, [...selected]); }, [projectId, selected, setMarked]);
   const [active, setActive] = useState<Pos | null>(null);
   const [editing, setEditing] = useState<{ pos: Pos; value: string } | null>(null);
   const [importTable, setImportTable] = useState<string[][] | null>(null);

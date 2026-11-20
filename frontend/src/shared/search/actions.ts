@@ -9,7 +9,7 @@ import { create } from 'zustand';
 export type ActionId =
   | 'new-item' | 'save' | 'review' | 'graph'
   | 'view-table' | 'view-list'
-  | 'import' | 'export' | 'ask';
+  | 'import' | 'export' | 'pdf' | 'ask';
 
 interface ActionStore {
   handlers: Partial<Record<ActionId, () => void>>;
