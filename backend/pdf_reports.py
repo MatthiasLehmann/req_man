@@ -81,3 +81,8 @@ def render(project_id: str, req: PdfRequest) -> Tuple[bytes, str]:
     base = re.sub(r"[^A-Za-z0-9_-]", "_", project["name"])
     suffix = "Review" if req.template == "review" else (req.documents[0] if len(req.documents) == 1 else "Spezifikation")
     return pdf, f"{base}_{suffix}.pdf"
+
+
+# E3: Review-Unterlage registrieren (am Ende, wegen Importzyklus)
+from pdf_review import render as _render_review  # noqa: E402
+RENDERERS["review"] = _render_review
