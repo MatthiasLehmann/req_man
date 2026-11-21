@@ -83,5 +83,8 @@ def render(project_id: str, req: PdfRequest) -> Tuple[bytes, str]:
     return pdf, f"{base}_{suffix}.pdf"
 
 
-from pdf_spezifikation import render as _render_spez  # noqa: E402  (E2; Import am Ende vermeidet Zyklus)
+# Vorlagen registrieren (am Ende, wegen Importzyklus)
+from pdf_spezifikation import render as _render_spez  # noqa: E402  (E2)
+from pdf_review import render as _render_review  # noqa: E402  (E3)
 RENDERERS["spezifikation"] = _render_spez
+RENDERERS["review"] = _render_review
