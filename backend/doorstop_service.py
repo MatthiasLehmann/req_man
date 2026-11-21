@@ -320,6 +320,7 @@ def _document_to_dict(doc: doorstop.Document) -> Dict:
         "parent": parent_prefix,
         "children": children,
         "property_values": _read_document_properties(str(doc.path)),
+        "document_control": read_document_control(str(doc.path)),
     }
 
 
@@ -384,6 +385,58 @@ def set_document_properties(project_id: str, prefix: str, values: Dict[str, str]
     with open(config, "w", encoding="utf-8") as f:
         yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
+    return cleaned
+
+
+# Dokumentenlenkung (E2): extensions.reqman.control der .doorstop.yml – Dokumentnummer, Version, Status,
+# Vertraulichkeit, Titel und die Namen für die Freigabetabelle. Vorgabe für die PDF-Spezifikation.
+DOCUMENT_CONTROL_FIELDS = ("title", "doc_number", "version", "status", "confidentiality",
+                           "author", "reviewer", "approver", "kind")
+
+
+def read_document_control(doc_path: str) -> Dict[str, str]:
+    try:
+        with open(_document_config_path(doc_path), encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError):
+        return {}
+    ext = data.get("extensions") if isinstance(data, dict) else None
+    reqman = ext.get("reqman") if isinstance(ext, dict) else None
+    control = reqman.get("control") if isinstance(reqman, dict) else None
+    if not isinstance(control, dict):
+        return {}
+    return {k: str(control[k]) for k in DOCUMENT_CONTROL_FIELDS if control.get(k) not in (None, "")}
+
+
+def set_document_control(project_id: str, prefix: str, values: Dict[str, str]) -> Dict[str, str]:
+    """Schreibt die Dokumentenlenkung; leere Felder werden nicht gespeichert."""
+    project = get_project(project_id)
+    if not project:
+        raise ValueError(f"Project {project_id} not found")
+    doc = _build_tree(project["path"]).find_document(prefix)  # DoorstopError bei unbekanntem Prefix
+    config = _document_config_path(str(doc.path))
+    with open(config, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    extensions = data.get("extensions") if isinstance(data.get("extensions"), dict) else {}
+    reqman = extensions.get("reqman") if isinstance(extensions.get("reqman"), dict) else {}
+    cleaned = {k: str(values[k]).strip() for k in DOCUMENT_CONTROL_FIELDS
+               if values.get(k) is not None and str(values[k]).strip()}
+    if cleaned:
+        reqman["control"] = cleaned
+        extensions["reqman"] = reqman
+        data["extensions"] = extensions
+    else:
+        reqman.pop("control", None)
+        if reqman:
+            extensions["reqman"] = reqman
+        else:
+            extensions.pop("reqman", None)
+        if extensions:
+            data["extensions"] = extensions
+        else:
+            data.pop("extensions", None)
+    with open(config, "w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
     return cleaned
 
 

@@ -249,15 +249,14 @@ export default function ProjectStructureTab({ projectId }: Props) {
               </select>
             </div>
 
-            {selectedDoc.document_type && selectedDoc.document_type.properties.length > 0 && (
-              <DocumentPropertiesForm
-                projectId={projectId}
-                prefix={selectedDoc.prefix}
-                properties={selectedDoc.document_type.properties}
-                values={selectedDoc.property_values ?? {}}
-                canEdit={canEdit}
-              />
-            )}
+            <DocumentPropertiesForm
+              projectId={projectId}
+              prefix={selectedDoc.prefix}
+              properties={selectedDoc.document_type?.properties ?? []}
+              values={selectedDoc.property_values ?? {}}
+              control={selectedDoc.document_control ?? {}}
+              canEdit={canEdit}
+            />
 
             <button
               onClick={() => navigate(`/requirements/${projectId}`)}

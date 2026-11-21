@@ -355,9 +355,13 @@ export const assignDocumentType = (projectId: string, prefix: string, typeId: st
   api.put(`/projects/${projectId}/documents/${prefix}/type`, {
     document_type_id: typeId,
   } satisfies ApiBody<'/api/projects/{project_id}/documents/{prefix}/type', 'put'>);
-export const updateDocumentProperties = (projectId: string, prefix: string, values: Record<string, string>) =>
+/** Dokumentenlenkung eines Dokuments (Dokumentnummer, Version, Status …; Vorgabe für die PDF-Spezifikation) */
+export type DocumentControl = Schemas['DocumentControl-Input'];
+export const updateDocumentProperties = (
+  projectId: string, prefix: string, values: Record<string, string>, control?: DocumentControl,
+) =>
   api.put(`/projects/${projectId}/documents/${encodeURIComponent(prefix)}/properties`, {
-    values,
+    values, control,
   } satisfies ApiBody<'/api/projects/{project_id}/documents/{prefix}/properties', 'put'>);
 
 // Export
