@@ -19,6 +19,7 @@ from typing import Dict, List, Optional
 
 import doorstop_service as ds
 import typst_service as ts
+import pdf_filter
 
 HISTORY_LIMIT = 30
 LOGO_REL = os.path.join(".reqman", "logo.png")
@@ -152,10 +153,19 @@ def glossary(project_path: str) -> Dict:
 def build_spec_data(project_id: str, req) -> Dict:
     """Datengerüst der Spezifikation (ohne Satz). ValueError: Projekt fehlt; KeyError: Dokument fehlt."""
     opts = req.options
-    data = ts.build_data(project_id, documents=list(req.documents) or None,
-                         uids=list(req.filter.uids) or None, attributes=list(opts.attributes))
     project = ds.get_project(project_id)
+    if not project:
+        raise ValueError("Projekt nicht gefunden")
     path = project["path"]
+    docs = list(req.documents) or None
+    filtered = pdf_filter.is_active(req.filter)
+    uids = None
+    if filtered:
+        # E5: gleicher Filter wie die Review-Unterlage (Status, geändert seit, Attribut, Auswahl)
+        base = ts.build_data(project_id, documents=docs, attributes=None)
+        items = [e for d in base["documents"] for e in d["items"] if e["kind"] == "req"]
+        uids = [e["uid"] for e in pdf_filter.select(items, req.filter, path)] or ["__keine__"]
+    data = ts.build_data(project_id, documents=docs, uids=uids, attributes=list(opts.attributes))
     tree = ds._build_tree(path)
     by_prefix = {str(d.prefix): d for d in tree.documents}
     shown = [d["prefix"] for d in data["documents"]]
@@ -177,7 +187,7 @@ def build_spec_data(project_id: str, req) -> Dict:
 
     data["history"] = git_history(path, [str(by_prefix[p].path) for p in shown])
     data["options"] = {"layout": opts.layout, "appendices": list(opts.appendices),
-                       "filtered": bool(req.filter.uids)}
+                       "filtered": filtered}
     data["glossary"] = glossary(path) if "glossar" in opts.appendices else {"documents": [], "entries": []}
     logo = find_logo(path)
     data["logo"] = f"/logo.{logo[1]}" if logo else None

@@ -275,3 +275,14 @@ def test_api_post_spezifikation(project):
     assert "Bremse_SYS.pdf" in r.headers["content-disposition"]
     r = TestClient(app).post(f"/api/projects/{pid}/export/pdf", json={"documents": ["NIX"]})
     assert r.status_code == 404
+
+
+def test_filter_wirkt_in_spezifikation(project):
+    """E5: Attribut-/Statusfilter aus pdf_filter gilt auch für die Spezifikation."""
+    pid, u, root = project
+    req = _req(documents=["SYS"], filter={"attribute": {"name": "priority", "value": "hoch"}})
+    d = spez.build_spec_data(pid, req)
+    reqs = [e["uid"] for e in d["documents"][0]["items"] if e["kind"] == "req"]
+    assert reqs == [u["s1"]] and d["options"]["filtered"]
+    leer = spez.build_spec_data(pid, _req(documents=["SYS"], filter={"status": ["geprüft"]}))
+    assert not [e for e in leer["documents"][0]["items"] if e["kind"] == "req"]
