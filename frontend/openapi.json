@@ -923,6 +923,141 @@
         "title": "DirEntry",
         "type": "object"
       },
+      "DocumentControl-Input": {
+        "description": "Dokumentenlenkung je Dokument (E2, für die PDF-Spezifikation; extensions.reqman.control der .doorstop.yml).\n\nAlle Felder leer = nicht gesetzt; im PDF-Dialog überschreibbar (options.meta).",
+        "properties": {
+          "approver": {
+            "default": "",
+            "title": "Approver",
+            "type": "string"
+          },
+          "author": {
+            "default": "",
+            "title": "Author",
+            "type": "string"
+          },
+          "confidentiality": {
+            "default": "",
+            "title": "Confidentiality",
+            "type": "string"
+          },
+          "doc_number": {
+            "default": "",
+            "title": "Doc Number",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "enum": [
+              "",
+              "glossar"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "reviewer": {
+            "default": "",
+            "title": "Reviewer",
+            "type": "string"
+          },
+          "status": {
+            "default": "",
+            "enum": [
+              "",
+              "entwurf",
+              "pruefung",
+              "freigegeben"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "default": "",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "title": "DocumentControl",
+        "type": "object"
+      },
+      "DocumentControl-Output": {
+        "description": "Dokumentenlenkung je Dokument (E2, für die PDF-Spezifikation; extensions.reqman.control der .doorstop.yml).\n\nAlle Felder leer = nicht gesetzt; im PDF-Dialog überschreibbar (options.meta).",
+        "properties": {
+          "approver": {
+            "default": "",
+            "title": "Approver",
+            "type": "string"
+          },
+          "author": {
+            "default": "",
+            "title": "Author",
+            "type": "string"
+          },
+          "confidentiality": {
+            "default": "",
+            "title": "Confidentiality",
+            "type": "string"
+          },
+          "doc_number": {
+            "default": "",
+            "title": "Doc Number",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "enum": [
+              "",
+              "glossar"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "reviewer": {
+            "default": "",
+            "title": "Reviewer",
+            "type": "string"
+          },
+          "status": {
+            "default": "",
+            "enum": [
+              "",
+              "entwurf",
+              "pruefung",
+              "freigegeben"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "default": "",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "doc_number",
+          "version",
+          "status",
+          "confidentiality",
+          "author",
+          "reviewer",
+          "approver",
+          "kind"
+        ],
+        "title": "DocumentControl",
+        "type": "object"
+      },
       "DocumentCreate": {
         "properties": {
           "parent": {
@@ -1024,6 +1159,16 @@
       },
       "DocumentPropertiesUpdate": {
         "properties": {
+          "control": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentControl-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "values": {
             "additionalProperties": {
               "type": "string"
@@ -1236,6 +1381,9 @@
             "title": "Children",
             "type": "array"
           },
+          "document_control": {
+            "$ref": "#/components/schemas/DocumentControl-Output"
+          },
           "document_type": {
             "anyOf": [
               {
@@ -1302,7 +1450,8 @@
           "children",
           "document_type_id",
           "document_type",
-          "property_values"
+          "property_values",
+          "document_control"
         ],
         "title": "DocumentWithType",
         "type": "object"

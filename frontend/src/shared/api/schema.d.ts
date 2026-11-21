@@ -1773,6 +1773,116 @@ export interface components {
             /** Path */
             path: string;
         };
+        /**
+         * DocumentControl
+         * @description Dokumentenlenkung je Dokument (E2, für die PDF-Spezifikation; extensions.reqman.control der .doorstop.yml).
+         *
+         *     Alle Felder leer = nicht gesetzt; im PDF-Dialog überschreibbar (options.meta).
+         */
+        "DocumentControl-Input": {
+            /**
+             * Approver
+             * @default
+             */
+            approver?: string;
+            /**
+             * Author
+             * @default
+             */
+            author?: string;
+            /**
+             * Confidentiality
+             * @default
+             */
+            confidentiality?: string;
+            /**
+             * Doc Number
+             * @default
+             */
+            doc_number?: string;
+            /**
+             * Kind
+             * @default
+             * @enum {string}
+             */
+            kind?: "" | "glossar";
+            /**
+             * Reviewer
+             * @default
+             */
+            reviewer?: string;
+            /**
+             * Status
+             * @default
+             * @enum {string}
+             */
+            status?: "" | "entwurf" | "pruefung" | "freigegeben";
+            /**
+             * Title
+             * @default
+             */
+            title?: string;
+            /**
+             * Version
+             * @default
+             */
+            version?: string;
+        };
+        /**
+         * DocumentControl
+         * @description Dokumentenlenkung je Dokument (E2, für die PDF-Spezifikation; extensions.reqman.control der .doorstop.yml).
+         *
+         *     Alle Felder leer = nicht gesetzt; im PDF-Dialog überschreibbar (options.meta).
+         */
+        "DocumentControl-Output": {
+            /**
+             * Approver
+             * @default
+             */
+            approver: string;
+            /**
+             * Author
+             * @default
+             */
+            author: string;
+            /**
+             * Confidentiality
+             * @default
+             */
+            confidentiality: string;
+            /**
+             * Doc Number
+             * @default
+             */
+            doc_number: string;
+            /**
+             * Kind
+             * @default
+             * @enum {string}
+             */
+            kind: "" | "glossar";
+            /**
+             * Reviewer
+             * @default
+             */
+            reviewer: string;
+            /**
+             * Status
+             * @default
+             * @enum {string}
+             */
+            status: "" | "entwurf" | "pruefung" | "freigegeben";
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+        };
         /** DocumentCreate */
         DocumentCreate: {
             /** Parent */
@@ -1812,6 +1922,7 @@ export interface components {
         };
         /** DocumentPropertiesUpdate */
         DocumentPropertiesUpdate: {
+            control?: components["schemas"]["DocumentControl-Input"] | null;
             /**
              * Values
              * @default {}
@@ -1898,6 +2009,7 @@ export interface components {
              * @default []
              */
             children: string[];
+            document_control: components["schemas"]["DocumentControl-Output"];
             document_type: components["schemas"]["DocumentTypeResponse"] | null;
             /** Document Type Id */
             document_type_id: string | null;

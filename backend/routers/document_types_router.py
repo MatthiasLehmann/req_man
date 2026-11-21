@@ -183,10 +183,15 @@ async def update_document_properties(
 ):
     try:
         saved = ds.set_document_properties(project_id, prefix, data.values)
+        control = (ds.set_document_control(project_id, prefix, data.control.model_dump())
+                   if data.control is not None else None)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except doorstop.DoorstopError:
         raise HTTPException(status_code=404, detail=f"Document {prefix} not found")
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Speichern: {e}")
-    return {"ok": True, "values": saved}
+    result = {"ok": True, "values": saved}
+    if control is not None:
+        result["control"] = control
+    return result

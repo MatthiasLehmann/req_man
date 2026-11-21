@@ -1,7 +1,7 @@
 import re
 
-from pydantic import BaseModel, field_validator
-from typing import Optional, List, Any, Dict
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List, Any, Dict, Literal
 from datetime import datetime
 
 
@@ -219,11 +219,28 @@ class DocumentTypeResponse(BaseModel):
         from_attributes = True
 
 
+class DocumentControl(BaseModel):
+    """Dokumentenlenkung je Dokument (E2, für die PDF-Spezifikation; extensions.reqman.control der .doorstop.yml).
+
+    Alle Felder leer = nicht gesetzt; im PDF-Dialog überschreibbar (options.meta).
+    """
+    title: str = ""
+    doc_number: str = ""
+    version: str = ""
+    status: Literal["", "entwurf", "pruefung", "freigegeben"] = ""
+    confidentiality: str = ""
+    author: str = ""      # Erstellt
+    reviewer: str = ""    # Geprüft
+    approver: str = ""    # Freigegeben
+    kind: Literal["", "glossar"] = ""  # "glossar" = Begriffe/Abkürzungen für den Anhang der Spezifikation
+
+
 class DocumentWithType(DocumentResponse):
     document_type_id: Optional[str] = None
     document_type: Optional[DocumentTypeResponse] = None
     # Eigenschaftswerte pro Dokument (aus extensions.reqman.properties der .doorstop.yml)
     property_values: Dict[str, str] = {}
+    document_control: DocumentControl = Field(default_factory=DocumentControl)
 
 
 class ProjectStructureResponse(BaseModel):
@@ -236,6 +253,8 @@ class AssignDocumentTypeRequest(BaseModel):
 
 class DocumentPropertiesUpdate(BaseModel):
     values: Dict[str, str] = {}
+    # None = Dokumentenlenkung unverändert lassen
+    control: Optional[DocumentControl] = None
 
 
 # Attribute config models
