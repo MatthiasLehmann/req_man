@@ -1,31 +1,22 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Suspense, useState, useMemo, useEffect, useRef } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ReactFlow, Node, Edge, Background, Controls, MiniMap,
   MarkerType, Panel, Position,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { GitBranch, Table2, List, ArrowLeft, Loader2, AlertCircle, ArrowDown, ArrowUp, ChevronDown } from 'lucide-react';
+import { GitBranch, Table2, Loader2, AlertCircle, ArrowDown, ArrowUp, ChevronDown, ChevronsUpDown, Link2, ListTree, Network } from 'lucide-react';
 import clsx from 'clsx';
 import { getTraceability } from '../../../shared/api/client';
 import { TraceabilityData, TraceabilityNode } from '../../../shared/types';
+import { EmptyProject } from '../../../shared/ui/EmptyProject';
+import { ForceGraph, buildGraph, getDocColor } from '../../graph';
+import { LinkingPage } from '../../editor';
+import { useOpenRequirement, useRegisterAction } from '../../../shared/search';
 
-// Document color map
-const DOC_COLORS: Record<string, string> = {
-  default: '#3b82f6',
-};
-const COLOR_PALETTE = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
-];
-
-function getDocColor(doc: string, docList: string[]): string {
-  const idx = docList.indexOf(doc);
-  return COLOR_PALETTE[idx % COLOR_PALETTE.length];
-}
-
-type ViewMode = 'graph' | 'matrix' | 'list' | 'topdown' | 'bottomup';
+type ViewMode = 'graph' | 'matrix' | 'tree' | 'link';
+type TreeDirection = 'down' | 'up';
 
 // ─── Document Multi-Select Menu ────────────────────────────────────────────────
 
@@ -100,10 +91,16 @@ function DocSelectMenu({
 
 export default function TraceabilityPage() {
   const { projectId } = useParams<{ projectId: string }>();
-  const navigate = useNavigate();
-  const [viewMode, setViewMode] = useState<ViewMode>('graph');
-  const [filterDoc, setFilterDoc] = useState<string>('');
-  const [selectedUid, setSelectedUid] = useState<string>('');
+  const openRequirement = useOpenRequirement();
+  const [searchParams] = useSearchParams();
+  const viewParam = searchParams.get('view');
+  const paramView = (['graph', 'matrix', 'tree', 'link'] as const).find((v) => v === viewParam);
+  const [viewMode, setViewMode] = useState<ViewMode>(paramView ?? 'graph');
+  // Adresse mit ?view=… (z. B. aus „Nächste Schritte“) stellt die Ansicht ein
+  useEffect(() => { if (paramView) setViewMode(paramView); }, [paramView]);
+  // „Graph öffnen“ (G) stellt die Ansicht „Graph“ ein
+  useRegisterAction('graph', () => setViewMode('graph'));
+  const [treeDir, setTreeDir] = useState<TreeDirection>('down');
   const [selectedDocsOverride, setSelectedDocsOverride] = useState<Set<string> | null>(null);
 
   // Reset horizontal scroll caused by ReactFlow when switching views
@@ -123,21 +120,8 @@ export default function TraceabilityPage() {
     return [...new Set(data.nodes.map((n) => n.document))].sort();
   }, [data.nodes]);
 
-  const filteredNodes = useMemo(() => {
-    if (!filterDoc) return data.nodes;
-    return data.nodes.filter((n) => n.document === filterDoc);
-  }, [data.nodes, filterDoc]);
-
-  const filteredNodeIds = new Set(filteredNodes.map((n) => n.uid));
-
-  const filteredLinks = useMemo(() => {
-    return data.links.filter(
-      (l) => filteredNodeIds.has(l.source) || filteredNodeIds.has(l.target)
-    );
-  }, [data.links, filteredNodeIds]);
-
-  // Document multi-selection for Graph & Matrix views: always at least two
-  // documents selected, showing only the linkage between the chosen documents.
+  // Dokument-Mehrfachauswahl für alle Ansichten: mindestens zwei Dokumente,
+  // gezeigt wird nur die Verlinkung zwischen den gewählten Dokumenten.
   const selectedDocs = useMemo(
     () => selectedDocsOverride ?? new Set(docList.slice(0, 2)),
     [selectedDocsOverride, docList]
@@ -169,15 +153,12 @@ export default function TraceabilityPage() {
     [data.links, multiDocNodeIds]
   );
 
-  if (!projectId) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <button onClick={() => navigate('/')} className="btn-secondary">
-          <ArrowLeft className="w-4 h-4" /> Zur Projektübersicht
-        </button>
-      </div>
-    );
-  }
+  const netData = useMemo(
+    () => buildGraph(multiDocNodes, multiDocLinks, docList, data.links),
+    [multiDocNodes, multiDocLinks, docList, data.links]
+  );
+
+  if (!projectId) return <EmptyProject icon={GitBranch} />;
 
   return (
     <div className="flex flex-col h-full">
@@ -186,41 +167,54 @@ export default function TraceabilityPage() {
         <div className="flex items-center gap-2">
           <GitBranch className="w-5 h-5 text-primary-600" />
           <h2 className="font-semibold text-gray-800">Traceability</h2>
-          <span className="text-xs text-gray-400">
-            {viewMode === 'graph' || viewMode === 'matrix'
-              ? `${multiDocNodes.length} Anforderungen · ${multiDocLinks.length} Verlinkungen`
-              : `${data.nodes.length} Anforderungen · ${data.links.length} Verlinkungen`}
-          </span>
+          {viewMode !== 'link' && (
+            <span className="text-xs text-gray-400">
+              {multiDocNodes.length} Anforderungen · {multiDocLinks.length} Verlinkungen
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Document selection */}
-          {viewMode === 'graph' || viewMode === 'matrix' ? (
+          {/* Dokumentauswahl (überall dieselbe Mehrfachauswahl; „Verknüpfen“ hat eigene Spalten) */}
+          {viewMode !== 'link' && (
             <DocSelectMenu docList={docList} selectedDocs={selectedDocs} onToggle={toggleDoc} />
-          ) : (
-            <select
-              className="text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-400"
-              value={filterDoc}
-              onChange={(e) => setFilterDoc(e.target.value)}
-            >
-              <option value="">Alle Dokumente</option>
-              {docList.map((d) => (
-                <option key={d} value={d}>{d}</option>
+          )}
+
+          {/* Richtung (nur Baum) */}
+          {viewMode === 'tree' && (
+            <div className="flex border border-gray-200 rounded-lg overflow-hidden" role="group" aria-label="Richtung">
+              {([
+                ['down', ArrowDown, 'Top-Down', 'Von oben nach unten: Anforderung → die, die auf sie verweisen'],
+                ['up', ArrowUp, 'Bottom-Up', 'Von unten nach oben: Anforderung → die, auf die sie verweist'],
+              ] as const).map(([dir, Icon, label, tip]) => (
+                <button
+                  key={dir}
+                  title={tip}
+                  onClick={() => setTreeDir(dir)}
+                  className={clsx(
+                    'px-2.5 py-1.5 flex items-center gap-1 text-xs transition-colors',
+                    treeDir === dir ? 'bg-gray-700 text-white' : 'text-gray-600 hover:bg-gray-50'
+                  )}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {label}
+                </button>
               ))}
-            </select>
+            </div>
           )}
 
           {/* View mode */}
-          <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+          <div className="flex border border-gray-200 rounded-lg overflow-hidden" role="tablist">
             {([
-              ['graph', GitBranch, 'Graph'],
+              ['graph', Network, 'Graph'],
               ['matrix', Table2, 'Matrix'],
-              ['list', List, 'Liste'],
-              ['topdown', ArrowDown, 'Top-Down'],
-              ['bottomup', ArrowUp, 'Bottom-Up'],
+              ['tree', ListTree, 'Baum'],
+              ['link', Link2, 'Verknüpfen'],
             ] as const).map(([mode, Icon, label]) => (
               <button
                 key={mode}
+                role="tab"
+                aria-selected={viewMode === mode}
                 onClick={() => setViewMode(mode)}
                 className={clsx(
                   'px-3 py-1.5 flex items-center gap-1.5 text-xs transition-colors',
@@ -239,7 +233,11 @@ export default function TraceabilityPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">
-        {isLoading ? (
+        {viewMode === 'link' ? (
+          <Suspense fallback={<Loader2 className="w-8 h-8 animate-spin text-primary-600 m-8" />}>
+            <LinkingPage />
+          </Suspense>
+        ) : isLoading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
           </div>
@@ -251,31 +249,36 @@ export default function TraceabilityPage() {
             </div>
           </div>
         ) : viewMode === 'graph' ? (
-          <GraphView nodes={multiDocNodes} links={multiDocLinks} docList={docList} />
+          <Suspense fallback={<Loader2 className="w-8 h-8 animate-spin text-primary-600 m-8" />}>
+            <ForceGraph
+              data={netData}
+              docList={docList}
+              controls
+              onOpen={(n) => openRequirement(projectId, n.document, n.id)}
+            />
+          </Suspense>
         ) : viewMode === 'matrix' ? (
           <MatrixView nodes={multiDocNodes} links={multiDocLinks} />
-        ) : viewMode === 'list' ? (
-          <ListView nodes={filteredNodes} links={filteredLinks} docList={docList} />
-        ) : viewMode === 'topdown' ? (
-          <TopDownView nodes={data.nodes} links={data.links} docList={docList} selectedUid={selectedUid} setSelectedUid={setSelectedUid} />
         ) : (
-          <BottomUpView nodes={data.nodes} links={data.links} docList={docList} selectedUid={selectedUid} setSelectedUid={setSelectedUid} />
+          <TreeView nodes={multiDocNodes} links={multiDocLinks} docList={docList} direction={treeDir} />
         )}
       </div>
     </div>
   );
 }
 
-// ─── Graph View ───────────────────────────────────────────────────────────────
+// ─── Tree View (Spaltenansicht mit Aufklappen) ────────────────────────────────
 
-function GraphView({
+function TreeView({
   nodes: traceNodes,
   links,
   docList,
+  direction,
 }: {
   nodes: TraceabilityNode[];
   links: { source: string; target: string; valid: boolean }[];
   docList: string[];
+  direction: TreeDirection;
 }) {
   const ITEM_WIDTH = 190;
   const COL_GAP = 260;
@@ -283,32 +286,38 @@ function GraphView({
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
+  // Beim Richtungswechsel beginnt der Baum zugeklappt neu.
+  useEffect(() => setExpanded(new Set()), [direction]);
+
   const nodeMap = useMemo(
     () => Object.fromEntries(traceNodes.map((n) => [n.uid, n])),
     [traceNodes]
   );
 
   // A link means: source (lower/child item) traces up to target (higher/parent item).
-  // So the "children" of a node in a top-down tree are the items that link to it.
+  // Top-Down: the children of a node are the items that link to it.
+  // Bottom-Up: the children of a node are the items it links to.
   const childrenMap = useMemo(() => {
     const map: Record<string, string[]> = {};
     links.forEach((l) => {
       if (nodeMap[l.source] && nodeMap[l.target]) {
-        map[l.target] = [...(map[l.target] || []), l.source];
+        const [parent, child] = direction === 'down' ? [l.target, l.source] : [l.source, l.target];
+        map[parent] = [...(map[parent] || []), child];
       }
     });
     return map;
-  }, [links, nodeMap]);
+  }, [links, nodeMap, direction]);
 
-  const hasParentLink = useMemo(
-    () => new Set(links.filter((l) => nodeMap[l.source] && nodeMap[l.target]).map((l) => l.source)),
-    [links, nodeMap]
-  );
+  const hasParent = useMemo(() => {
+    const s = new Set<string>();
+    Object.values(childrenMap).forEach((cs) => cs.forEach((c) => s.add(c)));
+    return s;
+  }, [childrenMap]);
 
-  // Roots: items that don't link up to anything else in the current selection.
+  // Roots: items without a parent in the current selection and direction.
   const roots = useMemo(
-    () => traceNodes.filter((n) => !hasParentLink.has(n.uid)),
-    [traceNodes, hasParentLink]
+    () => traceNodes.filter((n) => !hasParent.has(n.uid)),
+    [traceNodes, hasParent]
   );
 
   const toggle = (uid: string) => {
@@ -339,8 +348,8 @@ function GraphView({
     flowNodes.push({
       id: uid,
       position: { x: depth * COL_GAP, y: row * ROW_GAP },
-      sourcePosition: Position.Left,
-      targetPosition: Position.Right,
+      sourcePosition: direction === 'down' ? Position.Left : Position.Right,
+      targetPosition: direction === 'down' ? Position.Right : Position.Left,
       data: {
         label: (
           <div className="text-left leading-tight">
@@ -375,10 +384,11 @@ function GraphView({
 
     if (isExpanded) {
       children.forEach((childUid) => {
+        const [source, target] = direction === 'down' ? [childUid, uid] : [uid, childUid];
         flowEdges.push({
-          id: `e-${childUid}-${uid}`,
-          source: childUid,
-          target: uid,
+          id: `e-${source}-${target}`,
+          source,
+          target,
           animated: false,
           style: { stroke: '#94a3b8', strokeWidth: 1.5 },
           markerEnd: { type: MarkerType.ArrowClosed },
@@ -391,9 +401,11 @@ function GraphView({
   roots.forEach((r) => visit(r.uid, 0));
 
   const docOrder = docList.filter((d) => traceNodes.some((n) => n.document === d));
+  const allExpanded = traceNodes.every((n) => (childrenMap[n.uid] || []).length === 0 || expanded.has(n.uid));
 
   return (
     <ReactFlow
+      key={direction}
       nodes={flowNodes}
       edges={flowEdges}
       onNodeClick={(_, node) => {
@@ -423,18 +435,14 @@ function GraphView({
               </div>
             ))}
           </div>
-          <div className="flex gap-2 pt-1 border-t border-gray-100">
+          <div className="pt-1 border-t border-gray-100">
             <button
-              onClick={() => setExpanded(new Set(traceNodes.map((n) => n.uid)))}
-              className="text-primary-600 hover:underline"
+              title={allExpanded ? 'Alles zuklappen' : 'Alles aufklappen'}
+              aria-label={allExpanded ? 'Alles zuklappen' : 'Alles aufklappen'}
+              onClick={() => setExpanded(allExpanded ? new Set() : new Set(traceNodes.map((n) => n.uid)))}
+              className="p-1 rounded text-gray-500 hover:bg-gray-100 hover:text-gray-800"
             >
-              Alle aufklappen
-            </button>
-            <button
-              onClick={() => setExpanded(new Set())}
-              className="text-primary-600 hover:underline"
-            >
-              Alle einklappen
+              <ChevronsUpDown className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -520,368 +528,6 @@ function MatrixView({
         <span className="flex items-center gap-1"><span className="text-blue-600 font-bold">↓</span> Verlinkung (von → nach)</span>
         <span className="flex items-center gap-1"><span className="text-green-600">↑</span> Rückverlinkung</span>
       </div>
-    </div>
-  );
-}
-
-// ─── Shared: Traceability Tree ─────────────────────────────────────────────────
-
-type TraceLink = { source: string; target: string; valid: boolean };
-
-function buildDownstream(
-  uid: string,
-  links: TraceLink[],
-  nodeMap: Record<string, TraceabilityNode>,
-  visited = new Set<string>()
-): TraceabilityNode[] {
-  if (visited.has(uid)) return [];
-  visited.add(uid);
-  const children = links.filter((l) => l.source === uid).map((l) => l.target);
-  const result: TraceabilityNode[] = [];
-  for (const child of children) {
-    const node = nodeMap[child];
-    if (node) result.push(node, ...buildDownstream(child, links, nodeMap, visited));
-  }
-  return result;
-}
-
-function buildUpstream(
-  uid: string,
-  links: TraceLink[],
-  nodeMap: Record<string, TraceabilityNode>,
-  visited = new Set<string>()
-): TraceabilityNode[] {
-  if (visited.has(uid)) return [];
-  visited.add(uid);
-  const parents = links.filter((l) => l.target === uid).map((l) => l.source);
-  const result: TraceabilityNode[] = [];
-  for (const parent of parents) {
-    const node = nodeMap[parent];
-    if (node) result.push(node, ...buildUpstream(parent, links, nodeMap, visited));
-  }
-  return result;
-}
-
-interface TraceTreeNodeProps {
-  uid: string;
-  links: TraceLink[];
-  nodeMap: Record<string, TraceabilityNode>;
-  docList: string[];
-  direction: 'down' | 'up';
-  depth?: number;
-  visited?: Set<string>;
-}
-
-function TraceTreeNode({ uid, links, nodeMap, docList, direction, depth = 0, visited = new Set() }: TraceTreeNodeProps) {
-  const [collapsed, setCollapsed] = useState(false);
-  if (visited.has(uid)) return null;
-  const newVisited = new Set(visited);
-  newVisited.add(uid);
-
-  const node = nodeMap[uid];
-  const children = direction === 'down'
-    ? links.filter((l) => l.source === uid).map((l) => l.target)
-    : links.filter((l) => l.target === uid).map((l) => l.source);
-
-  const color = node ? getDocColor(node.document, docList) : '#94a3b8';
-
-  return (
-    <div className={clsx('relative', depth > 0 && 'ml-6')}>
-      {depth > 0 && (
-        <div
-          className="absolute left-[-16px] top-4 w-4 border-t border-gray-300"
-          style={{ borderStyle: 'dashed' }}
-        />
-      )}
-      <div
-        className="flex items-start gap-2 py-1.5 px-2 rounded-lg hover:bg-gray-50 group"
-      >
-        {children.length > 0 && (
-          <button
-            onClick={() => setCollapsed((c) => !c)}
-            className="mt-0.5 text-gray-400 hover:text-gray-700 shrink-0"
-          >
-            {collapsed ? '▶' : '▼'}
-          </button>
-        )}
-        {children.length === 0 && <span className="w-4 shrink-0" />}
-        <div className="flex items-start gap-2 flex-1 min-w-0">
-          <span
-            className="shrink-0 font-mono text-xs px-1.5 py-0.5 rounded text-white"
-            style={{ background: color }}
-          >
-            {uid}
-          </span>
-          {node && (
-            <>
-              <span className="text-xs text-gray-400 shrink-0">[{node.document}]</span>
-              <span className="text-xs text-gray-600 truncate">{node.text}</span>
-            </>
-          )}
-          {!node && <span className="text-xs text-red-400 italic">Anforderung nicht gefunden</span>}
-        </div>
-      </div>
-      {!collapsed && children.map((childUid) => (
-        <TraceTreeNode
-          key={childUid}
-          uid={childUid}
-          links={links}
-          nodeMap={nodeMap}
-          docList={docList}
-          direction={direction}
-          depth={depth + 1}
-          visited={newVisited}
-        />
-      ))}
-    </div>
-  );
-}
-
-// ─── Top-Down View ─────────────────────────────────────────────────────────────
-
-function TopDownView({
-  nodes,
-  links,
-  docList,
-  selectedUid,
-  setSelectedUid,
-}: {
-  nodes: TraceabilityNode[];
-  links: TraceLink[];
-  docList: string[];
-  selectedUid: string;
-  setSelectedUid: (uid: string) => void;
-}) {
-  const nodeMap = useMemo(() => Object.fromEntries(nodes.map((n) => [n.uid, n])), [nodes]);
-
-  return (
-    <div className="h-full overflow-auto p-6">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <ArrowDown className="w-5 h-5 text-primary-600" />
-          <h3 className="font-semibold text-gray-800">Top-Down Traceability</h3>
-          <span className="text-xs text-gray-400">Anforderung auswählen → Verlinkungen nach unten</span>
-        </div>
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Anforderung auswählen</label>
-          <select
-            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-400"
-            value={selectedUid}
-            onChange={(e) => setSelectedUid(e.target.value)}
-          >
-            <option value="">— Anforderung wählen —</option>
-            {nodes.map((n) => (
-              <option key={n.uid} value={n.uid}>
-                {n.uid} · [{n.document}] · {n.text?.slice(0, 60)}{n.text?.length > 60 ? '…' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {selectedUid && (
-          <div className="border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
-            <div className="mb-3 pb-3 border-b border-gray-100">
-              <p className="text-xs text-gray-500 mb-1">Ausgewählte Anforderung</p>
-              <div className="flex items-center gap-2">
-                <span
-                  className="font-mono text-sm px-2 py-0.5 rounded text-white"
-                  style={{ background: getDocColor(nodeMap[selectedUid]?.document ?? '', docList) }}
-                >
-                  {selectedUid}
-                </span>
-                <span className="text-sm text-gray-700">{nodeMap[selectedUid]?.text}</span>
-              </div>
-            </div>
-            {links.filter((l) => l.source === selectedUid).length === 0 ? (
-              <p className="text-sm text-gray-400 italic">Keine Verlinkungen nach unten vorhanden.</p>
-            ) : (
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-2">Verlinkungen ↓</p>
-                {links.filter((l) => l.source === selectedUid).map((l) => (
-                  <TraceTreeNode
-                    key={l.target}
-                    uid={l.target}
-                    links={links}
-                    nodeMap={nodeMap}
-                    docList={docList}
-                    direction="down"
-                    visited={new Set([selectedUid])}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {!selectedUid && (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-300">
-            <ArrowDown className="w-12 h-12 mb-3" />
-            <p className="text-sm">Wählen Sie eine Anforderung aus, um die Top-Down Traceability anzuzeigen.</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Bottom-Up View ────────────────────────────────────────────────────────────
-
-function BottomUpView({
-  nodes,
-  links,
-  docList,
-  selectedUid,
-  setSelectedUid,
-}: {
-  nodes: TraceabilityNode[];
-  links: TraceLink[];
-  docList: string[];
-  selectedUid: string;
-  setSelectedUid: (uid: string) => void;
-}) {
-  const nodeMap = useMemo(() => Object.fromEntries(nodes.map((n) => [n.uid, n])), [nodes]);
-
-  return (
-    <div className="h-full overflow-auto p-6">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <ArrowUp className="w-5 h-5 text-primary-600" />
-          <h3 className="font-semibold text-gray-800">Bottom-Up Traceability</h3>
-          <span className="text-xs text-gray-400">Anforderung auswählen → Verlinkungen nach oben</span>
-        </div>
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Anforderung auswählen</label>
-          <select
-            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-400"
-            value={selectedUid}
-            onChange={(e) => setSelectedUid(e.target.value)}
-          >
-            <option value="">— Anforderung wählen —</option>
-            {nodes.map((n) => (
-              <option key={n.uid} value={n.uid}>
-                {n.uid} · [{n.document}] · {n.text?.slice(0, 60)}{n.text?.length > 60 ? '…' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {selectedUid && (
-          <div className="border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
-            <div className="mb-3 pb-3 border-b border-gray-100">
-              <p className="text-xs text-gray-500 mb-1">Ausgewählte Anforderung</p>
-              <div className="flex items-center gap-2">
-                <span
-                  className="font-mono text-sm px-2 py-0.5 rounded text-white"
-                  style={{ background: getDocColor(nodeMap[selectedUid]?.document ?? '', docList) }}
-                >
-                  {selectedUid}
-                </span>
-                <span className="text-sm text-gray-700">{nodeMap[selectedUid]?.text}</span>
-              </div>
-            </div>
-            {links.filter((l) => l.target === selectedUid).length === 0 ? (
-              <p className="text-sm text-gray-400 italic">Keine Verlinkungen nach oben vorhanden.</p>
-            ) : (
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-2">Verlinkungen ↑</p>
-                {links.filter((l) => l.target === selectedUid).map((l) => (
-                  <TraceTreeNode
-                    key={l.source}
-                    uid={l.source}
-                    links={links}
-                    nodeMap={nodeMap}
-                    docList={docList}
-                    direction="up"
-                    visited={new Set([selectedUid])}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {!selectedUid && (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-300">
-            <ArrowUp className="w-12 h-12 mb-3" />
-            <p className="text-sm">Wählen Sie eine Anforderung aus, um die Bottom-Up Traceability anzuzeigen.</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── List View ────────────────────────────────────────────────────────────────
-
-function ListView({
-  nodes,
-  links,
-  docList,
-}: {
-  nodes: TraceabilityNode[];
-  links: { source: string; target: string; valid: boolean }[];
-  docList: string[];
-}) {
-  const outLinks: Record<string, string[]> = {};
-  const inLinks: Record<string, string[]> = {};
-  links.forEach((l) => {
-    outLinks[l.source] = [...(outLinks[l.source] || []), l.target];
-    inLinks[l.target] = [...(inLinks[l.target] || []), l.source];
-  });
-
-  return (
-    <div className="h-full overflow-auto p-4">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="bg-gray-50 border-b border-gray-200">
-            <th className="text-left p-3 font-medium text-gray-600 w-28">UID</th>
-            <th className="text-left p-3 font-medium text-gray-600 w-16">Ebene</th>
-            <th className="text-left p-3 font-medium text-gray-600 w-20">Dokument</th>
-            <th className="text-left p-3 font-medium text-gray-600">Text</th>
-            <th className="text-left p-3 font-medium text-gray-600 w-40">Verlinkt nach</th>
-            <th className="text-left p-3 font-medium text-gray-600 w-40">Verlinkt von</th>
-          </tr>
-        </thead>
-        <tbody>
-          {nodes.map((node) => (
-            <tr key={node.uid} className="border-b border-gray-100 hover:bg-gray-50">
-              <td className="p-3">
-                <span className="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">
-                  {node.uid}
-                </span>
-              </td>
-              <td className="p-3 text-xs text-gray-500">{node.level}</td>
-              <td className="p-3">
-                <span
-                  className="inline-block px-1.5 py-0.5 rounded text-xs font-medium text-white"
-                  style={{ background: getDocColor(node.document, docList) }}
-                >
-                  {node.document}
-                </span>
-              </td>
-              <td className="p-3 text-xs text-gray-600 max-w-xs truncate">{node.text}</td>
-              <td className="p-3">
-                <div className="flex flex-wrap gap-1">
-                  {(outLinks[node.uid] || []).map((uid) => (
-                    <span key={uid} className="text-xs font-mono text-blue-600 bg-blue-50 px-1 rounded">
-                      {uid}
-                    </span>
-                  ))}
-                </div>
-              </td>
-              <td className="p-3">
-                <div className="flex flex-wrap gap-1">
-                  {(inLinks[node.uid] || []).map((uid) => (
-                    <span key={uid} className="text-xs font-mono text-green-600 bg-green-50 px-1 rounded">
-                      {uid}
-                    </span>
-                  ))}
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }

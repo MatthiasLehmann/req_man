@@ -1,16 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, FileText, AlertTriangle, PanelsTopLeft, Table2 } from 'lucide-react';
+import { FileText, AlertTriangle, PanelsTopLeft, Table2 } from 'lucide-react';
 import clsx from 'clsx';
 import { getProject } from '../../../shared/api/client';
+import { useRegisterAction, withShortcut } from '../../../shared/search';
+
 import { useProjectStore } from '../../../shared/store/projectStore';
 import DocumentTree from '../components/DocumentTree';
 import ItemList from '../components/ItemList';
 import ItemEditor from '../components/ItemEditor';
 import RequirementsTable from '../components/table/RequirementsTable';
-import ExcelFileImport from '../components/import/ExcelFileImport';
+import ImportExportMenus from '../components/import/ImportExportMenus';
 import { useAuthStore } from '../../../shared/auth/authStore';
+import { EmptyProject } from '../../../shared/ui/EmptyProject';
 
 const VIEW_KEY = 'reqman_requirements_view';
 type ViewMode = 'editor' | 'table';
@@ -238,6 +241,19 @@ export default function RequirementsPage() {
     setPendingAction(() => action);
   }, [editorDirty]);
 
+  // Von außen gesetzte Auswahl übernehmen (Suche, „Öffnen“ in Hinweisen): der Store ist maßgeblich,
+  // die lokalen Wrapper halten ihn ohnehin synchron.
+  const storedPrefix = pid ? storedPrefixes[pid] || null : null;
+  const storedUid = pid ? storedUids[pid] || null : null;
+  useEffect(() => {
+    if (storedPrefix === selectedPrefix && storedUid === selectedUid) return;
+    guardedAction(() => {
+      setSelectedPrefixState(storedPrefix);
+      setSelectedUidState(storedUid);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storedPrefix, storedUid]);
+
   const handleModalConfirm = () => {
     if (pendingAction) {
       setEditorDirty(false);
@@ -250,35 +266,24 @@ export default function RequirementsPage() {
     setPendingAction(null);
   };
 
+  useRegisterAction('view-table', () => guardedAction(() => setView('table')), view !== 'table');
+  useRegisterAction('view-list', () => guardedAction(() => setView('editor')), view !== 'editor');
+
   // ── Kein Projekt ─────────────────────────────────────────────────────────────
-  if (!projectId) {
-    return (
-      <div className="flex items-center justify-center h-full text-gray-400">
-        <div className="text-center">
-          <FileText className="w-16 h-16 mx-auto mb-4 opacity-30" />
-          <p>Kein Projekt ausgewählt</p>
-          <button onClick={() => navigate('/')} className="btn-primary mt-4">
-            <ArrowLeft className="w-4 h-4" />
-            Zur Projektübersicht
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (!projectId) return <EmptyProject icon={FileText} />;
 
   // ── Render ───────────────────────────────────────────────────────────────────
   const viewSwitch = (
     <div className="flex items-center justify-end gap-2 px-3 h-11 border-b border-gray-200 bg-gray-50 shrink-0">
-      {canEdit && (
-        <ExcelFileImport
-          projectId={projectId}
-          selectedPrefix={selectedPrefix}
-          onSelectDocument={(prefix) => {
-            if (prefix !== selectedPrefix) guardedAction(() => { setSelectedPrefix(prefix); setSelectedUid(null); });
-          }}
-          className="mr-auto"
-        />
-      )}
+      <ImportExportMenus
+        projectId={projectId}
+        selectedPrefix={selectedPrefix}
+        canEdit={canEdit}
+        onSelectDocument={(prefix) => {
+          if (prefix !== selectedPrefix) guardedAction(() => { setSelectedPrefix(prefix); setSelectedUid(null); });
+        }}
+        className="mr-auto"
+      />
       <span className="text-xs text-gray-400 mr-1">Ansicht</span>
       <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
         {([
@@ -287,6 +292,7 @@ export default function RequirementsPage() {
         ] as const).map(([mode, label, Icon]) => (
           <button
             key={mode}
+            title={withShortcut(label, mode === 'table' ? 'view-table' : 'view-list')}
             onClick={() => view !== mode && guardedAction(() => setView(mode))}
             className={clsx('inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md transition-colors',
               view === mode ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100')}

@@ -1,23 +1,21 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, Loader2, CheckCircle, Circle, AlertCircle,
-  Tag, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, Download, FileSpreadsheet,
+  Tag, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, FileSpreadsheet,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
-import { listItems, createItem, deleteItem, exportDocument, ExportFormat } from '../../../shared/api/client';
+import { listItems, createItem, deleteItem } from '../../../shared/api/client';
 import { Item } from '../../../shared/types';
 import { useAuthStore } from '../../../shared/auth/authStore';
 import ImportDialog from './import/ImportDialog';
+import { useRegisterAction, withShortcut } from '../../../shared/search';
+
+import { parseLevel, compareLevel } from '../../../shared/ui/requirementUtils';
 import { parseClipboardTable } from './import/tableParsing';
 
 // ─── Level-Hilfsfunktionen ────────────────────────────────────────────────────
-
-/** Wandelt "1.2.3" in [1, 2, 3] um */
-function parseLevel(level: string): number[] {
-  return level.split('.').map((n) => parseInt(n, 10) || 0);
-}
 
 /**
  * Berechnet die Anzeigetiefe eines Doorstop-Levels.
@@ -36,17 +34,6 @@ function levelDepth(level: string): number {
   // Abschließendes 0 = Doorstop-Sektion → effektiv ein Segment weniger
   const effective = parts[parts.length - 1] === 0 ? parts.slice(0, -1) : parts;
   return Math.max(0, effective.length - 1);
-}
-
-/** Vergleichsfunktion für Level-Sortierung (numerisch) */
-function compareLevel(a: string, b: string): number {
-  const la = parseLevel(a);
-  const lb = parseLevel(b);
-  for (let i = 0; i < Math.max(la.length, lb.length); i++) {
-    const diff = (la[i] ?? 0) - (lb[i] ?? 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
 }
 
 // ─── Baum-Datenstruktur ───────────────────────────────────────────────────────
@@ -131,23 +118,6 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
     return () => document.removeEventListener('paste', onPaste);
   }, [canEdit, importTable]);
 
-  const [exportOpen, setExportOpen] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const exportRef = useRef<HTMLDivElement>(null);
-
-  const handleExport = async (format: ExportFormat) => {
-    setExportOpen(false);
-    setExporting(true);
-    try {
-      await exportDocument(projectId, prefix, format);
-      toast.success(`${prefix}.${format === 'yaml' ? 'yml' : format} heruntergeladen`);
-    } catch (e: any) {
-      toast.error(e.message || 'Export fehlgeschlagen');
-    } finally {
-      setExporting(false);
-    }
-  };
-
   const { data: itemsRes, isLoading } = useQuery({
     queryKey: ['items', projectId, prefix],
     queryFn: () => listItems(projectId, prefix),
@@ -221,6 +191,8 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
     onError: () => toast.error('Fehler beim Löschen'),
   });
 
+  useRegisterAction('new-item', () => createMut.mutate(), canEdit && !createMut.isPending);
+
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
@@ -229,7 +201,7 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
           type="text"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder="Suchen..."
+          placeholder="Filtern…"
           className="flex-1 text-sm px-2 py-1 border border-gray-200 rounded
                      focus:outline-none focus:ring-1 focus:ring-primary-400"
         />
@@ -250,7 +222,7 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
             onClick={() => createMut.mutate()}
             disabled={createMut.isPending}
             className="btn-primary text-xs py-1 px-2"
-            title="Neue Anforderung"
+            title={withShortcut('Neue Anforderung', 'new-item')}
           >
             {createMut.isPending
               ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -258,47 +230,6 @@ export default function ItemList({ projectId, prefix, selectedUid, onSelectItem 
           </button>
         )}
 
-        {canEdit && (
-          <button
-            onClick={() => setImportTable([])}
-            className="p-1 text-gray-400 hover:text-green-700 transition-colors"
-            title="Aus Excel einfügen (oder Tabelle kopieren und hier Strg+V drücken)"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-          </button>
-        )}
-
-        {/* Export-Dropdown */}
-        <div className="relative" ref={exportRef}>
-          <button
-            onClick={() => setExportOpen((o) => !o)}
-            disabled={exporting}
-            title="Dokument exportieren"
-            className="p-1 text-gray-400 hover:text-gray-700 transition-colors"
-          >
-            {exporting
-              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              : <Download className="w-3.5 h-3.5" />}
-          </button>
-          {exportOpen && (
-            <div
-              className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200
-                         rounded-lg shadow-lg py-1 min-w-[110px]"
-              onMouseLeave={() => setExportOpen(false)}
-            >
-              {(['xlsx', 'csv', 'tsv', 'yaml'] as ExportFormat[]).map((fmt) => (
-                <button
-                  key={fmt}
-                  onClick={() => handleExport(fmt)}
-                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700
-                             hover:bg-gray-50 transition-colors"
-                >
-                  {fmt.toUpperCase()}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Zähler */}

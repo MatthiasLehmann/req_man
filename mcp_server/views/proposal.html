@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReqMan – Vorschlag</title>
+<style>/*CSS*/</style></head>
+<body>
+<div id="root" class="muted">Warte auf den Vorschlag …</div>
+<script>/*BRIDGE*/</script>
+<script>
+var el = ReqManApp.el, root = document.getElementById("root"), state = null;
+var KIND = { change_text: "Textänderung", new_item: "Neue Anforderung", add_link: "Neuer Link" };
+var STATUS = { open: "offen", accepted: "übernommen", rejected: "abgelehnt", stale: "veraltet" };
+
+function words(s) { return (s || "").split(/(\s+)/).filter(function (x) { return x !== ""; }); }
+function diff(a, b) {                       // Wortvergleich (LCS): [{t:"=",w}|{t:"-",w}|{t:"+",w}]
+  var x = words(a), y = words(b), n = x.length, m = y.length, i, j, L = [];
+  if (n * m > 250000) return [{ t: "-", w: a || "" }, { t: "+", w: b || "" }];
+  for (i = 0; i <= n; i++) { L.push(new Array(m + 1).fill(0)); }
+  for (i = n - 1; i >= 0; i--) for (j = m - 1; j >= 0; j--)
+    L[i][j] = x[i] === y[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  var out = []; i = 0; j = 0;
+  while (i < n && j < m) {
+    if (x[i] === y[j]) { out.push({ t: "=", w: x[i] }); i++; j++; }
+    else if (L[i + 1][j] >= L[i][j + 1]) { out.push({ t: "-", w: x[i++] }); }
+    else { out.push({ t: "+", w: y[j++] }); }
+  }
+  while (i < n) out.push({ t: "-", w: x[i++] });
+  while (j < m) out.push({ t: "+", w: y[j++] });
+  return out;
+}
+function box(title) { var b = el("div", "box"); b.appendChild(el("h2", null, title)); return b; }
+function fill(b, parts, mark) {
+  parts.forEach(function (p) {
+    if (p.t === "=") b.appendChild(document.createTextNode(p.w));
+    else if (p.t === mark) b.appendChild(el(mark === "-" ? "del" : "ins", null, p.w));
+  });
+}
+
+function render() {
+  var d = state; root.textContent = ""; root.className = "";
+  var p = d.proposal;
+  var h = el("h1", null, "Vorschlag Nr. " + p.id + " · " + (KIND[p.kind] || p.kind) + " ");
+  h.appendChild(el("span", "badge", STATUS[p.status] || p.status));
+  root.appendChild(h);
+  var cols = el("div", "cols"), before = box("Bisher"), after = box("Vorschlag");
+  if (p.kind === "change_text") {
+    root.appendChild(el("div", "muted", p.uid));
+    var df = diff(p.old_text, p.new_text);
+    fill(before, df, "-"); fill(after, df, "+");
+  } else if (p.kind === "new_item") {
+    before.appendChild(document.createTextNode("– (gibt es noch nicht)"));
+    after.appendChild(el("div", null, "Neu in Dokument " + p.prefix + ":"));
+    after.appendChild(el("ins", null, p.text || ""));
+    if (p.links && p.links.length) after.appendChild(el("div", "muted", "Links: " + p.links.join(", ")));
+  } else if (p.kind === "add_link") {
+    before.appendChild(document.createTextNode(p.uid + " ist noch nicht mit " + p.target_uid + " verlinkt."));
+    after.appendChild(el("ins", null, p.uid + " → " + p.target_uid));
+  }
+  cols.appendChild(before); cols.appendChild(after); root.appendChild(cols);
+  var why = box("Begründung"); why.appendChild(document.createTextNode(p.reason || ""));
+  root.appendChild(why);
+  root.appendChild(el("div", "muted", "Quelle: " + (p.source || "?") + (p.created_by ? " · angelegt von " + p.created_by : "") +
+    (p.decided_by ? " · entschieden von " + p.decided_by : "")));
+  var bar = el("div", "buttons"); root.appendChild(bar);
+  if (p.status === "open") {
+    if (d.can_decide) {
+      var ok = el("button", "primary", "Übernehmen"), no = el("button", null, "Ablehnen");
+      ok.onclick = function () { decide("accept_proposal", [ok, no]); };
+      no.onclick = function () { decide("reject_proposal", [ok, no]); };
+      bar.appendChild(ok); bar.appendChild(no);
+    } else {
+      bar.appendChild(el("span", "muted", "Übernehmen und Ablehnen dürfen nur editor und admin – in ReqMan unter „Vorschläge“."));
+    }
+  }
+  if (d.msg) bar.appendChild(el("span", d.msgErr ? "err" : "muted", d.msg));
+}
+
+function decide(tool, buttons) {
+  buttons.forEach(function (b) { b.disabled = true; });
+  ReqManApp.callTool(tool, { project: state.project_id, proposal_id: state.proposal.id }).then(function (res) {
+    state.msg = ReqManApp.firstText(res); state.msgErr = !!res.isError;
+    if (!res.isError && res.structuredContent && res.structuredContent.proposal) state.proposal = res.structuredContent.proposal;
+    render();
+  }).catch(function (e) { state.msg = String(e.message || e); state.msgErr = true; render(); });
+}
+
+ReqManApp.start({
+  name: "ReqMan Vorschlagskarte",
+  onResult: function (res) {
+    var sc = res && res.structuredContent;
+    if (sc && sc.proposal) { state = sc; render(); }
+    else { root.textContent = ReqManApp.firstText(res) || "Kein Vorschlag erhalten."; }
+  },
+  onNoHost: function () { root.textContent = "Diese Ansicht wird von einem MCP-Apps-fähigen Host geöffnet."; }
+});
+</script></body></html>

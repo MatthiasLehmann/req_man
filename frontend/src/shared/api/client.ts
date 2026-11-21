@@ -166,6 +166,67 @@ export const removeLink = (projectId: string, sourceUid: string, targetUid: stri
     `/projects/${projectId}/items/${sourceUid}/links/${targetUid}`,
   );
 
+// Bedeutungssuche (RAG, A1) – Ähnliche, Link-Vorschläge, Auswirkungen, Suche
+export type RagHit = Schemas['RagHit'];
+export type LinkSuggestionsResult = Schemas['LinkSuggestions'];
+export type ImpactResult = Schemas['ImpactResult'];
+export const ragSearch = (projectId: string, q: string, k = 8, prefixes?: string[]) =>
+  api.get<ApiResponse<'/api/projects/{project_id}/rag/search', 'get'>>(`/projects/${projectId}/rag/search`, {
+    params: { q, k, prefix: prefixes },
+    paramsSerializer: { indexes: null },
+  });
+export const ragSimilarText = (projectId: string, body: ApiBody<'/api/projects/{project_id}/rag/similar-text', 'post'>) =>
+  api.post<ApiResponse<'/api/projects/{project_id}/rag/similar-text', 'post'>>(
+    `/projects/${projectId}/rag/similar-text`, body);
+export const getLinkSuggestions = (projectId: string, uid: string, k = 8) =>
+  api.get<LinkSuggestionsResult>(`/projects/${projectId}/items/${uid}/link-suggestions`, { params: { k } });
+export const getImpact = (projectId: string, uid: string) =>
+  api.get<ImpactResult>(`/projects/${projectId}/items/${uid}/impact`);
+
+// Vorschläge (A6) – Agenten/Assistent schlagen vor, ein Mensch übernimmt oder lehnt ab
+export type Proposal = Schemas['ProposalResponse'];
+export const listProposals = (projectId: string, params?: { status?: string; uid?: string }) =>
+  api.get<Proposal[]>(`/projects/${projectId}/proposals`, { params });
+export const getProposalCount = (projectId: string) =>
+  api.get<Schemas['ProposalCount']>(`/projects/${projectId}/proposals/count`);
+export const acceptProposal = (projectId: string, id: number) =>
+  api.post<Proposal>(`/projects/${projectId}/proposals/${id}/accept`);
+export const rejectProposal = (projectId: string, id: number) =>
+  api.post<Proposal>(`/projects/${projectId}/proposals/${id}/reject`);
+
+// Rückmeldung zu KI-Befunden (L2) – „trifft zu“ / „trifft nicht zu“, speist den Fallspeicher
+export type FindingFeedback = Schemas['FeedbackResponse'];
+export type FindingVerdict = 'applies' | 'not_applies';
+export const listFindingFeedback = (projectId: string, params?: { uid?: string; only_mine?: boolean }) =>
+  api.get<FindingFeedback[]>(`/projects/${projectId}/finding-feedback`, { params });
+export const sendFindingFeedback = (
+  projectId: string,
+  body: { uid: string; category: string; finding: string; verdict: FindingVerdict },
+) => api.post<FindingFeedback>(`/projects/${projectId}/finding-feedback`, body);
+export const deleteFindingFeedback = (projectId: string, id: number) =>
+  api.delete(`/projects/${projectId}/finding-feedback/${id}`);
+// Brücken (B1) – Projekt als Obsidian-Ordner ausliefern (Markdown, .base, .canvas)
+export type ObsidianExport = Schemas['ObsidianExport'];
+export type ObsidianStatus = Schemas['ObsidianStatus'];
+export const exportToObsidian = (projectId: string) =>
+  api.post<ObsidianExport>(`/projects/${projectId}/obsidian/export`);
+export type ObsidianImport = Schemas['ObsidianImport'];
+export const importFromObsidian = (projectId: string) =>
+  api.post<ObsidianImport>(`/projects/${projectId}/obsidian/import-changes`);
+export const getObsidianStatus = (projectId: string) =>
+  api.get<ObsidianStatus>(`/projects/${projectId}/obsidian/status`);
+
+// „Frag ReqMan“ (A4) – Assistent mit Quellen, Hilfe-Suche, offene Punkte
+export type AssistantAnswer = Schemas['AssistantAnswer'];
+export type AssistantSource = Schemas['AssistantSource'];
+export type NextStep = Schemas['NextStep'];
+export const askAssistant = (body: ApiBody<'/api/assistant/ask', 'post'>) =>
+  api.post<ApiResponse<'/api/assistant/ask', 'post'>>('/assistant/ask', body, { timeout: 120_000 });
+export const searchHelp = (q: string, k = 5) =>
+  api.get<ApiResponse<'/api/help/search', 'get'>>('/help/search', { params: { q, k } });
+export const getNextSteps = (projectId: string) =>
+  api.get<ApiResponse<'/api/projects/{project_id}/next-steps', 'get'>>(`/projects/${projectId}/next-steps`);
+
 // Review (doorstop stamp)
 export const reviewItem = (projectId: string, uid: string) =>
   api.post<Item>(
@@ -324,6 +385,27 @@ export const exportDocument = (projectId: string, prefix: string, format: Export
       document.body.removeChild(a);
       URL.revokeObjectURL(objectUrl);
     });
+};
+
+/** Gesetztes Lastenheft als PDF (Typst); ohne `document` das ganze Projekt. */
+export const exportPdf = async (projectId: string, document?: string) => {
+  const token = localStorage.getItem('token');
+  const qs = document ? `?document=${encodeURIComponent(document)}` : '';
+  const res = await fetch(`/api/projects/${projectId}/export/pdf${qs}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail ?? detail; } catch { /* keine JSON-Antwort */ }
+    throw new Error(detail);
+  }
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = window.document.createElement('a');
+  a.href = objectUrl;
+  a.download = `${document ?? 'Lastenheft'}.pdf`;
+  window.document.body.appendChild(a);
+  a.click();
+  window.document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
 };
 
 /** Löst einen Browser-Download für das gesamte Projekt (ZIP) aus. */

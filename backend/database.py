@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, UniqueConstraint, text
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, UniqueConstraint, Text, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from datetime import datetime, timezone
 import os
@@ -50,6 +50,42 @@ class DocumentTypeAssignment(Base):
     document_type_id = Column(String, nullable=False)
 
     __table_args__ = (UniqueConstraint('project_id', 'prefix'),)
+
+
+class Proposal(Base):
+    """Änderungsvorschlag von Agenten/Assistent; übernommen wird nur durch einen Menschen (editor/admin)."""
+    __tablename__ = "proposals"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, nullable=False, index=True)
+    kind = Column(String, nullable=False)   # change_text | new_item | add_link
+    uid = Column(String, nullable=True, index=True)
+    prefix = Column(String, nullable=True)
+    payload = Column(Text, nullable=False, default="{}")   # JSON je Art
+    reason = Column(Text, nullable=False, default="")
+    source = Column(String, nullable=False, default="mcp")
+    base_hash = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="open")   # open | accepted | rejected | stale
+    created_by = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    decided_by = Column(String, nullable=True)
+    decided_at = Column(DateTime, nullable=True)
+
+
+class FindingFeedback(Base):
+    """Rückmeldung eines Menschen zu einem KI-Befund („trifft zu“ / „trifft nicht zu“), Quelle des Fallspeichers (L2)."""
+    __tablename__ = "finding_feedback"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, nullable=False, index=True)
+    uid = Column(String, nullable=False, index=True)
+    category = Column(String, nullable=False)
+    finding = Column(Text, nullable=False)              # Befundtext (Beschreibung)
+    requirement_text = Column(Text, nullable=False)     # Text der Anforderung zum Zeitpunkt des Urteils
+    text_hash = Column(String, nullable=False)          # SHA-256 des Anforderungstexts
+    verdict = Column(String, nullable=False)            # applies | not_applies
+    created_by = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 def get_db():

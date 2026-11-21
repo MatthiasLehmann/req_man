@@ -1,7 +1,15 @@
 import { useState } from 'react';
-import { Sparkles, RefreshCw, AlertCircle, AlertTriangle, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { Sparkles, RefreshCw, AlertCircle, AlertTriangle, Info, ChevronDown, ChevronUp, ThumbsUp, ThumbsDown } from 'lucide-react';
 import clsx from 'clsx';
-import { useAiQuality, useTriggerAiQuality, useAiQualityProfiles } from '../hooks/useAiQuality';
+import {
+  useAiQuality,
+  useTriggerAiQuality,
+  useAiQualityProfiles,
+  useFindingFeedback,
+  useSendFindingFeedback,
+  useWithdrawFindingFeedback,
+} from '../hooks/useAiQuality';
+import type { FindingVerdict } from '../../../shared/api/client';
 import type { AiQualityIssue, AiQualitySeverity } from '../../../shared/types';
 
 interface Props {
@@ -60,7 +68,15 @@ function ScoreBar({ label, value }: { label: string; value: number | null }) {
 
 // ─── Issue-Karte ─────────────────────────────────────────────────────────────
 
-function IssueCard({ issue }: { issue: AiQualityIssue }) {
+function IssueCard({
+  issue,
+  verdict,
+  onVerdict,
+}: {
+  issue: AiQualityIssue;
+  verdict?: FindingVerdict;
+  onVerdict: (v: FindingVerdict | null) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const cfg = SEVERITY_CONFIG[issue.severity] || SEVERITY_CONFIG.medium;
   const Icon = cfg.icon;
@@ -91,6 +107,24 @@ function IssueCard({ issue }: { issue: AiQualityIssue }) {
           <p className="text-xs leading-snug">{issue.suggestion}</p>
         </div>
       )}
+      <div className="px-3 pb-2 pt-1 flex items-center gap-2 border-t border-current/10">
+        <span className="text-[10px] opacity-70">Rückmeldung:</span>
+        {(['applies', 'not_applies'] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            aria-pressed={verdict === v}
+            onClick={() => onVerdict(verdict === v ? null : v)}
+            className={clsx(
+              'flex items-center gap-1 text-[10px] border rounded px-1.5 py-0.5',
+              verdict === v ? 'bg-white font-semibold' : 'bg-white/40 opacity-70 hover:opacity-100',
+            )}
+          >
+            {v === 'applies' ? <ThumbsUp className="w-3 h-3" /> : <ThumbsDown className="w-3 h-3" />}
+            {v === 'applies' ? 'trifft zu' : 'trifft nicht zu'}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -103,6 +137,11 @@ export default function AiQualityTab({ projectId, uid }: Props) {
   const { data: result, isLoading: isLoadingResult } = useAiQuality(projectId, uid);
   const { data: profiles } = useAiQualityProfiles();
   const triggerMut = useTriggerAiQuality(projectId, uid);
+  const { data: feedback } = useFindingFeedback(projectId, uid);
+  const sendFeedback = useSendFindingFeedback(projectId, uid);
+  const withdrawFeedback = useWithdrawFindingFeedback(projectId, uid);
+  const ownVerdict = (issue: AiQualityIssue) =>
+    feedback?.find((f) => f.category === issue.category && f.finding === issue.description);
 
   const handleAnalyze = () => {
     triggerMut.mutate({ profile: selectedProfile });
@@ -202,7 +241,19 @@ export default function AiQualityTab({ projectId, uid }: Props) {
             </p>
             <div className="space-y-2">
               {sortedIssues.map((issue, i) => (
-                <IssueCard key={i} issue={issue} />
+                <IssueCard
+                  key={i}
+                  issue={issue}
+                  verdict={ownVerdict(issue)?.verdict as FindingVerdict | undefined}
+                  onVerdict={(v) => {
+                    const own = ownVerdict(issue);
+                    if (v === null) {
+                      if (own) withdrawFeedback.mutate(own.id);
+                    } else {
+                      sendFeedback.mutate({ category: issue.category, finding: issue.description, verdict: v });
+                    }
+                  }}
+                />
               ))}
             </div>
           </div>

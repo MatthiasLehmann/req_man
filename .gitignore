@@ -32,6 +32,8 @@ htmlcov/
 # ─── Laufzeitdaten (werden zur Laufzeit erzeugt) ──────────────────────────────
 data/reqman.db
 data/projects.json
+data/rag/
+data/obsidian/
 data/attributes.yml
 
 # ─── Doorstop-Projekte (nutzerspezifische Daten) ─────────────────────────────

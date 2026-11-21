@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -22,25 +22,10 @@ import toast from 'react-hot-toast';
 import { listDocuments, listItems, addLink, removeLink } from '../../../shared/api/client';
 import { useProjectStore } from '../../../shared/store/projectStore';
 import { Item } from '../../../shared/types';
+import { EmptyProject } from '../../../shared/ui/EmptyProject';
+import { compareLevel, stripHtml } from '../../../shared/ui/requirementUtils';
 
 // ─── Hilfsfunktionen ─────────────────────────────────────────────────────────
-
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
-}
-
-function parseLevel(level: string): number[] {
-  return level.split('.').map((n) => parseInt(n, 10) || 0);
-}
-function compareLevel(a: string, b: string): number {
-  const la = parseLevel(a);
-  const lb = parseLevel(b);
-  for (let i = 0; i < Math.max(la.length, lb.length); i++) {
-    const diff = (la[i] ?? 0) - (lb[i] ?? 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
-}
 
 function sortByLevel(items: Item[]): Item[] {
   return [...items].sort((a, b) => compareLevel(a.level, b.level));
@@ -334,7 +319,6 @@ export default function LinkingPage() {
     setLinkingLeftPrefix,
     setLinkingRightPrefix,
   } = useProjectStore();
-  const navigate = useNavigate();
   const qc = useQueryClient();
 
   const pid = projectId ?? currentProject?.id ?? '';
@@ -462,19 +446,7 @@ export default function LinkingPage() {
 
   // ── Kein Projekt ─────────────────────────────────────────────────────────────
 
-  if (!pid) {
-    return (
-      <div className="flex items-center justify-center h-full text-gray-400">
-        <div className="text-center">
-          <Link2 className="w-16 h-16 mx-auto mb-4 opacity-30" />
-          <p>Kein Projekt ausgewählt</p>
-          <button onClick={() => navigate('/')} className="btn-primary mt-4">
-            Zur Projektübersicht
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (!pid) return <EmptyProject icon={Link2} />;
 
   // ── Render ───────────────────────────────────────────────────────────────────
 

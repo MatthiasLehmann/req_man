@@ -3,8 +3,11 @@ import { Outlet } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import { useCommandShortcuts } from '../search';
+import { AssistantButton } from '../assistant';
 
 export default function Layout() {
+  useCommandShortcuts();
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
@@ -23,6 +26,7 @@ export default function Layout() {
           </Suspense>
         </main>
       </div>
+      <AssistantButton />
     </div>
   );
 }
