@@ -355,9 +355,13 @@ export const assignDocumentType = (projectId: string, prefix: string, typeId: st
   api.put(`/projects/${projectId}/documents/${prefix}/type`, {
     document_type_id: typeId,
   } satisfies ApiBody<'/api/projects/{project_id}/documents/{prefix}/type', 'put'>);
-export const updateDocumentProperties = (projectId: string, prefix: string, values: Record<string, string>) =>
+/** Dokumentenlenkung eines Dokuments (Dokumentnummer, Version, Status …; Vorgabe für die PDF-Spezifikation) */
+export type DocumentControl = Schemas['DocumentControl-Input'];
+export const updateDocumentProperties = (
+  projectId: string, prefix: string, values: Record<string, string>, control?: DocumentControl,
+) =>
   api.put(`/projects/${projectId}/documents/${encodeURIComponent(prefix)}/properties`, {
-    values,
+    values, control,
   } satisfies ApiBody<'/api/projects/{project_id}/documents/{prefix}/properties', 'put'>);
 
 // Export
@@ -387,25 +391,33 @@ export const exportDocument = (projectId: string, prefix: string, format: Export
     });
 };
 
-/** Gesetztes Lastenheft als PDF (Typst); ohne `document` das ganze Projekt. */
-export const exportPdf = async (projectId: string, document?: string) => {
+/** Anfrage für einen PDF-Bericht (Körper von POST /export/pdf, zugleich Inhalt von `.reqman/pdf.yml`). */
+export type PdfRequest = Schemas['PdfRequest-Input'];
+
+/** Gespeicherte PDF-Einstellungen des Projekts (leer = Vorgaben). */
+export const getPdfSettings = (projectId: string) =>
+  api.get<PdfRequest>(`/projects/${projectId}/pdf-settings`);
+export const savePdfSettings = (projectId: string, req: PdfRequest) =>
+  api.put<PdfRequest>(`/projects/${projectId}/pdf-settings`, req);
+
+/** Setzt den Bericht mit Typst; Antwort = PDF-Datei und der vom Server vorgeschlagene Dateiname. */
+export const createPdf = async (projectId: string, req: PdfRequest): Promise<{ blob: Blob; filename: string }> => {
   const token = localStorage.getItem('token');
-  const qs = document ? `?document=${encodeURIComponent(document)}` : '';
-  const res = await fetch(`/api/projects/${projectId}/export/pdf${qs}`, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(`/api/projects/${projectId}/export/pdf`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
   if (!res.ok) {
     let detail = res.statusText;
-    try { detail = (await res.json()).detail ?? detail; } catch { /* keine JSON-Antwort */ }
+    try {
+      const d = (await res.json()).detail;
+      detail = typeof d === 'string' ? d : d ? JSON.stringify(d) : detail;
+    } catch { /* keine JSON-Antwort */ }
     throw new Error(detail);
   }
-  const blob = await res.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  const a = window.document.createElement('a');
-  a.href = objectUrl;
-  a.download = `${document ?? 'Lastenheft'}.pdf`;
-  window.document.body.appendChild(a);
-  a.click();
-  window.document.body.removeChild(a);
-  URL.revokeObjectURL(objectUrl);
+  const m = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '');
+  return { blob: await res.blob(), filename: m?.[1] ?? 'Bericht.pdf' };
 };
 
 /** Löst einen Browser-Download für das gesamte Projekt (ZIP) aus. */

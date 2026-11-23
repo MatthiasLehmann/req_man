@@ -221,9 +221,21 @@ Seite: /requirements
 
 1. Auf der Seite **Anforderungen** das Dokument auswählen.
 2. Oben auf **Exportieren ▾** klicken (Kürzel **E**).
-3. Format wählen: **Excel (zum Bearbeiten und Zurückladen)**, **CSV**, **TSV**, **YAML** oder **PDF (gesetzt)**. Die Datei wird heruntergeladen. **Nach Obsidian** liefert das ganze Projekt als Obsidian-Ordner aus.
+3. Format wählen: **Excel (zum Bearbeiten und Zurückladen)**, **CSV**, **TSV**, oder **YAML**. Die Datei wird heruntergeladen. **Nach Obsidian** liefert das ganze Projekt als Obsidian-Ordner aus.
 
 Nur die Excel-Datei erkennt ReqMan beim Zurückladen wieder (siehe „Wie bearbeite ich Anforderungen in Excel und hole die Änderungen zurück?“). Geänderte Notizen aus Obsidian holt **Importieren ▾ → Änderungen aus Obsidian holen** als Vorschläge zurück.
+
+## Wie erstelle ich ein PDF (Spezifikation oder Review-Unterlage)?
+
+Seite: /requirements
+
+1. **Exportieren ▾ → PDF erstellen…** öffnet den Dialog.
+2. **Vorlage** wählen: **Spezifikation** (formales Dokument mit Deckblatt, Freigabetabelle, Änderungshistorie aus Git, Kapiteln und Anhängen; Layout Fließtext oder Tabelle) oder **Review-Unterlage** (Querformat-Tabelle mit leeren Spalten für Kommentar und Entscheidung, Teilnehmern und Beschlüssen – zum Ausdrucken fürs Meeting).
+3. **Dokumente** und **Filter** setzen: markierte Anforderungen, Status, „geändert seit“ (Datum oder Commit) oder Attribut = Wert.
+4. Optional Attribut-Spalten, Anhänge, Metadaten bzw. Termin eintragen.
+5. **Ansehen** öffnet das PDF in einem neuen Tab, **Herunterladen** speichert es. **Als Standard speichern** merkt die Einstellungen für das Projekt.
+
+Dokumentnummer, Version, Status und Freigabe-Namen stehen unter **Projekt einrichten** beim Dokument im Block **Dokumentenlenkung**; leere Felder im Dialog übernehmen diese Werte. Solange der Status nicht „freigegeben“ ist, trägt die Spezifikation das Wasserzeichen ENTWURF.
 
 ## Wie finde ich Anforderungen und sehe, was eine Änderung betrifft?
 
